@@ -1,0 +1,47 @@
+{
+  "name": "@brainkim/shredder",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "clean": "shx rm -rf ./lib",
+    "prebuild": "yarn clean",
+    "build": "tsc",
+    "prebench": "yarn build",
+    "bench": "NODE_ENV=production node ./bench",
+    "watch": "nodemon --ignore ./lib --delay 3 --ext js,ts,tsx,json,sup,txt,html --exec",
+    "develop": "yarn watch yarn test",
+    "readme": "node bin/markup.js README.sup > README.md",
+    "coverage": "nyc yarn test",
+    "pretest": "tsc --noEmit",
+    "test": "TS_NODE_PRETTY=1 TS_NODE_COMPILER_OPTIONS='{ \"target\": \"ESNext\", \"noImplicitAny\": false }' mocha --require ts-node/register test/**/*.ts",
+    "lint": "eslint --ext js,ts src test bench",
+    "publish-lib": "yarn clean && yarn lint && yarn test && shx grep -v \"\\\"private\\\": true,\" package.json > lib/package.json && shx cp yarn.lock README.md ./lib && cd ./lib && npm publish"
+  },
+  "dependencies": {
+    "@atom/teletype-crdt": "^0.9.0",
+    "lodash": "^4",
+    "uuid": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.117",
+    "@types/mocha": "^5.2.5",
+    "@types/node": "^10.12.0",
+    "@types/uuid": "^3.4.4",
+    "benchmark": "^2.1.4",
+    "chai": "^4.2.0",
+    "eslint": "^5.7.0",
+    "eslint-config-prettier": "^3.1.0",
+    "eslint-plugin-prettier": "^3.0.0",
+    "eslint-plugin-typescript": "^0.12.0",
+    "microtime": "^2.1.8",
+    "mocha": "^5.2.0",
+    "mocha-testcheck": "^1.0.0-rc.0",
+    "nodemon": "^1.18.4",
+    "nyc": "^13.1.0",
+    "prettier": "^1.14.3",
+    "shx": "^0.3.2",
+    "ts-node": "^7.0.1",
+    "typescript": "^3.1.3",
+    "typescript-eslint-parser": "^20.0.0"
+  }
+}

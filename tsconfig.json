@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "outDir": "lib",
+    "lib": ["ES2017"],
+    "declaration": true,
+    "strict": true,
+    "downlevelIteration": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"]
+}
