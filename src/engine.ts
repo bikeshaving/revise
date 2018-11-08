@@ -88,13 +88,9 @@ export default class Engine {
       deletes = expand(deletes, revision.inserts);
     }
     deletes = expand(deletes, inserts);
-
     const currentDeletes = expand(this.deletes, inserts);
     const visibleInserts = shrink(inserts, currentDeletes);
-    const visible = apply(
-      this.visible,
-      synthesize(inserted, visibleInserts, [[lengthOf(visibleInserts), 0]]),
-    );
+    const visible = apply(this.visible, synthesize(inserted, visibleInserts));
     deletes = union(currentDeletes, deletes);
     const [visible1, hidden] = shuffle(
       visible,

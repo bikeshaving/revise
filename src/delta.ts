@@ -1,4 +1,4 @@
-import { complement, pushSegment, Subset, zip } from "./subset";
+import { complement, lengthOf, pushSegment, Subset, zip } from "./subset";
 // inclusive start, exclusive end
 export type Copy = [number, number];
 export type Insert = string;
@@ -41,7 +41,10 @@ export function factor(delta: Delta, length: number): [Subset, Subset, string] {
   return [inserts, deletes, inserted];
 }
 
-export function synthesize(text: string, from: Subset, to: Subset): Delta {
+export function synthesize(
+  text: string,
+  from: Subset,
+  to: Subset = [[lengthOf(from), 0]]): Delta {
   const delta: Delta = [];
   let ri = 0;
   let ti = 0;

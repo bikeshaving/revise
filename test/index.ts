@@ -199,10 +199,7 @@ describe("delta", () => {
   it("synthesize", () => {
     const [inserts, deletes, inserted] = delta.factor(d, text.length);
     const deletes1: subset.Subset = subset.expand(deletes, inserts);
-    const union = delta.apply(
-      text,
-      delta.synthesize(inserted, inserts, [[subset.lengthOf(inserts), 0]]),
-    );
+    const union = delta.apply(text, delta.synthesize(inserted, inserts));
     const text1 = subset.deleteSubset(union, subset.complement(deletes1));
     const tombstones = subset.deleteSubset(union, subset.complement(inserts));
     expect(delta.synthesize(tombstones, inserts, deletes1)).to.deep.equal(d);
