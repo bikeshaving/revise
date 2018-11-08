@@ -76,7 +76,7 @@ export default class Engine {
     return deletes;
   }
 
-  public revise(index: number, delta: Delta): void {
+  public edit(delta: Delta, index: number = this.revisions.length - 1): void {
     const oldDeletes = this.getDeletesForIndex(index + 1);
     const oldVisibleLength = lengthOf(oldDeletes, (c) => c === 0);
     let [inserts, deletes, inserted] = factor(delta, oldVisibleLength);
@@ -90,11 +90,11 @@ export default class Engine {
     deletes = expand(deletes, inserts);
 
     const currentDeletes = expand(this.deletes, inserts);
+    const visibleInserts = shrink(inserts, currentDeletes);
     const visible = apply(
       this.visible,
-      synthesize(inserted, inserts, [[lengthOf(inserts), 0]]),
+      synthesize(inserted, visibleInserts, [[lengthOf(visibleInserts), 0]]),
     );
-
     deletes = union(currentDeletes, deletes);
     const [visible1, hidden] = shuffle(
       visible,
@@ -102,13 +102,13 @@ export default class Engine {
       currentDeletes,
       deletes,
     );
-
-    this.revisions.push({
+    const revision: Revision = {
       id: this.id,
       version: this.revisions.length,
       inserts,
       deletes,
-    });
+    };
+    this.revisions.push(revision);
     this.visible = visible1;
     this.hidden = hidden;
     this.deletes = deletes;

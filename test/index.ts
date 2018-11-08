@@ -215,10 +215,11 @@ describe("delta", () => {
 });
 
 describe("engine", () => {
-  describe("Engine.revise", () => {
+  it("Engine.getDeletesForIndex", () => {});
+  describe("Engine.edit", () => {
     it("simple edit", () => {
       const engine = new Engine("hello world");
-      engine.revise(0, [[0, 1], "era", [9, 11]]);
+      engine.edit([[0, 1], "era", [9, 11]]);
       expect(engine.revisions.length).to.equal(2);
       expect(engine.visible).to.equal("herald");
       expect(engine.hidden).to.equal("ello wor");
@@ -226,14 +227,52 @@ describe("engine", () => {
     });
     it("sequential edits", () => {
       const engine = new Engine("hello world");
-      engine.revise(0, [[0, 1], "era", [9, 11]]);
-      engine.revise(1, [[0, 6], "ry"]);
+      //01234567890
+      //hello world
+      engine.edit([[0, 1], "era", [9, 11]]);
+      //01234567890123
+      //herald
+      //heraello world
+      engine.edit([[0, 6], "ry"]);
       expect(engine.visible).to.equal("heraldry");
     });
-    it("rebase edits", () => {
+    it("sequential edits 2", () => {
+      //"Hello World"
       const engine = new Engine("hello world");
-      engine.revise(0, [[0, 1], "era", [9, 11]]);
-      engine.revise(0, ["je", [2, 5]]);
+      engine.edit(["H", [1, 6], "W", [7, 11]]);
+      // union string
+      //"Hhello Wworld"
+      // inserts
+      //"Hello, Brian World"
+      // =====+++++++======
+      // deletes
+      //"Hello World"
+      // =====------
+      // old deletes
+      //"Hhello Wworld"
+      // =-======-====
+      // rebased inserts against old deletes
+      //"Hhello, Brian Wworld"
+      // ======+++++++=======
+      // expanded deletes against old deletes
+      //"Hhello Wworld"
+      // ======--=----
+      // expanded deletes against rebased inserts
+      //"Hhello, Brian Wworld"
+      // =============--=----
+      // rebased current deletes against rebased inserts
+      //"Hhello, Brian Wworld"
+      // =-=============-====
+      // union of expanded deletes and rebased current deletes
+      //"Hhello, Brian Wworld"
+      // =-===========-------
+      engine.edit([[0, 5], ", Brian"]);
+      expect(engine.visible).to.equal("Hello, Brian");
+    });
+    it("concurrent edits", () => {
+      const engine = new Engine("hello world");
+      engine.edit([[0, 1], "era", [9, 11]], 0);
+      engine.edit(["je", [2, 5]], 0);
       expect(engine.visible).to.equal("jeera");
     });
   });
