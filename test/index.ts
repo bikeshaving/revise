@@ -51,11 +51,14 @@ describe("subset", () => {
     });
 
     it("same position", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //| | |x|x| | | | |     subset
-      //| | |x|x| | | | |     transform
-      //| | | | |x|x| | | | | result
-      //| | |x|x| | | | | | | result (before = true)
+      // subset
+      // ==++==== 
+      // transform
+      // ==++====
+      // result after
+      // ====++====
+      // result before
+      // ==++======
       const s: subset.Subset = [[2, 0], [2, 1], [4, 0]];
       const t: subset.Subset = [[2, 0], [2, 1], [4, 0]];
       const result = [[4, 0], [2, 1], [4, 0]];
@@ -65,11 +68,14 @@ describe("subset", () => {
     });
 
     it("same position different lengths", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //| | |x|x|x|x| | |     subset
-      //| | |x|x| | |         transform
-      //| | | | |x|x|x|x| | | result
-      //| | |x|x|x|x| | | | | result (before = true)
+      // subset
+      // ==++++==
+      // transform
+      // ==++==
+      // result after
+      // ====++++==
+      // result before
+      // ==++++====
       const s: subset.Subset = [[2, 0], [4, 1], [2, 0]];
       const t: subset.Subset = [[2, 0], [2, 1], [2, 0]];
       const result = [[4, 0], [4, 1], [2, 0]];
@@ -79,11 +85,14 @@ describe("subset", () => {
     });
 
     it("subset before", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //|x| | | | | |         subset
-      //| |x|x|x|x| | | | |   transform
-      //|x| | | | | | | | | | result
-      //|x| | | | | | | | | | result (before = true)
+      // subset
+      // +=====
+      // transform
+      // =++++====
+      // result after
+      // +=========
+      // result before
+      // +=========
       const s: subset.Subset = [[1, 1], [5, 0]];
       const t: subset.Subset = [[1, 0], [4, 1], [4, 0]];
       const result = [[1, 1], [9, 0]];
@@ -92,11 +101,14 @@ describe("subset", () => {
     });
 
     it("subset before overlapping", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //|x|x| | | | |         subset
-      //| |x|x|x|x| | | |     transform
-      //|x|x| | | | | | | | | result
-      //|x|x| | | | | | | | | result (before = true)
+      // subset
+      // ++====
+      // transform
+      // =++++===
+      // result after
+      // ++========
+      // result before
+      // ++========
       const s: subset.Subset = [[2, 1], [4, 0]];
       const t: subset.Subset = [[1, 0], [4, 1], [3, 0]];
       const result = [[2, 1], [8, 0]];
@@ -105,11 +117,14 @@ describe("subset", () => {
     });
 
     it("subset after", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //| |x|x|x|x| | | | |   subset
-      //|x| | | | | |         transform
-      //| | |x|x|x|x| | | | | result
-      //| | |x|x|x|x| | | | | result (before = true)
+      // subset
+      // =++++====
+      // transform
+      // +=====
+      // result after
+      // ==++++====
+      // result before
+      // ==++++====
       const s: subset.Subset = [[1, 0], [4, 1], [4, 0]];
       const t: subset.Subset = [[1, 1], [5, 0]];
       const result = [[2, 0], [4, 1], [4, 0]];
@@ -118,11 +133,14 @@ describe("subset", () => {
     });
 
     it("subset after overlapping 1", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //| | | | |x|x|         subset
-      //| | |x|x|x|x| | |     transform
-      //| | | | | | | | |x|x| result
-      //| | | | | | | | |x|x| result (before = true)
+      // subset
+      // ====++
+      // transform
+      // ==++++==
+      // result after
+      // ========++
+      // result before
+      // ========++
       const s: subset.Subset = [[4, 0], [2, 1]];
       const t: subset.Subset = [[2, 0], [4, 1], [2, 0]];
       const result = [[8, 0], [2, 1]];
@@ -131,11 +149,14 @@ describe("subset", () => {
     });
 
     it("subset after overlapping 2", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //| | |x|x| | | |       subset
-      //| |x|x|x| | | | |     transform
-      //| | | | | |x|x| | | | result
-      //| | | | | |x|x| | | | result (before = true)
+      // subset
+      // ==++===
+      // transform
+      // =+++====
+      // result after
+      // =====++===
+      // result before
+      // =====++===
       const s: subset.Subset = [[2, 0], [2, 1], [3, 0]];
       const t: subset.Subset = [[1, 0], [3, 1], [4, 0]];
       const result = [[5, 0], [2, 1], [3, 0]];
@@ -144,11 +165,14 @@ describe("subset", () => {
     });
 
     it("subset after overlapping 3", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //| |x|x|x|x| | | |     subset
-      //|x|x| | | | |         transform
-      //| | | |x|x|x|x| | | | result
-      //| | | |x|x|x|x| | | | result (before = true)
+      // subset
+      // =++++===
+      // transform
+      // ++====
+      // result after
+      // ===++++===
+      // result before
+      // ===++++===
       const s: subset.Subset = [[1, 0], [4, 1], [3, 0]];
       const t: subset.Subset = [[2, 1], [4, 0]];
       const result = [[3, 0], [4, 1], [3, 0]];
@@ -157,12 +181,14 @@ describe("subset", () => {
     });
 
     it("multiple segments", () => {
-      // 0 1 2 3 4 5 6 7 8 9
-      //|x| |x|x| |x| | |
-      //| |x| | | |x|
-      //|x| | |x|x| |x| | | | result
-      //|x| |x|x| | |x| | | | result (before = true)
-
+      // subset
+      // +=++=+==
+      // transform
+      // =+===+
+      // result after
+      // +==++=+===
+      // result before
+      // +=++==+===
       const s: subset.Subset = [[1, 1], [1, 0], [2, 1], [1, 0], [1, 1], [2, 0]];
       const t: subset.Subset = [[1, 0], [1, 1], [3, 0], [1, 1]];
       const result = [[1, 1], [2, 0], [2, 1], [1, 0], [1, 1], [3, 0]];
@@ -225,30 +251,16 @@ describe("Engine", () => {
       // =+=====================+++++++
       engine.edit(["H", [1, 6], "W", [7, 11]]);
       engine.edit([[0, 5], ", Brian"]);
-      engine.edit([[0, 5], ", Dr. Evil"], 1);
-      expect(engine.getDeletesForIndex(0)).to.deep.equal([[11, 0]]);
-      expect(engine.getDeletesForIndex(1)).to.deep.equal([
-        [1, 0],
-        [1, 1],
-        [6, 0],
-        [1, 1],
-        [4, 0],
-      ]);
-      expect(engine.getDeletesForIndex(2)).to.deep.equal([
-        [1, 0],
-        [1, 1],
-        [11, 0],
-        [7, 1],
-      ]);
+      engine.edit([[0, 5], ", Dr. Evil"], 1, 1);
+      const deletes = [[11, 0]];
+      expect(engine.getDeletesForIndex(0)).to.deep.equal(deletes);
+      const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
+      expect(engine.getDeletesForIndex(1)).to.deep.equal(deletes1);
+      const deletes2 = [[1, 0], [1, 1], [11, 0], [7, 1]];
+      expect(engine.getDeletesForIndex(2)).to.deep.equal(deletes2);
+      const deletes3 = [[1, 0], [1, 1], [21, 0], [2, 2], [1, 1], [4, 2]];
+      expect(engine.getDeletesForIndex(3)).to.deep.equal(deletes3);
       expect(engine.getDeletesForIndex(3)).to.deep.equal(engine.deletes);
-      expect(engine.getDeletesForIndex(3)).to.deep.equal([
-        [1, 0],
-        [1, 1],
-        [21, 0],
-        [2, 2],
-        [1, 1],
-        [4, 2],
-      ]);
     });
   });
   describe("Engine.edit", () => {
@@ -308,13 +320,13 @@ describe("Engine", () => {
     it("concurrent edits 1", () => {
       const engine = new Engine("hello world");
       engine.edit([[0, 1], "era", [9, 11]]);
-      engine.edit(["Great H", [2, 5]], 0);
+      engine.edit(["Great H", [2, 5]], 0, 1);
       expect(engine.visible).to.equal("Great Hera");
     });
     it("concurrent edits 2", () => {
       const engine = new Engine("hello world");
       engine.edit(["H", [1, 6], "W", [7, 11]]);
-      engine.edit([[0, 5], ", Brian"], 1);
+      engine.edit([[0, 5], ", Brian"]);
       // revisions
       //"hello world"
       // inserts
@@ -343,7 +355,7 @@ describe("Engine", () => {
       // ======+++++++=======
       // old deletes from union
       // =+======+====
-      engine.edit([[0, 5], ", Dr. Evil"], 1);
+      engine.edit([[0, 5], ", Dr. Evil"], 1, 1);
       expect(engine.visible).to.equal("Hello, Brian, Dr. Evil");
     });
   });

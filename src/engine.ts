@@ -13,8 +13,11 @@ import { apply, Delta, factor, shuffle, synthesize } from "./delta";
 export interface Revision {
   id: string;
   version: number;
+  // sequence of characters which were inserted by this revision
   inserts: Subset;
+  // sequence of characters which were deleted by this revision
   deletes: Subset;
+  priority: number;
 }
 
 export default class Engine {
@@ -33,6 +36,7 @@ export default class Engine {
         version: 0,
         inserts: initial.length ? [[initial.length, 1]] : [],
         deletes: initial.length ? [[initial.length, 0]] : [],
+        priority: 0,
       },
     ];
   }
@@ -75,7 +79,11 @@ export default class Engine {
     return deletes;
   }
 
-  public edit(delta: Delta, index: number = this.revisions.length - 1): void {
+  public edit(
+    delta: Delta,
+    index: number = this.revisions.length - 1,
+    priority: number = 0,
+  ): void {
     const oldDeletes = this.getDeletesForIndex(index);
     const oldVisibleLength = lengthOf(oldDeletes, (c) => c === 0);
     let [inserts, deletes, inserted] = factor(delta, oldVisibleLength);
@@ -83,7 +91,11 @@ export default class Engine {
     deletes = expand(deletes, oldDeletes);
     for (let i = index + 1; i < this.revisions.length; i++) {
       const revision = this.revisions[i];
-      inserts = rebase(inserts, revision.inserts);
+      if (priority === revision.priority && this.id === revision.id) {
+        throw new Error("Can’t have concurrent edits with the same priority and client id");
+      }
+      const before = priority < revision.priority || this.id < revision.id;
+      inserts = rebase(inserts, revision.inserts, before);
       deletes = expand(deletes, revision.inserts);
     }
     deletes = expand(deletes, inserts);
@@ -102,6 +114,7 @@ export default class Engine {
       version: this.revisions.length,
       inserts,
       deletes,
+      priority,
     };
     this.revisions.push(revision);
     this.visible = visible1;
