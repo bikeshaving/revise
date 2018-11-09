@@ -44,7 +44,8 @@ export function factor(delta: Delta, length: number): [Subset, Subset, string] {
 export function synthesize(
   text: string,
   from: Subset,
-  to: Subset = [[lengthOf(from), 0]]): Delta {
+  to: Subset = [[lengthOf(from), 0]],
+): Delta {
   const delta: Delta = [];
   let ri = 0;
   let ti = 0;

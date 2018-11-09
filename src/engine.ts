@@ -91,12 +91,12 @@ export default class Engine {
     const currentDeletes = expand(this.deletes, inserts);
     const visibleInserts = shrink(inserts, currentDeletes);
     const visible = apply(this.visible, synthesize(inserted, visibleInserts));
-    deletes = union(currentDeletes, deletes);
+    const newDeletes = union(deletes, currentDeletes);
     const [visible1, hidden] = shuffle(
       visible,
       this.hidden,
       currentDeletes,
-      deletes,
+      newDeletes,
     );
     const revision: Revision = {
       id: this.id,
@@ -107,6 +107,6 @@ export default class Engine {
     this.revisions.push(revision);
     this.visible = visible1;
     this.hidden = hidden;
-    this.deletes = deletes;
+    this.deletes = newDeletes;
   }
 }

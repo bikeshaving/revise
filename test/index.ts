@@ -211,8 +211,8 @@ describe("delta", () => {
   });
 });
 
-describe("engine", () => {
-  it("Engine.getDeletesForIndex", () => {});
+describe("Engine", () => {
+  describe("Engine.getDeletesForIndex", () => {});
   describe("Engine.edit", () => {
     it("simple edit", () => {
       const engine = new Engine("hello world");
@@ -222,14 +222,16 @@ describe("engine", () => {
       expect(engine.hidden).to.equal("ello wor");
       expect(engine.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
     });
-    it("sequential edits", () => {
+    it("sequential edits 1", () => {
       const engine = new Engine("hello world");
-      //01234567890
-      //hello world
+      //"hello world"
+      // inserts
+      // =+++==
+      //"herald"
+      // deletes
+      // =--------==
+      //"hello world"
       engine.edit([[0, 1], "era", [9, 11]]);
-      //01234567890123
-      //herald
-      //heraello world
       engine.edit([[0, 6], "ry"]);
       expect(engine.visible).to.equal("heraldry");
     });
@@ -266,11 +268,35 @@ describe("engine", () => {
       engine.edit([[0, 5], ", Brian"]);
       expect(engine.visible).to.equal("Hello, Brian");
     });
-    it("concurrent edits", () => {
+    it("concurrent edits 1", () => {
       const engine = new Engine("hello world");
-      engine.edit([[0, 1], "era", [9, 11]], 0);
-      engine.edit(["je", [2, 5]], 0);
-      expect(engine.visible).to.equal("jeera");
+      engine.edit([[0, 1], "era", [9, 11]]);
+      engine.edit(["Great H", [2, 5]], 0);
+      expect(engine.visible).to.equal("Great Hera");
+    });
+    it("concurrent edits 2", () => {
+      const engine = new Engine("hello world");
+      engine.edit(["H", [1, 6], "W", [7, 11]]);
+      engine.edit([[0, 5], ", Brian"], 1);
+      // revisions
+      //"hello world"
+      // +++++++++++
+      // ===========
+      //"Hhello Wworld"
+      // +======+=====
+      // =-======-====
+      //"Hhello, Brian Wworld"
+      // ======+++++++=======
+      // =============--=----
+      // =-===========-------
+      // subtract
+      // =============--=----
+      // =-=============-====
+      // shrink
+      // ======+++++++=======
+      // =-======-====
+      engine.edit([[0, 5], ", Dr. Evil"], 1);
+      expect(engine.visible).to.equal("Hello, Brian, Dr. Evil");
     });
   });
 });
