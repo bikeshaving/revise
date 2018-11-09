@@ -18,8 +18,6 @@
     "publish-lib": "yarn clean && yarn lint && yarn test && shx grep -v \"\\\"private\\\": true,\" package.json > lib/package.json && shx cp yarn.lock README.md ./lib && cd ./lib && npm publish"
   },
   "dependencies": {
-    "@atom/teletype-crdt": "^0.9.0",
-    "lodash": "^4",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
