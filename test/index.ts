@@ -212,7 +212,45 @@ describe("delta", () => {
 });
 
 describe("Engine", () => {
-  describe("Engine.getDeletesForIndex", () => {});
+  describe("Engine.getDeletesForIndex", () => {
+    it("get deletes for all points in history", () => {
+      const engine = new Engine("hello world");
+      //"hello world"
+      // ===========
+      //"Hhello Wworld"
+      // =+======+====
+      //"Hhello, Brian Wworld"
+      // =+===========+++++++
+      //"Hhello, Brian, Dr. Evil Wworld"
+      // =+=====================+++++++
+      engine.edit(["H", [1, 6], "W", [7, 11]]);
+      engine.edit([[0, 5], ", Brian"]);
+      engine.edit([[0, 5], ", Dr. Evil"], 1);
+      expect(engine.getDeletesForIndex(0)).to.deep.equal([[11, 0]]);
+      expect(engine.getDeletesForIndex(1)).to.deep.equal([
+        [1, 0],
+        [1, 1],
+        [6, 0],
+        [1, 1],
+        [4, 0],
+      ]);
+      expect(engine.getDeletesForIndex(2)).to.deep.equal([
+        [1, 0],
+        [1, 1],
+        [11, 0],
+        [7, 1],
+      ]);
+      expect(engine.getDeletesForIndex(3)).to.deep.equal(engine.deletes);
+      expect(engine.getDeletesForIndex(3)).to.deep.equal([
+        [1, 0],
+        [1, 1],
+        [21, 0],
+        [2, 2],
+        [1, 1],
+        [4, 2],
+      ]);
+    });
+  });
   describe("Engine.edit", () => {
     it("simple edit", () => {
       const engine = new Engine("hello world");
@@ -229,14 +267,13 @@ describe("Engine", () => {
       // =+++==
       //"herald"
       // deletes
-      // =--------==
+      // =++++++++==
       //"hello world"
       engine.edit([[0, 1], "era", [9, 11]]);
       engine.edit([[0, 6], "ry"]);
       expect(engine.visible).to.equal("heraldry");
     });
     it("sequential edits 2", () => {
-      //"Hello World"
       const engine = new Engine("hello world");
       engine.edit(["H", [1, 6], "W", [7, 11]]);
       // union string
@@ -246,25 +283,25 @@ describe("Engine", () => {
       // =====+++++++======
       // deletes
       //"Hello World"
-      // =====------
+      // =====++++++
       // old deletes
       //"Hhello Wworld"
-      // =-======-====
+      // =+======+====
       // rebased inserts against old deletes
       //"Hhello, Brian Wworld"
       // ======+++++++=======
       // expanded deletes against old deletes
       //"Hhello Wworld"
-      // ======--=----
+      // ======++=++++
       // expanded deletes against rebased inserts
       //"Hhello, Brian Wworld"
-      // =============--=----
+      // =============++=++++
       // rebased current deletes against rebased inserts
       //"Hhello, Brian Wworld"
-      // =-=============-====
+      // =+=============+====
       // union of expanded deletes and rebased current deletes
       //"Hhello, Brian Wworld"
-      // =-===========-------
+      // =+===========+++++++
       engine.edit([[0, 5], ", Brian"]);
       expect(engine.visible).to.equal("Hello, Brian");
     });
@@ -280,21 +317,32 @@ describe("Engine", () => {
       engine.edit([[0, 5], ", Brian"], 1);
       // revisions
       //"hello world"
+      // inserts
       // +++++++++++
+      // deletes
       // ===========
       //"Hhello Wworld"
+      // inserts
       // +======+=====
-      // =-======-====
+      // deletes
+      // =+======+====
       //"Hhello, Brian Wworld"
+      // inserts
       // ======+++++++=======
-      // =============--=----
-      // =-===========-------
+      // deletes
+      // =============++=++++
+      // deletes from union
+      // =+===========+++++++
       // subtract
-      // =============--=----
-      // =-=============-====
+      // deletes
+      // =============++=++++
+      // subtracted deletes from union
+      // =+=============+====
       // shrink
+      // inserts
       // ======+++++++=======
-      // =-======-====
+      // old deletes from union
+      // =+======+====
       engine.edit([[0, 5], ", Dr. Evil"], 1);
       expect(engine.visible).to.equal("Hello, Brian, Dr. Evil");
     });

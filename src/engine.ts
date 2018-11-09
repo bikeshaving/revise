@@ -58,8 +58,7 @@ export default class Engine {
 
   public getDeletesForIndex(index: number): Subset {
     let deletes: Subset = this.deletes;
-    // should end condition be i > index?
-    for (let i = this.revisions.length - 1; i >= index; i--) {
+    for (let i = this.revisions.length - 1; i > index; i--) {
       const revision = this.revisions[i];
       deletes = subtract(deletes, revision.deletes);
       deletes = shrink(deletes, revision.inserts);
@@ -69,7 +68,7 @@ export default class Engine {
 
   public getDeletesFromCurrentForIndex(index: number): Subset {
     let deletes = this.getDeletesForIndex(index);
-    for (let i = index; i < this.revisions.length; i++) {
+    for (let i = index + 1; i < this.revisions.length; i++) {
       const revision = this.revisions[i];
       deletes = union(expand(deletes, revision.inserts), revision.inserts);
     }
@@ -77,7 +76,7 @@ export default class Engine {
   }
 
   public edit(delta: Delta, index: number = this.revisions.length - 1): void {
-    const oldDeletes = this.getDeletesForIndex(index + 1);
+    const oldDeletes = this.getDeletesForIndex(index);
     const oldVisibleLength = lengthOf(oldDeletes, (c) => c === 0);
     let [inserts, deletes, inserted] = factor(delta, oldVisibleLength);
     inserts = rebase(inserts, oldDeletes);
