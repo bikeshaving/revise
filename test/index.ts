@@ -8,7 +8,7 @@ import { expect } from "chai";
 
 import * as subset from "../src/subset";
 import * as delta from "../src/delta";
-import Engine from "../src/engine";
+import Client from "../src/client";
 
 describe("subset", () => {
   it("lengthOf", () => {
@@ -237,10 +237,11 @@ describe("delta", () => {
   });
 });
 
-describe("Engine", () => {
-  describe("Engine.getDeletesForIndex", () => {
+describe("Client", () => {
+  describe("Client.getDeletesForIndex", () => {
     it("get deletes for all points in history", () => {
-      const engine = new Engine("hello world");
+      const client = new Client("hello world");
+      client.sources = ["concurrent"];
       //"hello world"
       // ===========
       //"Hhello Wworld"
@@ -249,31 +250,31 @@ describe("Engine", () => {
       // =+===========+++++++
       //"Hhello, Brian, Dr. Evil Wworld"
       // =+=====================+++++++
-      engine.edit(["H", [1, 6], "W", [7, 11]]);
-      engine.edit([[0, 5], ", Brian"]);
-      engine.edit([[0, 5], ", Dr. Evil"], 1, 1);
+      client.edit(["H", [1, 6], "W", [7, 11]]);
+      client.edit([[0, 5], ", Brian"]);
+      client.edit([[0, 5], ", Dr. Evil"], 1, "concurrent");
       const deletes = [[11, 0]];
-      expect(engine.getDeletesForIndex(0)).to.deep.equal(deletes);
+      expect(client.getDeletesForIndex(0)).to.deep.equal(deletes);
       const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
-      expect(engine.getDeletesForIndex(1)).to.deep.equal(deletes1);
+      expect(client.getDeletesForIndex(1)).to.deep.equal(deletes1);
       const deletes2 = [[1, 0], [1, 1], [11, 0], [7, 1]];
-      expect(engine.getDeletesForIndex(2)).to.deep.equal(deletes2);
+      expect(client.getDeletesForIndex(2)).to.deep.equal(deletes2);
       const deletes3 = [[1, 0], [1, 1], [21, 0], [2, 2], [1, 1], [4, 2]];
-      expect(engine.getDeletesForIndex(3)).to.deep.equal(deletes3);
-      expect(engine.getDeletesForIndex(3)).to.deep.equal(engine.deletes);
+      expect(client.getDeletesForIndex(3)).to.deep.equal(deletes3);
+      expect(client.getDeletesForIndex(3)).to.deep.equal(client.deletes);
     });
   });
-  describe("Engine.edit", () => {
+  describe("Client.edit", () => {
     it("simple edit", () => {
-      const engine = new Engine("hello world");
-      engine.edit([[0, 1], "era", [9, 11]]);
-      expect(engine.revisions.length).to.equal(2);
-      expect(engine.visible).to.equal("herald");
-      expect(engine.hidden).to.equal("ello wor");
-      expect(engine.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
+      const client = new Client("hello world");
+      client.edit([[0, 1], "era", [9, 11]]);
+      expect(client.revisions.length).to.equal(2);
+      expect(client.visible).to.equal("herald");
+      expect(client.hidden).to.equal("ello wor");
+      expect(client.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
     });
     it("sequential edits 1", () => {
-      const engine = new Engine("hello world");
+      const client = new Client("hello world");
       //"hello world"
       // inserts
       // =+++==
@@ -281,13 +282,13 @@ describe("Engine", () => {
       // deletes
       // =++++++++==
       //"hello world"
-      engine.edit([[0, 1], "era", [9, 11]]);
-      engine.edit([[0, 6], "ry"]);
-      expect(engine.visible).to.equal("heraldry");
+      client.edit([[0, 1], "era", [9, 11]]);
+      client.edit([[0, 6], "ry"]);
+      expect(client.visible).to.equal("heraldry");
     });
     it("sequential edits 2", () => {
-      const engine = new Engine("hello world");
-      engine.edit(["H", [1, 6], "W", [7, 11]]);
+      const client = new Client("hello world");
+      client.edit(["H", [1, 6], "W", [7, 11]]);
       // union string
       //"Hhello Wworld"
       // inserts
@@ -314,19 +315,21 @@ describe("Engine", () => {
       // union of expanded deletes and rebased current deletes
       //"Hhello, Brian Wworld"
       // =+===========+++++++
-      engine.edit([[0, 5], ", Brian"]);
-      expect(engine.visible).to.equal("Hello, Brian");
+      client.edit([[0, 5], ", Brian"]);
+      expect(client.visible).to.equal("Hello, Brian");
     });
     it("concurrent edits 1", () => {
-      const engine = new Engine("hello world");
-      engine.edit([[0, 1], "era", [9, 11]]);
-      engine.edit(["Great H", [2, 5]], 0, 1);
-      expect(engine.visible).to.equal("Great Hera");
+      const client = new Client("hello world");
+      client.sources = ["concurrent"];
+      client.edit([[0, 1], "era", [9, 11]]);
+      client.edit(["Great H", [2, 5]], 0, "concurrent");
+      expect(client.visible).to.equal("Great Hera");
     });
     it("concurrent edits 2", () => {
-      const engine = new Engine("hello world");
-      engine.edit(["H", [1, 6], "W", [7, 11]]);
-      engine.edit([[0, 5], ", Brian"]);
+      const client = new Client("hello world");
+      client.sources = ["concurrent"];
+      client.edit(["H", [1, 6], "W", [7, 11]]);
+      client.edit([[0, 5], ", Brian"]);
       // revisions
       //"hello world"
       // inserts
@@ -355,8 +358,8 @@ describe("Engine", () => {
       // ======+++++++=======
       // old deletes from union
       // =+======+====
-      engine.edit([[0, 5], ", Dr. Evil"], 1, 1);
-      expect(engine.visible).to.equal("Hello, Brian, Dr. Evil");
+      client.edit([[0, 5], ", Dr. Evil"], 1, "concurrent");
+      expect(client.visible).to.equal("Hello, Brian, Dr. Evil");
     });
   });
 });

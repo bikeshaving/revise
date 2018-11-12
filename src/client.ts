@@ -11,53 +11,45 @@ import {
 import { apply, Delta, factor, shuffle, synthesize } from "./delta";
 
 export interface Revision {
-  id: string;
+  clientId: string;
   version: number;
-  // sequence of characters which were inserted by this revision
+  // sequence of characters based on union which were inserted by this revision
   inserts: Subset;
-  // sequence of characters which were deleted by this revision
+  // sequence of characters based on union which were deleted by this revision
   deletes: Subset;
-  priority: number;
+  source?: string;
 }
 
-export default class Engine {
+export default class Client {
   public visible: string;
   public hidden: string;
   public deletes: Subset;
   public revisions: Revision[];
   public id: string = uuid();
+  public sources: string[] = [];
+  public version: number = 0;
   constructor(initial: string = "") {
     this.visible = initial;
-    this.hidden = "";
+    this.hidden = initial.slice(0, 0);
     this.deletes = initial.length ? [[initial.length, 0]] : [];
     this.revisions = [
       {
-        id: this.id,
-        version: 0,
+        clientId: this.id,
+        version: this.version++,
         inserts: initial.length ? [[initial.length, 1]] : [],
         deletes: initial.length ? [[initial.length, 0]] : [],
-        priority: 0,
       },
     ];
   }
 
-  public findRevisionIndex(id: string, version: number): number | undefined {
+  public indexOf(clientId: string, version: number) {
     for (let i = this.revisions.length - 1; i >= 0; i--) {
-      const revision: Revision = this.revisions[i];
-      if (revision.id === id && revision.version === version) {
+      const revision = this.revisions[i];
+      if (revision.clientId === clientId && revision.version === version) {
         return i;
       }
     }
-  }
-
-  public findRevision(id: string, version: number): Revision | undefined {
-    const index = this.findRevisionIndex(id, version);
-    return index != null ? this.revisions[index] : undefined;
-  }
-
-  public getVisibleForIndex(index: number): string {
-    const deletes = this.getDeletesFromCurrentForIndex(index);
-    return apply(this.visible, synthesize(this.hidden, this.deletes, deletes));
+    return -1;
   }
 
   public getDeletesForIndex(index: number): Subset {
@@ -79,11 +71,27 @@ export default class Engine {
     return deletes;
   }
 
+  public getVisibleForIndex(index: number): string {
+    const deletes = this.getDeletesFromCurrentForIndex(index);
+    return apply(this.visible, synthesize(this.hidden, this.deletes, deletes));
+  }
+
   public edit(
     delta: Delta,
     index: number = this.revisions.length - 1,
-    priority: number = 0,
-  ): void {
+    source?: string,
+    clientId: string = this.id,
+    version?: number,
+  ): Revision {
+    if (clientId === this.id && version != null) {
+      throw new Error("Can't specify version for local edit");
+    } else if (index < 0 || index > this.revisions.length - 1) {
+      throw new Error("Index out of range of revisions");
+    }
+    const sourceIndex = source == null ? -1 : this.sources.indexOf(source);
+    if (sourceIndex === -1) {
+      source = undefined;
+    }
     const oldDeletes = this.getDeletesForIndex(index);
     const oldVisibleLength = lengthOf(oldDeletes, (c) => c === 0);
     let [inserts, deletes, inserted] = factor(delta, oldVisibleLength);
@@ -91,10 +99,17 @@ export default class Engine {
     deletes = expand(deletes, oldDeletes);
     for (let i = index + 1; i < this.revisions.length; i++) {
       const revision = this.revisions[i];
-      if (priority === revision.priority && this.id === revision.id) {
-        throw new Error("Can’t have concurrent edits with the same priority and client id");
+      if (source === revision.source && clientId === revision.clientId) {
+        throw new Error("Can’t have concurrent edits with the same source and client");
       }
-      const before = priority < revision.priority || this.id < revision.id;
+      const revisionSourceIndex =
+        revision.source == null
+          ? -1
+          : this.sources.indexOf(revision.source);
+      const before =
+        source === revision.source
+          ? this.id < revision.clientId
+          : sourceIndex < revisionSourceIndex;
       inserts = rebase(inserts, revision.inserts, before);
       deletes = expand(deletes, revision.inserts);
     }
@@ -110,15 +125,41 @@ export default class Engine {
       newDeletes,
     );
     const revision: Revision = {
-      id: this.id,
-      version: this.revisions.length,
+      clientId: this.id,
+      version: version || this.version++,
       inserts,
       deletes,
-      priority,
+      source,
     };
     this.revisions.push(revision);
     this.visible = visible1;
     this.hidden = hidden;
     this.deletes = newDeletes;
+    return revision;
   }
+
+  public apply(message: Message): Revision | undefined {
+    const index = this.indexOf(message.parentClientId, message.parentVersion);
+    if (index === -1) {
+      // TODO: put message in the orphanage
+      return;
+    }
+    return this.edit(
+      message.delta,
+      index,
+      message.source,
+      message.clientId,
+      message.version,
+    );
+  }
+}
+
+// TODO: better name for this maybe
+export interface Message {
+  delta: Delta;
+  source?: string;
+  clientId: string;
+  version: number;
+  parentClientId: string;
+  parentVersion: number;
 }
