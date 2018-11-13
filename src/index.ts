@@ -1,6 +1,7 @@
 import uuid from "uuid/v4";
 
-export interface Sequence<T, U> {
+// TODO: use this
+export interface Seq<T, U> {
   length: number;
   slice(this: T, start?: number, end?: number): T;
   concat(this: T, ...items: U[]): T;
@@ -8,8 +9,13 @@ export interface Sequence<T, U> {
 
 // length, count
 export type Segment = [number, number];
+// TODO: we might not need subsets to be multisets, so consider switching from [[length, count]] to [flag, ...length] where flag is boolean which alternates based on state
+export type Subset = Segment[];
 
-export function lengthOf(subset: Subset, test?: (c: number) => boolean) {
+export function lengthOf(
+  subset: Subset,
+  test?: (c: number) => boolean,
+): number {
   return subset.reduce(
     (l, [l1, c]) => (test == null || test(c) ? l + l1 : l),
     0,
@@ -35,8 +41,6 @@ export function pushSegment(
   }
   return subset.length;
 }
-
-export type Subset = Segment[];
 
 // length, count1, count2
 type ZippedSegment = [number, number, number];
@@ -228,71 +232,85 @@ export function deleteSubset(text: string, subset: Subset): string {
   return result;
 }
 
-// inclusive start, exclusive end
-export type Copy = [number, number];
-export type Insert = string;
-export type Delta = (Copy | Insert)[];
+export interface PatchElement {
+  //inclusive
+  start: number;
+  //exclusive
+  end: number;
+  insert: string;
+}
+export type Patch = PatchElement[];
 
-export function apply(text: string, delta: Delta): string {
-  let result = "";
-  for (const el of delta) {
-    if (typeof el === "string") {
-      result += el;
-    } else {
-      result += text.slice.apply(text, el);
-    }
+export function apply(text: string, patch: Patch): string {
+  let result = text.slice(0, 0);
+  for (const { start, end, insert } of patch) {
+    result += text.slice(start, end);
+    result += insert;
   }
   return result;
 }
 
-export function factor(delta: Delta, length: number): [Subset, Subset, string] {
+export function factor(patch: Patch, length: number): [Subset, Subset, string] {
   const inserts: Subset = [];
   const deletes: Subset = [];
   let inserted = "";
-  let end = 0;
-  for (const el of delta) {
-    if (typeof el === "string") {
-      inserted += el;
-      pushSegment(inserts, el.length, 1);
-    } else {
-      pushSegment(inserts, el[1] - end, 0);
-      if (el[0] > end) {
-        pushSegment(deletes, el[0] - end, 1);
+  let consumed = 0;
+  for (const { start, end, insert } of patch) {
+    if (end - start > 0) {
+      pushSegment(inserts, end - consumed, 0);
+      if (start > consumed) {
+        pushSegment(deletes, start - consumed, 1);
       }
-      pushSegment(deletes, el[1] - el[0], 0);
-      end = el[1];
+      pushSegment(deletes, end - start, 0);
     }
+    if (insert.length) {
+      inserted += insert;
+      pushSegment(inserts, insert.length, 1);
+    }
+    consumed = end;
   }
-  if (length > end) {
-    pushSegment(inserts, length - end, 0);
-    pushSegment(deletes, length - end, 1);
+  if (length > consumed) {
+    pushSegment(inserts, length - consumed, 0);
+    pushSegment(deletes, length - consumed, 1);
   }
   return [inserts, deletes, inserted];
 }
 
 export function synthesize(
-  text: string,
+  inserted: string,
   from: Subset,
   to: Subset = [[lengthOf(from), 0]],
-): Delta {
-  const delta: Delta = [];
-  let ri = 0;
-  let ti = 0;
+): Patch {
+  const patch: Patch = [];
+  let consumed = 0;
+  let index = 0;
+  let pe: PatchElement = { start: consumed, end: consumed, insert: "" };
   for (const [length, count1, count2] of zip(from, to)) {
     if (count1 === 0) {
-      ri += length;
+      if (pe.insert.length || pe.end > pe.start) {
+        patch.push(pe);
+        pe = { start: consumed, end: consumed, insert: "" };
+      }
+      consumed += length;
       if (count2 === 0) {
-        const range: Copy = [ri - length, ri];
-        delta.push(range);
+        pe.start = consumed - length;
+        pe.end = consumed;
       }
     } else {
-      ti += length;
+      if (pe.end < consumed) {
+        if (pe.end > pe.start) {
+          patch.push(pe);
+        }
+        pe = { start: consumed, end: consumed, insert: "" };
+      }
+      index += length;
       if (count2 === 0) {
-        delta.push(text.slice(ti - length, ti));
+        pe.insert += inserted.slice(index - length, index);
       }
     }
   }
-  return delta;
+  patch.push(pe);
+  return patch;
 }
 
 // Do the variable names make sense? Does this belong here?
@@ -302,10 +320,26 @@ export function shuffle(
   inserts: Subset,
   deletes: Subset,
 ): [string, string] {
-  return [
-    apply(from, synthesize(to, inserts, deletes)),
-    apply(to, synthesize(from, complement(inserts), complement(deletes))),
-  ];
+  const fromPatch = synthesize(to, inserts, deletes);
+  const toPatch = synthesize(from, complement(inserts), complement(deletes));
+  return [apply(from, fromPatch), apply(to, toPatch)];
+}
+
+// TODO: better name for this maybe
+export interface Message {
+  patch: Patch;
+  source?: string;
+  clientId: string;
+  version: number;
+  parentClientId: string;
+  parentVersion: number;
+}
+
+export interface Document<T extends Seq<any, any>> {
+  visible: T;
+  hidden: T;
+  deleted: Subset;
+  revisions: RevisionStore;
 }
 
 export interface Revision {
@@ -316,6 +350,39 @@ export interface Revision {
   // sequence of characters based on union which were deleted by this revision
   deletes: Subset;
   source?: string;
+}
+
+export interface RevisionStore {
+  indexOf(clientId: string, version: number): number;
+  slice(start?: number, end?: number): Revision[];
+  push(revision: Revision): number;
+  length: number;
+}
+
+export class ArrayRevisionStore implements RevisionStore {
+  public length: number;
+  constructor(private revisions: Revision[] = []) {
+    this.length = revisions.length;
+  }
+
+  public indexOf(clientId: string, version: number) {
+    for (let i = this.revisions.length - 1; i >= 0; i--) {
+      const revision = this.revisions[i];
+      if (revision.clientId === clientId && revision.version === version) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  public slice(start?: number, end?: number): Revision[] {
+    return this.revisions.slice(start, end);
+  }
+
+  public push(revision: Revision): number {
+    this.length = this.revisions.push(revision);
+    return this.length;
+  }
 }
 
 export class Client {
@@ -377,12 +444,12 @@ export class Client {
   }
 
   public edit(
-    delta: Delta,
+    patch: Patch,
     index: number = this.revisions.length - 1,
     source?: string,
     clientId: string = this.id,
     version?: number,
-  ): Revision {
+  ): Message {
     if (clientId === this.id && version != null) {
       throw new Error("Can't specify version for local edit");
     } else if (index < 0 || index > this.revisions.length - 1) {
@@ -394,18 +461,18 @@ export class Client {
     }
     const oldDeletes = this.getDeletesForIndex(index);
     const oldVisibleLength = lengthOf(oldDeletes, (c) => c === 0);
-    let [inserts, deletes, inserted] = factor(delta, oldVisibleLength);
+    let [inserts, deletes, inserted] = factor(patch, oldVisibleLength);
     inserts = rebase(inserts, oldDeletes);
     deletes = expand(deletes, oldDeletes);
     for (let i = index + 1; i < this.revisions.length; i++) {
       const revision = this.revisions[i];
       if (source === revision.source && clientId === revision.clientId) {
-        throw new Error("Can’t have concurrent edits with the same source and client");
+        throw new Error(
+          "Can’t have concurrent edits with the same client and source",
+        );
       }
       const revisionSourceIndex =
-        revision.source == null
-          ? -1
-          : this.sources.indexOf(revision.source);
+        revision.source == null ? -1 : this.sources.indexOf(revision.source);
       const before =
         source === revision.source
           ? this.id < revision.clientId
@@ -425,7 +492,7 @@ export class Client {
       newDeletes,
     );
     const revision: Revision = {
-      clientId: this.id,
+      clientId,
       version: version || this.version++,
       inserts,
       deletes,
@@ -435,17 +502,27 @@ export class Client {
     this.visible = visible1;
     this.hidden = hidden;
     this.deletes = newDeletes;
-    return revision;
+    const { clientId: parentClientId, version: parentVersion } = this.revisions[
+      index
+    ];
+    return {
+      patch,
+      source,
+      clientId,
+      version: revision.version,
+      parentClientId,
+      parentVersion,
+    };
   }
 
-  public apply(message: Message): Revision | undefined {
+  public apply(message: Message): Message | undefined {
     const index = this.indexOf(message.parentClientId, message.parentVersion);
     if (index === -1) {
       // TODO: put message in the orphanage
       return;
     }
     return this.edit(
-      message.delta,
+      message.patch,
       index,
       message.source,
       message.clientId,
@@ -454,12 +531,4 @@ export class Client {
   }
 }
 
-// TODO: better name for this maybe
-export interface Message {
-  delta: Delta;
-  source?: string;
-  clientId: string;
-  version: number;
-  parentClientId: string;
-  parentVersion: number;
-}
+export class Server {}

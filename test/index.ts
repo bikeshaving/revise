@@ -23,7 +23,10 @@ describe("subset", () => {
       [4, 0],
     ]);
     expect(
-      shredder.union([[2, 1], [2, 0], [2, 1]], [[1, 0], [2, 1], [2, 0], [1, 1]]),
+      shredder.union(
+        [[2, 1], [2, 0], [2, 1]],
+        [[1, 0], [2, 1], [2, 0], [1, 1]],
+      ),
     ).to.deep.equal([[1, 1], [1, 2], [1, 1], [1, 0], [1, 1], [1, 2]]);
   });
 
@@ -51,7 +54,7 @@ describe("subset", () => {
 
     it("same position", () => {
       // subset
-      // ==++==== 
+      // ==++====
       // transform
       // ==++====
       // result after
@@ -67,7 +70,7 @@ describe("subset", () => {
     });
 
     it("same position different lengths", () => {
-      // subset 
+      // subset
       // ==++++==
       // transform
       // ==++==
@@ -188,7 +191,14 @@ describe("subset", () => {
       // +==++=+===
       // result before
       // +=++==+===
-      const s: shredder.Subset = [[1, 1], [1, 0], [2, 1], [1, 0], [1, 1], [2, 0]];
+      const s: shredder.Subset = [
+        [1, 1],
+        [1, 0],
+        [2, 1],
+        [1, 0],
+        [1, 1],
+        [2, 0],
+      ];
       const t: shredder.Subset = [[1, 0], [1, 1], [3, 0], [1, 1]];
       const result = [[1, 1], [2, 0], [2, 1], [1, 0], [1, 1], [3, 0]];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
@@ -198,40 +208,54 @@ describe("subset", () => {
   });
 });
 
-describe("delta", () => {
-  const d: shredder.Delta = [[0, 1], "era", [9, 11]];
-  const d1: shredder.Delta = ["je", [2, 5]];
-  const d2: shredder.Delta = [[0, 4], " ", [4, 5], "n Earth"];
+describe("patch", () => {
+  const p0: shredder.Patch = [
+    { start: 0, end: 1, insert: "era" },
+    { start: 9, end: 11, insert: "" },
+  ];
+  const p1: shredder.Patch = [
+    { start: 0, end: 0, insert: "je" },
+    { start: 2, end: 5, insert: "" },
+  ];
+  const p2: shredder.Patch = [
+    { start: 0, end: 4, insert: " " },
+    { start: 4, end: 5, insert: "n Earth" },
+  ];
   const text = "hello world";
   it("apply", () => {
-    expect(shredder.apply(text, d)).to.equal("herald");
-    expect(shredder.apply(text, d1)).to.equal("jello");
-    expect(shredder.apply(text, d2)).to.equal("hell on Earth");
+    expect(shredder.apply(text, p0)).to.equal("herald");
+    expect(shredder.apply(text, p1)).to.equal("jello");
+    expect(shredder.apply(text, p2)).to.equal("hell on Earth");
   });
 
   it("factor", () => {
-    const [inserts, deletes] = shredder.factor(d, text.length);
+    const [inserts, deletes] = shredder.factor(p0, text.length);
     expect(inserts).to.deep.equal([[1, 0], [3, 1], [10, 0]]);
     expect(deletes).to.deep.equal([[1, 0], [8, 1], [2, 0]]);
-    const [inserts1, deletes1] = shredder.factor(d1, text.length);
+    const [inserts1, deletes1] = shredder.factor(p1, text.length);
     expect(inserts1).to.deep.equal([[2, 1], [11, 0]]);
     expect(deletes1).to.deep.equal([[2, 1], [3, 0], [6, 1]]);
-    const [inserts2, deletes2] = shredder.factor(d2, text.length);
+    const [inserts2, deletes2] = shredder.factor(p2, text.length);
     expect(inserts2).to.deep.equal([[4, 0], [1, 1], [1, 0], [7, 1], [6, 0]]);
     expect(deletes2).to.deep.equal([[5, 0], [6, 1]]);
   });
 
   it("synthesize", () => {
-    const [inserts, deletes, inserted] = shredder.factor(d, text.length);
+    const [inserts, deletes, inserted] = shredder.factor(p0, text.length);
     const deletes1: shredder.Subset = shredder.expand(deletes, inserts);
     const union = shredder.apply(text, shredder.synthesize(inserted, inserts));
     const text1 = shredder.deleteSubset(union, shredder.complement(deletes1));
-    const tombstones = shredder.deleteSubset(union, shredder.complement(inserts));
-    expect(shredder.synthesize(tombstones, inserts, deletes1)).to.deep.equal(d);
+    const tombstones = shredder.deleteSubset(
+      union,
+      shredder.complement(inserts),
+    );
+    expect(shredder.synthesize(tombstones, inserts, deletes1)).to.deep.equal(
+      p0,
+    );
     expect(shredder.synthesize(text1, deletes1, inserts)).to.deep.equal([
-      [0, 1],
-      "ello wor",
-      [4, 6],
+      { start: 0, end: 1, insert: "" },
+      { start: 4, end: 4, insert: "ello wor" },
+      { start: 4, end: 6, insert: "" },
     ]);
   });
 });
@@ -249,9 +273,17 @@ describe("Client", () => {
       // =+===========+++++++
       //"Hhello, Brian, Dr. Evil Wworld"
       // =+=====================+++++++
-      client.edit(["H", [1, 6], "W", [7, 11]]);
-      client.edit([[0, 5], ", Brian"]);
-      client.edit([[0, 5], ", Dr. Evil"], 1, "concurrent");
+      client.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
+      client.edit([{ start: 0, end: 5, insert: ", Brian" }]);
+      client.edit(
+        [{ start: 0, end: 5, insert: ", Dr. Evil" }],
+        1,
+        "concurrent",
+      );
       const deletes = [[11, 0]];
       expect(client.getDeletesForIndex(0)).to.deep.equal(deletes);
       const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
@@ -266,7 +298,10 @@ describe("Client", () => {
   describe("Client.edit", () => {
     it("simple edit", () => {
       const client = new Client("hello world");
-      client.edit([[0, 1], "era", [9, 11]]);
+      client.edit([
+        { start: 0, end: 1, insert: "era" },
+        { start: 9, end: 11, insert: "" },
+      ]);
       expect(client.revisions.length).to.equal(2);
       expect(client.visible).to.equal("herald");
       expect(client.hidden).to.equal("ello wor");
@@ -281,13 +316,20 @@ describe("Client", () => {
       // deletes
       // =++++++++==
       //"hello world"
-      client.edit([[0, 1], "era", [9, 11]]);
-      client.edit([[0, 6], "ry"]);
+      client.edit([
+        { start: 0, end: 1, insert: "era" },
+        { start: 9, end: 11, insert: "" },
+      ]);
+      client.edit([{ start: 0, end: 6, insert: "ry" }]);
       expect(client.visible).to.equal("heraldry");
     });
     it("sequential edits 2", () => {
       const client = new Client("hello world");
-      client.edit(["H", [1, 6], "W", [7, 11]]);
+      client.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
       // union string
       //"Hhello Wworld"
       // inserts
@@ -314,21 +356,40 @@ describe("Client", () => {
       // union of expanded deletes and rebased current deletes
       //"Hhello, Brian Wworld"
       // =+===========+++++++
-      client.edit([[0, 5], ", Brian"]);
+      client.edit([{ start: 0, end: 5, insert: ", Brian" }]);
       expect(client.visible).to.equal("Hello, Brian");
     });
     it("concurrent edits 1", () => {
       const client = new Client("hello world");
       client.sources = ["concurrent"];
-      client.edit([[0, 1], "era", [9, 11]]);
-      client.edit(["Great H", [2, 5]], 0, "concurrent");
+      client.edit([
+        { start: 0, end: 1, insert: "era" },
+        { start: 9, end: 11, insert: "" },
+      ]);
+      client.edit(
+        [
+          { start: 0, end: 0, insert: "Great H" },
+          { start: 2, end: 5, insert: "" },
+        ],
+        0,
+        "concurrent",
+      );
       expect(client.visible).to.equal("Great Hera");
     });
     it("concurrent edits 2", () => {
       const client = new Client("hello world");
       client.sources = ["concurrent"];
-      client.edit(["H", [1, 6], "W", [7, 11]]);
-      client.edit([[0, 5], ", Brian"]);
+      client.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
+      client.edit([{ start: 0, end: 5, insert: ", Brian" }]);
+      client.edit(
+        [{ start: 0, end: 5, insert: ", Dr. Evil" }],
+        1,
+        "concurrent",
+      );
       // revisions
       //"hello world"
       // inserts
@@ -357,7 +418,6 @@ describe("Client", () => {
       // ======+++++++=======
       // old deletes from union
       // =+======+====
-      client.edit([[0, 5], ", Dr. Evil"], 1, "concurrent");
       expect(client.visible).to.equal("Hello, Brian, Dr. Evil");
     });
   });
