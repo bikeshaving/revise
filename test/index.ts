@@ -281,7 +281,7 @@ describe("Document", () => {
         { start: 7, end: 11, insert: "" },
       ]);
       doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
-      doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], 1, "concurrent");
+      doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], "concurrent", 1);
       const deletes = [[11, 0]];
       expect(doc.getDeletesForIndex(0)).to.deep.equal(deletes);
       const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
@@ -369,8 +369,8 @@ describe("Document", () => {
           { start: 0, end: 0, insert: "Great H" },
           { start: 2, end: 5, insert: "" },
         ],
-        0,
         "concurrent",
+        0,
       );
       expect(doc.visible).to.equal("Great Hera");
     });
@@ -382,7 +382,7 @@ describe("Document", () => {
         { start: 7, end: 11, insert: "" },
       ]);
       doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
-      doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], 1, "concurrent");
+      doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], "concurrent", 1);
       // revisions
       //"hello world"
       // inserts

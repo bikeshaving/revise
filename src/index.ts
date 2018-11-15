@@ -465,8 +465,8 @@ export class Document<T> {
     patch: Patch<T>,
     pi: number, // parent index
     clientId: string = this.clientId,
-    version?: number,
     intent?: string,
+    version?: number,
   ): Message<T> {
     if (clientId === this.clientId && version != null) {
       throw new Error("Cannot specify version for local edit");
@@ -541,10 +541,10 @@ export class Document<T> {
 
   public edit(
     patch: Patch<T>,
-    pi: number = this.revisions.length - 1, // parent index
     intent?: string,
+    pi: number = this.revisions.length - 1, // parent index
   ): Message<T> {
-    return this.revise(patch, pi, this.clientId, undefined, intent);
+    return this.revise(patch, pi, this.clientId, intent);
   }
 
   public ingest(message: Message<T>): Message<T> | undefined {
@@ -561,7 +561,7 @@ export class Document<T> {
     if (pi === -1) {
       return;
     }
-    return this.revise(patch, pi, clientId, version, intent);
+    return this.revise(patch, pi, clientId, intent, version);
   }
 }
 
