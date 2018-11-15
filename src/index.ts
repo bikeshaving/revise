@@ -1,10 +1,10 @@
 import uuid from "uuid/v4";
+import EventEmitter from "events";
 
-// TODO: use this
-export interface Seq<T, U> {
+export interface Seq<T> {
   length: number;
-  slice(this: T, start?: number, end?: number): T;
-  concat(this: T, ...items: U[]): T;
+  slice(start?: number, end?: number): Seq<T>;
+  concat(...items: (T | Seq<T>)[]): Seq<T>;
 }
 
 // length, count
@@ -12,10 +12,7 @@ export type Segment = [number, number];
 // TODO: we might not need subsets to be multisets, so consider switching from [[length, count]] to [flag, ...length] where flag is boolean which alternates based on state
 export type Subset = Segment[];
 
-export function lengthOf(
-  subset: Subset,
-  test?: (c: number) => boolean,
-): number {
+export function countBy(subset: Subset, test?: (c: number) => boolean): number {
   return subset.reduce(
     (l, [l1, c]) => (test == null || test(c) ? l + l1 : l),
     0,
@@ -42,10 +39,8 @@ export function pushSegment(
   return subset.length;
 }
 
-// length, count1, count2
-type ZippedSegment = [number, number, number];
-
-class ZippedSubset implements IterableIterator<ZippedSegment> {
+type ZipValue = [number, number, number];
+class ZipIterator implements IterableIterator<ZipValue> {
   private i1: number = 0;
   private i2: number = 0;
   private consumed1: number = 0;
@@ -53,14 +48,14 @@ class ZippedSubset implements IterableIterator<ZippedSegment> {
   private consumed: number = 0;
   constructor(private subset1: Subset, private subset2: Subset) {}
 
-  public next(): IteratorResult<ZippedSegment> {
+  public next(): IteratorResult<ZipValue> {
     const segment1 = this.subset1[this.i1];
     const segment2 = this.subset2[this.i2];
     if (segment1 == null || segment2 == null) {
       if (segment1 || segment2) {
         throw new Error("Length mismatch");
       }
-      return ({ done: true } as any) as IteratorResult<ZippedSegment>;
+      return ({ done: true } as any) as IteratorResult<ZipValue>;
     }
     const [length1, count1] = segment1;
     const [length2, count2] = segment2;
@@ -100,8 +95,8 @@ class ZippedSubset implements IterableIterator<ZippedSegment> {
   }
 }
 
-export function zip(a: Subset, b: Subset): ZippedSubset {
-  return new ZippedSubset(a, b);
+export function zip(a: Subset, b: Subset): ZipIterator {
+  return new ZipIterator(a, b);
 }
 
 export function complement(subset: Subset): Subset {
@@ -166,7 +161,7 @@ export function rebase(
   subset2: Subset,
   before?: boolean,
 ): Subset {
-  if (lengthOf(subset1, (c) => c === 0) !== lengthOf(subset2, (c) => c === 0)) {
+  if (countBy(subset1, (c) => c === 0) !== countBy(subset2, (c) => c === 0)) {
     throw new Error("Length mismatch");
   }
   const result: Subset = [];
@@ -220,40 +215,54 @@ export function rebase(
   return result;
 }
 
-export function deleteSubset(text: string, subset: Subset): string {
-  let result = "";
+export function deleteSubset<T>(text: Seq<T>, subset: Subset): Seq<T> {
+  let result = text.slice(0, 0);
   let consumed = 0;
   for (const [length, count] of subset) {
     consumed += length;
     if (!count) {
-      result += text.slice(consumed - length, consumed);
+      if (typeof result === "string") {
+        result += text.slice(consumed - length, consumed);
+      } else {
+        result = result.concat(text.slice(consumed - length, consumed));
+      }
     }
   }
   return result;
 }
 
-export interface PatchElement {
-  //inclusive
+// To apply a patch, copy from start (inclusive) to end (exclusive) and splice insert at end.
+// Deletes are represented via omission
+export interface PatchElement<T> {
   start: number;
-  //exclusive
   end: number;
-  insert: string;
+  insert: Seq<T>;
 }
-export type Patch = PatchElement[];
 
-export function apply(text: string, patch: Patch): string {
+export type Patch<T> = PatchElement<T>[];
+
+export function apply<T>(text: Seq<T>, patch: Patch<T>): Seq<T> {
   let result = text.slice(0, 0);
   for (const { start, end, insert } of patch) {
-    result += text.slice(start, end);
-    result += insert;
+    if (typeof result === "string") {
+      result += text.slice(start, end);
+      result += insert;
+    } else {
+      result = result.concat(text.slice(start, end));
+      result = result.concat(insert);
+    }
   }
   return result;
 }
 
-export function factor(patch: Patch, length: number): [Subset, Subset, string] {
+export function factor<T>(
+  patch: Patch<T>,
+  length: number,
+  empty: Seq<T>,
+): [Subset, Subset, Seq<T>] {
   const inserts: Subset = [];
   const deletes: Subset = [];
-  let inserted = "";
+  let inserted: Seq<T> = empty.slice();
   let consumed = 0;
   for (const { start, end, insert } of patch) {
     if (end - start > 0) {
@@ -264,7 +273,11 @@ export function factor(patch: Patch, length: number): [Subset, Subset, string] {
       pushSegment(deletes, end - start, 0);
     }
     if (insert.length) {
-      inserted += insert;
+      if (typeof inserted === "string") {
+        inserted += insert;
+      } else {
+        inserted = inserted.concat(insert);
+      }
       pushSegment(inserts, insert.length, 1);
     }
     consumed = end;
@@ -276,20 +289,24 @@ export function factor(patch: Patch, length: number): [Subset, Subset, string] {
   return [inserts, deletes, inserted];
 }
 
-export function synthesize(
-  inserted: string,
+export function synthesize<T>(
+  inserted: Seq<T>,
   from: Subset,
-  to: Subset = [[lengthOf(from), 0]],
-): Patch {
-  const patch: Patch = [];
+  to: Subset = [[countBy(from), 0]],
+): Patch<T> {
+  const patch: Patch<T> = [];
   let consumed = 0;
   let index = 0;
-  let pe: PatchElement = { start: consumed, end: consumed, insert: "" };
+  let pe: PatchElement<T> = {
+    start: consumed,
+    end: consumed,
+    insert: inserted.slice(0, 0),
+  };
   for (const [length, count1, count2] of zip(from, to)) {
     if (count1 === 0) {
       if (pe.insert.length || pe.end > pe.start) {
         patch.push(pe);
-        pe = { start: consumed, end: consumed, insert: "" };
+        pe = { start: consumed, end: consumed, insert: inserted.slice(0, 0) };
       }
       consumed += length;
       if (count2 === 0) {
@@ -301,11 +318,15 @@ export function synthesize(
         if (pe.end > pe.start) {
           patch.push(pe);
         }
-        pe = { start: consumed, end: consumed, insert: "" };
+        pe = { start: consumed, end: consumed, insert: inserted.slice(0, 0) };
       }
       index += length;
       if (count2 === 0) {
-        pe.insert += inserted.slice(index - length, index);
+        if (typeof pe.insert === "string") {
+          pe.insert += inserted.slice(index - length, index);
+        } else {
+          pe.insert = pe.insert.concat(inserted.slice(index - length, index));
+        }
       }
     }
   }
@@ -314,32 +335,24 @@ export function synthesize(
 }
 
 // Do the variable names make sense? Does this belong here?
-export function shuffle(
-  from: string,
-  to: string,
+export function shuffle<T>(
+  from: Seq<T>,
+  to: Seq<T>,
   inserts: Subset,
   deletes: Subset,
-): [string, string] {
+): [Seq<T>, Seq<T>] {
   const fromPatch = synthesize(to, inserts, deletes);
   const toPatch = synthesize(from, complement(inserts), complement(deletes));
   return [apply(from, fromPatch), apply(to, toPatch)];
 }
 
-// TODO: better name for this maybe
-export interface Message {
-  patch: Patch;
-  source?: string;
+export interface Message<T> {
   clientId: string;
   version: number;
   parentClientId: string;
   parentVersion: number;
-}
-
-export interface Document<T extends Seq<any, any>> {
-  visible: T;
-  hidden: T;
-  deleted: Subset;
-  revisions: RevisionStore;
+  patch: Patch<T>;
+  intent?: string;
 }
 
 export interface Revision {
@@ -349,23 +362,23 @@ export interface Revision {
   inserts: Subset;
   // sequence of characters based on union which were deleted by this revision
   deletes: Subset;
-  source?: string;
+  intent?: string;
 }
 
-export interface RevisionStore {
-  indexOf(clientId: string, version: number): number;
+export interface RevisionLog {
   slice(start?: number, end?: number): Revision[];
   push(revision: Revision): number;
+  locate(clientId: string, version: number): number;
   length: number;
 }
 
-export class ArrayRevisionStore implements RevisionStore {
+export class ArrayRevisionLog implements RevisionLog {
   public length: number;
   constructor(private revisions: Revision[] = []) {
     this.length = revisions.length;
   }
 
-  public indexOf(clientId: string, version: number) {
+  public locate(clientId: string, version: number) {
     for (let i = this.revisions.length - 1; i >= 0; i--) {
       const revision = this.revisions[i];
       if (revision.clientId === clientId && revision.version === version) {
@@ -385,98 +398,85 @@ export class ArrayRevisionStore implements RevisionStore {
   }
 }
 
-export class Client {
-  public visible: string;
-  public hidden: string;
-  public deletes: Subset;
-
-  public id: string = uuid();
-  public revisions: Revision[];
-  public version: number = 0;
-  public sources: string[] = [];
-
-  constructor(initial: string = "") {
-    this.visible = initial;
-    this.hidden = initial.slice(0, 0);
-    this.deletes = initial.length ? [[initial.length, 0]] : [];
-    this.revisions = [
-      {
-        clientId: this.id,
-        version: this.version++,
-        inserts: initial.length ? [[initial.length, 1]] : [],
-        deletes: initial.length ? [[initial.length, 0]] : [],
-      },
-    ];
+export class Document<T> extends EventEmitter {
+  public constructor(
+    public visible: Seq<T>,
+    public hidden: Seq<T>,
+    public deletes: Subset,
+    public intents: string[],
+    public revisions: RevisionLog,
+  ) {
+    super();
   }
 
-  public indexOf(clientId: string, version: number) {
-    for (let i = this.revisions.length - 1; i >= 0; i--) {
-      const revision = this.revisions[i];
-      if (revision.clientId === clientId && revision.version === version) {
-        return i;
-      }
-    }
-    return -1;
+  public static create<T>(
+    clientId: string,
+    version: number,
+    initial: Seq<T>,
+    intents: string[] = [],
+    revisions: RevisionLog = new ArrayRevisionLog(),
+  ) {
+    revisions.push({
+      clientId,
+      version,
+      inserts: initial.length ? [[initial.length, 1]] : [],
+      deletes: initial.length ? [[initial.length, 0]] : [],
+    });
+    return new Document<T>(
+      initial,
+      initial.slice(0, 0),
+      [[initial.length, 0]],
+      intents,
+      revisions,
+    );
   }
 
   public getDeletesForIndex(index: number): Subset {
     let deletes: Subset = this.deletes;
-    for (let i = this.revisions.length - 1; i > index; i--) {
-      const revision = this.revisions[i];
+    for (const revision of this.revisions.slice(index + 1).reverse()) {
       deletes = subtract(deletes, revision.deletes);
       deletes = shrink(deletes, revision.inserts);
     }
     return deletes;
   }
 
-  public getDeletesFromCurrentForIndex(index: number): Subset {
-    let deletes = this.getDeletesForIndex(index);
-    for (let i = index + 1; i < this.revisions.length; i++) {
-      const revision = this.revisions[i];
-      deletes = union(expand(deletes, revision.inserts), revision.inserts);
-    }
-    return deletes;
-  }
-
-  public getVisibleForIndex(index: number): string {
-    const deletes = this.getDeletesFromCurrentForIndex(index);
-    return apply(this.visible, synthesize(this.hidden, this.deletes, deletes));
-  }
-
   public edit(
-    patch: Patch,
-    index: number = this.revisions.length - 1,
-    source?: string,
-    clientId: string = this.id,
+    patch: Patch<T>,
+    pi: number, // parent index
+    clientId: string,
     version?: number,
-  ): Message {
-    if (clientId === this.id && version != null) {
-      throw new Error("Can't specify version for local edit");
-    } else if (index < 0 || index > this.revisions.length - 1) {
+    intent?: string,
+  ): void {
+    if (pi < 0 || pi > this.revisions.length - 1) {
       throw new Error("Index out of range of revisions");
     }
-    const sourceIndex = source == null ? -1 : this.sources.indexOf(source);
-    if (sourceIndex === -1) {
-      source = undefined;
+    version = version == null ? this.revisions.length + 1 : version;
+    // intent index
+    const ii = intent == null ? -1 : this.intents.indexOf(intent);
+    if (ii === -1) {
+      intent = undefined;
     }
-    const oldDeletes = this.getDeletesForIndex(index);
-    const oldVisibleLength = lengthOf(oldDeletes, (c) => c === 0);
-    let [inserts, deletes, inserted] = factor(patch, oldVisibleLength);
+    const oldDeletes = this.getDeletesForIndex(pi);
+    const oldLength = countBy(oldDeletes, (c) => c === 0);
+    let [inserts, deletes, inserted] = factor(
+      patch,
+      oldLength,
+      this.visible.slice(0, 0),
+    );
     inserts = rebase(inserts, oldDeletes);
     deletes = expand(deletes, oldDeletes);
-    for (let i = index + 1; i < this.revisions.length; i++) {
-      const revision = this.revisions[i];
-      if (source === revision.source && clientId === revision.clientId) {
+    const revisions = this.revisions.slice(pi + 1);
+    for (const revision of revisions) {
+      if (intent === revision.intent && clientId === revision.clientId) {
         throw new Error(
           "Can’t have concurrent edits with the same client and source",
         );
       }
-      const revisionSourceIndex =
-        revision.source == null ? -1 : this.sources.indexOf(revision.source);
+      // revision intent index
+      const rii =
+        revision.intent == null ? -1 : this.intents.indexOf(revision.intent);
       const before =
-        source === revision.source
-          ? this.id < revision.clientId
-          : sourceIndex < revisionSourceIndex;
+        intent === revision.intent ? clientId < revision.clientId : ii < rii;
       inserts = rebase(inserts, revision.inserts, before);
       deletes = expand(deletes, revision.inserts);
     }
@@ -493,42 +493,66 @@ export class Client {
     );
     const revision: Revision = {
       clientId,
-      version: version || this.version++,
+      version,
       inserts,
       deletes,
-      source,
+      intent,
     };
     this.revisions.push(revision);
     this.visible = visible1;
     this.hidden = hidden;
     this.deletes = newDeletes;
-    const { clientId: parentClientId, version: parentVersion } = this.revisions[
-      index
-    ];
-    return {
-      patch,
-      source,
-      clientId,
-      version: revision.version,
-      parentClientId,
-      parentVersion,
-    };
   }
 
-  public apply(message: Message): Message | undefined {
-    const index = this.indexOf(message.parentClientId, message.parentVersion);
-    if (index === -1) {
-      // TODO: put message in the orphanage
+  public ingest(message: Message<T>): void {
+    const {
+      patch,
+      clientId,
+      version,
+      parentClientId,
+      parentVersion,
+      intent,
+    } = message;
+    // revision index
+    const ri = this.revisions.locate(parentClientId, parentVersion);
+    if (ri === -1) {
       return;
     }
-    return this.edit(
-      message.patch,
-      index,
-      message.source,
-      message.clientId,
-      message.version,
-    );
+    this.edit(patch, ri, clientId, version, intent);
   }
 }
 
-export class Server {}
+export interface Client {
+  getDocument(id: string): Document<any> | undefined;
+  connect(id: string, doc: Document<any>): void;
+  disconnect(id: string): void;
+  // edit(id: string, patch: Patch, parentIndex: number, source?: string): void;
+}
+
+export interface Server {
+  TODO: number;
+}
+
+export class LocalClient extends EventEmitter implements Client {
+  private documents: Record<string, Document<any>> = {};
+  public sources: string[] = [];
+  public id = uuid();
+  constructor(public server: Server) {
+    super();
+  }
+
+  getDocument(id: string): Document<any> | undefined {
+    return this.documents[id];
+  }
+
+  connect(id: string, doc: Document<any>): void {
+    if (this.documents[id]) {
+      throw new Error(`Document with id ${id} already exists`);
+    }
+    this.documents[id] = doc;
+  }
+
+  disconnect(id: string): void {
+    delete this.documents[id];
+  }
+}

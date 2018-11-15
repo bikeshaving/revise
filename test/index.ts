@@ -7,14 +7,14 @@ import { expect } from "chai";
 // testcheck.install();
 
 import * as shredder from "../src/index";
-import { Client } from "../src/index";
+import { Document } from "../src/index";
 
 describe("subset", () => {
-  it("lengthOf", () => {
+  it("countBy", () => {
     const s: shredder.Subset = [[10, 0], [5, 1], [8, 0], [4, 1], [4, 0]];
-    expect(shredder.lengthOf(s)).to.equal(31);
-    expect(shredder.lengthOf(s, (c) => c === 0)).to.equal(22);
-    expect(shredder.lengthOf(s, (c) => c === 1)).to.equal(9);
+    expect(shredder.countBy(s)).to.equal(31);
+    expect(shredder.countBy(s, (c) => c === 0)).to.equal(22);
+    expect(shredder.countBy(s, (c) => c === 1)).to.equal(9);
   });
 
   it("union", () => {
@@ -208,16 +208,17 @@ describe("subset", () => {
   });
 });
 
+type Patch = shredder.Patch<string>;
 describe("patch", () => {
-  const p0: shredder.Patch = [
+  const p0: Patch = [
     { start: 0, end: 1, insert: "era" },
     { start: 9, end: 11, insert: "" },
   ];
-  const p1: shredder.Patch = [
+  const p1: Patch = [
     { start: 0, end: 0, insert: "je" },
     { start: 2, end: 5, insert: "" },
   ];
-  const p2: shredder.Patch = [
+  const p2: Patch = [
     { start: 0, end: 4, insert: " " },
     { start: 4, end: 5, insert: "n Earth" },
   ];
@@ -229,19 +230,19 @@ describe("patch", () => {
   });
 
   it("factor", () => {
-    const [inserts, deletes] = shredder.factor(p0, text.length);
+    const [inserts, deletes] = shredder.factor(p0, text.length, "");
     expect(inserts).to.deep.equal([[1, 0], [3, 1], [10, 0]]);
     expect(deletes).to.deep.equal([[1, 0], [8, 1], [2, 0]]);
-    const [inserts1, deletes1] = shredder.factor(p1, text.length);
+    const [inserts1, deletes1] = shredder.factor(p1, text.length, "");
     expect(inserts1).to.deep.equal([[2, 1], [11, 0]]);
     expect(deletes1).to.deep.equal([[2, 1], [3, 0], [6, 1]]);
-    const [inserts2, deletes2] = shredder.factor(p2, text.length);
+    const [inserts2, deletes2] = shredder.factor(p2, text.length, "");
     expect(inserts2).to.deep.equal([[4, 0], [1, 1], [1, 0], [7, 1], [6, 0]]);
     expect(deletes2).to.deep.equal([[5, 0], [6, 1]]);
   });
 
   it("synthesize", () => {
-    const [inserts, deletes, inserted] = shredder.factor(p0, text.length);
+    const [inserts, deletes, inserted] = shredder.factor(p0, text.length, "");
     const deletes1: shredder.Subset = shredder.expand(deletes, inserts);
     const union = shredder.apply(text, shredder.synthesize(inserted, inserts));
     const text1 = shredder.deleteSubset(union, shredder.complement(deletes1));
@@ -260,11 +261,12 @@ describe("patch", () => {
   });
 });
 
-describe("Client", () => {
-  describe("Client.getDeletesForIndex", () => {
+describe("Document", () => {
+  const clientId = "hi";
+  const intents = ["concurrent"];
+  describe("Document.getDeletesForIndex", () => {
     it("get deletes for all points in history", () => {
-      const client = new Client("hello world");
-      client.sources = ["concurrent"];
+      const doc = Document.create(clientId, 0, "hello world", intents);
       //"hello world"
       // ===========
       //"Hhello Wworld"
@@ -273,42 +275,55 @@ describe("Client", () => {
       // =+===========+++++++
       //"Hhello, Brian, Dr. Evil Wworld"
       // =+=====================+++++++
-      client.edit([
-        { start: 0, end: 0, insert: "H" },
-        { start: 1, end: 6, insert: "W" },
-        { start: 7, end: 11, insert: "" },
-      ]);
-      client.edit([{ start: 0, end: 5, insert: ", Brian" }]);
-      client.edit(
+      doc.edit(
+        [
+          { start: 0, end: 0, insert: "H" },
+          { start: 1, end: 6, insert: "W" },
+          { start: 7, end: 11, insert: "" },
+        ],
+        0,
+        clientId,
+        1,
+      );
+      doc.edit([{ start: 0, end: 5, insert: ", Brian" }], 1, clientId, 2);
+      doc.edit(
         [{ start: 0, end: 5, insert: ", Dr. Evil" }],
         1,
+        clientId,
+        2,
         "concurrent",
       );
       const deletes = [[11, 0]];
-      expect(client.getDeletesForIndex(0)).to.deep.equal(deletes);
+      expect(doc.getDeletesForIndex(0)).to.deep.equal(deletes);
       const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
-      expect(client.getDeletesForIndex(1)).to.deep.equal(deletes1);
+      expect(doc.getDeletesForIndex(1)).to.deep.equal(deletes1);
       const deletes2 = [[1, 0], [1, 1], [11, 0], [7, 1]];
-      expect(client.getDeletesForIndex(2)).to.deep.equal(deletes2);
+      expect(doc.getDeletesForIndex(2)).to.deep.equal(deletes2);
       const deletes3 = [[1, 0], [1, 1], [21, 0], [2, 2], [1, 1], [4, 2]];
-      expect(client.getDeletesForIndex(3)).to.deep.equal(deletes3);
-      expect(client.getDeletesForIndex(3)).to.deep.equal(client.deletes);
+      expect(doc.getDeletesForIndex(3)).to.deep.equal(deletes3);
+      expect(doc.getDeletesForIndex(3)).to.deep.equal(doc.deletes);
     });
   });
+
   describe("Client.edit", () => {
     it("simple edit", () => {
-      const client = new Client("hello world");
-      client.edit([
-        { start: 0, end: 1, insert: "era" },
-        { start: 9, end: 11, insert: "" },
-      ]);
-      expect(client.revisions.length).to.equal(2);
-      expect(client.visible).to.equal("herald");
-      expect(client.hidden).to.equal("ello wor");
-      expect(client.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
+      const doc = Document.create(clientId, 0, "hello world", intents);
+      doc.edit(
+        [
+          { start: 0, end: 1, insert: "era" },
+          { start: 9, end: 11, insert: "" },
+        ],
+        0,
+        clientId,
+        1,
+      );
+      expect(doc.revisions.length).to.equal(2);
+      expect(doc.visible).to.equal("herald");
+      expect(doc.hidden).to.equal("ello wor");
+      expect(doc.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
     });
     it("sequential edits 1", () => {
-      const client = new Client("hello world");
+      const doc = Document.create(clientId, 0, "hello world", intents);
       //"hello world"
       // inserts
       // =+++==
@@ -316,20 +331,30 @@ describe("Client", () => {
       // deletes
       // =++++++++==
       //"hello world"
-      client.edit([
-        { start: 0, end: 1, insert: "era" },
-        { start: 9, end: 11, insert: "" },
-      ]);
-      client.edit([{ start: 0, end: 6, insert: "ry" }]);
-      expect(client.visible).to.equal("heraldry");
+      doc.edit(
+        [
+          { start: 0, end: 1, insert: "era" },
+          { start: 9, end: 11, insert: "" },
+        ],
+        0,
+        clientId,
+        1,
+      );
+      doc.edit([{ start: 0, end: 6, insert: "ry" }], 1, clientId, 2);
+      expect(doc.visible).to.equal("heraldry");
     });
     it("sequential edits 2", () => {
-      const client = new Client("hello world");
-      client.edit([
-        { start: 0, end: 0, insert: "H" },
-        { start: 1, end: 6, insert: "W" },
-        { start: 7, end: 11, insert: "" },
-      ]);
+      const doc = Document.create(clientId, 0, "hello world", intents);
+      doc.edit(
+        [
+          { start: 0, end: 0, insert: "H" },
+          { start: 1, end: 6, insert: "W" },
+          { start: 7, end: 11, insert: "" },
+        ],
+        0,
+        clientId,
+        1,
+      );
       // union string
       //"Hhello Wworld"
       // inserts
@@ -356,38 +381,50 @@ describe("Client", () => {
       // union of expanded deletes and rebased current deletes
       //"Hhello, Brian Wworld"
       // =+===========+++++++
-      client.edit([{ start: 0, end: 5, insert: ", Brian" }]);
-      expect(client.visible).to.equal("Hello, Brian");
+      doc.edit([{ start: 0, end: 5, insert: ", Brian" }], 1, clientId, 2);
+      expect(doc.visible).to.equal("Hello, Brian");
     });
     it("concurrent edits 1", () => {
-      const client = new Client("hello world");
-      client.sources = ["concurrent"];
-      client.edit([
-        { start: 0, end: 1, insert: "era" },
-        { start: 9, end: 11, insert: "" },
-      ]);
-      client.edit(
+      const doc = Document.create(clientId, 0, "hello world", intents);
+      doc.edit(
+        [
+          { start: 0, end: 1, insert: "era" },
+          { start: 9, end: 11, insert: "" },
+        ],
+        0,
+        clientId,
+        1,
+      );
+      doc.edit(
         [
           { start: 0, end: 0, insert: "Great H" },
           { start: 2, end: 5, insert: "" },
         ],
         0,
+        clientId,
+        2,
         "concurrent",
       );
-      expect(client.visible).to.equal("Great Hera");
+      expect(doc.visible).to.equal("Great Hera");
     });
     it("concurrent edits 2", () => {
-      const client = new Client("hello world");
-      client.sources = ["concurrent"];
-      client.edit([
-        { start: 0, end: 0, insert: "H" },
-        { start: 1, end: 6, insert: "W" },
-        { start: 7, end: 11, insert: "" },
-      ]);
-      client.edit([{ start: 0, end: 5, insert: ", Brian" }]);
-      client.edit(
+      const doc = Document.create(clientId, 0, "hello world", intents);
+      doc.edit(
+        [
+          { start: 0, end: 0, insert: "H" },
+          { start: 1, end: 6, insert: "W" },
+          { start: 7, end: 11, insert: "" },
+        ],
+        0,
+        clientId,
+        1,
+      );
+      doc.edit([{ start: 0, end: 5, insert: ", Brian" }], 1, clientId, 2);
+      doc.edit(
         [{ start: 0, end: 5, insert: ", Dr. Evil" }],
         1,
+        clientId,
+        3,
         "concurrent",
       );
       // revisions
@@ -418,7 +455,7 @@ describe("Client", () => {
       // ======+++++++=======
       // old deletes from union
       // =+======+====
-      expect(client.visible).to.equal("Hello, Brian, Dr. Evil");
+      expect(doc.visible).to.equal("Hello, Brian, Dr. Evil");
     });
   });
 });
