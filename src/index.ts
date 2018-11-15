@@ -25,7 +25,7 @@ export function pushSegment(
   count: number,
 ): number {
   if (length <= 0) {
-    throw new Error("Can't push empty segment");
+    throw new Error("Cannot push empty segment");
   } else if (!subset.length) {
     subset.push([length, count]);
   } else {
@@ -330,7 +330,9 @@ export function synthesize<T>(
       }
     }
   }
-  patch.push(pe);
+  if (pe.insert.length || pe.end > pe.start) {
+    patch.push(pe);
+  }
   return patch;
 }
 
@@ -347,12 +349,19 @@ export function shuffle<T>(
 }
 
 export interface Message<T> {
+  patch: Patch<T>;
   clientId: string;
   version: number;
   parentClientId: string;
   parentVersion: number;
-  patch: Patch<T>;
   intent?: string;
+}
+
+export interface Snapshot<T> {
+  visible: Seq<T>;
+  hidden: Seq<T>;
+  deletes: Subset;
+  index: number;
 }
 
 export interface Revision {
@@ -370,6 +379,10 @@ export interface RevisionLog {
   push(revision: Revision): number;
   locate(clientId: string, version: number): number;
   length: number;
+}
+
+export interface RevisionLogConstructor {
+  new (): RevisionLog;
 }
 
 export class ArrayRevisionLog implements RevisionLog {
@@ -398,31 +411,31 @@ export class ArrayRevisionLog implements RevisionLog {
   }
 }
 
-export class Document<T> extends EventEmitter {
+export class Document<T> {
   public constructor(
+    public clientId: string,
     public visible: Seq<T>,
     public hidden: Seq<T>,
     public deletes: Subset,
     public intents: string[],
     public revisions: RevisionLog,
-  ) {
-    super();
-  }
+  ) {}
 
-  public static create<T>(
+  public static initialize<T>(
     clientId: string,
-    version: number,
     initial: Seq<T>,
     intents: string[] = [],
-    revisions: RevisionLog = new ArrayRevisionLog(),
+    RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
   ) {
+    const revisions = new RevisionLog();
     revisions.push({
       clientId,
-      version,
+      version: 0,
       inserts: initial.length ? [[initial.length, 1]] : [],
       deletes: initial.length ? [[initial.length, 0]] : [],
     });
     return new Document<T>(
+      clientId,
       initial,
       initial.slice(0, 0),
       [[initial.length, 0]],
@@ -430,6 +443,14 @@ export class Document<T> extends EventEmitter {
       revisions,
     );
   }
+
+  // public static restore<T>(
+  //   clientId: string,
+  //   snapshot: Seq<T>,
+  //   revisions: RevisionLog,
+  //   intents: string[],
+  // ) {
+  // }
 
   public getDeletesForIndex(index: number): Subset {
     let deletes: Subset = this.deletes;
@@ -440,17 +461,19 @@ export class Document<T> extends EventEmitter {
     return deletes;
   }
 
-  public edit(
+  protected revise(
     patch: Patch<T>,
     pi: number, // parent index
-    clientId: string,
+    clientId: string = this.clientId,
     version?: number,
     intent?: string,
-  ): void {
-    if (pi < 0 || pi > this.revisions.length - 1) {
+  ): Message<T> {
+    if (clientId === this.clientId && version != null) {
+      throw new Error("Cannot specify version for local edit");
+    } else if (pi < 0 || pi > this.revisions.length - 1) {
       throw new Error("Index out of range of revisions");
     }
-    version = version == null ? this.revisions.length + 1 : version;
+    version = version == null ? this.revisions.length : version;
     // intent index
     const ii = intent == null ? -1 : this.intents.indexOf(intent);
     if (ii === -1) {
@@ -465,11 +488,11 @@ export class Document<T> extends EventEmitter {
     );
     inserts = rebase(inserts, oldDeletes);
     deletes = expand(deletes, oldDeletes);
-    const revisions = this.revisions.slice(pi + 1);
+    const [parent, ...revisions] = this.revisions.slice(pi);
     for (const revision of revisions) {
       if (intent === revision.intent && clientId === revision.clientId) {
         throw new Error(
-          "Can’t have concurrent edits with the same client and source",
+          "Cannot have concurrent edits with the same client and source",
         );
       }
       // revision intent index
@@ -502,9 +525,29 @@ export class Document<T> extends EventEmitter {
     this.visible = visible1;
     this.hidden = hidden;
     this.deletes = newDeletes;
+    return {
+      patch: synthesize(
+        inserted,
+        visibleInserts,
+        shrink(deletes, currentDeletes),
+      ),
+      clientId,
+      version,
+      parentClientId: parent.clientId,
+      parentVersion: parent.version,
+      intent,
+    };
   }
 
-  public ingest(message: Message<T>): void {
+  public edit(
+    patch: Patch<T>,
+    pi: number = this.revisions.length - 1, // parent index
+    intent?: string,
+  ): Message<T> {
+    return this.revise(patch, pi, this.clientId, undefined, intent);
+  }
+
+  public ingest(message: Message<T>): Message<T> | undefined {
     const {
       patch,
       clientId,
@@ -513,12 +556,12 @@ export class Document<T> extends EventEmitter {
       parentVersion,
       intent,
     } = message;
-    // revision index
-    const ri = this.revisions.locate(parentClientId, parentVersion);
-    if (ri === -1) {
+    // parent index
+    const pi = this.revisions.locate(parentClientId, parentVersion);
+    if (pi === -1) {
       return;
     }
-    this.edit(patch, ri, clientId, version, intent);
+    return this.revise(patch, pi, clientId, version, intent);
   }
 }
 
@@ -535,9 +578,7 @@ export interface Server {
 
 export class LocalClient extends EventEmitter implements Client {
   private documents: Record<string, Document<any>> = {};
-  public sources: string[] = [];
-  public id = uuid();
-  constructor(public server: Server) {
+  constructor(public readonly id: string = uuid(), public server: Server) {
     super();
   }
 

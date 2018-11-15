@@ -262,11 +262,11 @@ describe("patch", () => {
 });
 
 describe("Document", () => {
-  const clientId = "hi";
+  const clientId = "id1";
   const intents = ["concurrent"];
   describe("Document.getDeletesForIndex", () => {
     it("get deletes for all points in history", () => {
-      const doc = Document.create(clientId, 0, "hello world", intents);
+      const doc = Document.initialize(clientId, "hello world", intents);
       //"hello world"
       // ===========
       //"Hhello Wworld"
@@ -275,24 +275,13 @@ describe("Document", () => {
       // =+===========+++++++
       //"Hhello, Brian, Dr. Evil Wworld"
       // =+=====================+++++++
-      doc.edit(
-        [
-          { start: 0, end: 0, insert: "H" },
-          { start: 1, end: 6, insert: "W" },
-          { start: 7, end: 11, insert: "" },
-        ],
-        0,
-        clientId,
-        1,
-      );
-      doc.edit([{ start: 0, end: 5, insert: ", Brian" }], 1, clientId, 2);
-      doc.edit(
-        [{ start: 0, end: 5, insert: ", Dr. Evil" }],
-        1,
-        clientId,
-        2,
-        "concurrent",
-      );
+      doc.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
+      doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
+      doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], 1, "concurrent");
       const deletes = [[11, 0]];
       expect(doc.getDeletesForIndex(0)).to.deep.equal(deletes);
       const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
@@ -306,24 +295,19 @@ describe("Document", () => {
   });
 
   describe("Client.edit", () => {
-    it("simple edit", () => {
-      const doc = Document.create(clientId, 0, "hello world", intents);
-      doc.edit(
-        [
-          { start: 0, end: 1, insert: "era" },
-          { start: 9, end: 11, insert: "" },
-        ],
-        0,
-        clientId,
-        1,
-      );
+    it("simple", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([
+        { start: 0, end: 1, insert: "era" },
+        { start: 9, end: 11, insert: "" },
+      ]);
       expect(doc.revisions.length).to.equal(2);
       expect(doc.visible).to.equal("herald");
       expect(doc.hidden).to.equal("ello wor");
       expect(doc.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
     });
-    it("sequential edits 1", () => {
-      const doc = Document.create(clientId, 0, "hello world", intents);
+    it("sequential", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
       //"hello world"
       // inserts
       // =+++==
@@ -331,30 +315,20 @@ describe("Document", () => {
       // deletes
       // =++++++++==
       //"hello world"
-      doc.edit(
-        [
-          { start: 0, end: 1, insert: "era" },
-          { start: 9, end: 11, insert: "" },
-        ],
-        0,
-        clientId,
-        1,
-      );
-      doc.edit([{ start: 0, end: 6, insert: "ry" }], 1, clientId, 2);
+      doc.edit([
+        { start: 0, end: 1, insert: "era" },
+        { start: 9, end: 11, insert: "" },
+      ]);
+      doc.edit([{ start: 0, end: 6, insert: "ry" }]);
       expect(doc.visible).to.equal("heraldry");
     });
-    it("sequential edits 2", () => {
-      const doc = Document.create(clientId, 0, "hello world", intents);
-      doc.edit(
-        [
-          { start: 0, end: 0, insert: "H" },
-          { start: 1, end: 6, insert: "W" },
-          { start: 7, end: 11, insert: "" },
-        ],
-        0,
-        clientId,
-        1,
-      );
+    it("sequential 2", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
       // union string
       //"Hhello Wworld"
       // inserts
@@ -381,52 +355,34 @@ describe("Document", () => {
       // union of expanded deletes and rebased current deletes
       //"Hhello, Brian Wworld"
       // =+===========+++++++
-      doc.edit([{ start: 0, end: 5, insert: ", Brian" }], 1, clientId, 2);
+      doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
       expect(doc.visible).to.equal("Hello, Brian");
     });
-    it("concurrent edits 1", () => {
-      const doc = Document.create(clientId, 0, "hello world", intents);
-      doc.edit(
-        [
-          { start: 0, end: 1, insert: "era" },
-          { start: 9, end: 11, insert: "" },
-        ],
-        0,
-        clientId,
-        1,
-      );
+    it("concurrent 1", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([
+        { start: 0, end: 1, insert: "era" },
+        { start: 9, end: 11, insert: "" },
+      ]);
       doc.edit(
         [
           { start: 0, end: 0, insert: "Great H" },
           { start: 2, end: 5, insert: "" },
         ],
         0,
-        clientId,
-        2,
         "concurrent",
       );
       expect(doc.visible).to.equal("Great Hera");
     });
-    it("concurrent edits 2", () => {
-      const doc = Document.create(clientId, 0, "hello world", intents);
-      doc.edit(
-        [
-          { start: 0, end: 0, insert: "H" },
-          { start: 1, end: 6, insert: "W" },
-          { start: 7, end: 11, insert: "" },
-        ],
-        0,
-        clientId,
-        1,
-      );
-      doc.edit([{ start: 0, end: 5, insert: ", Brian" }], 1, clientId, 2);
-      doc.edit(
-        [{ start: 0, end: 5, insert: ", Dr. Evil" }],
-        1,
-        clientId,
-        3,
-        "concurrent",
-      );
+    it("concurrent 2", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
+      doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
+      doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], 1, "concurrent");
       // revisions
       //"hello world"
       // inserts
