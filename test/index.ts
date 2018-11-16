@@ -208,17 +208,16 @@ describe("subset", () => {
   });
 });
 
-type Patch = shredder.Patch<string>;
 describe("patch", () => {
-  const p0: Patch = [
+  const p0: shredder.Patch = [
     { start: 0, end: 1, insert: "era" },
     { start: 9, end: 11, insert: "" },
   ];
-  const p1: Patch = [
+  const p1: shredder.Patch = [
     { start: 0, end: 0, insert: "je" },
     { start: 2, end: 5, insert: "" },
   ];
-  const p2: Patch = [
+  const p2: shredder.Patch = [
     { start: 0, end: 4, insert: " " },
     { start: 4, end: 5, insert: "n Earth" },
   ];
@@ -245,10 +244,21 @@ describe("patch", () => {
     const [inserts, deletes, inserted] = shredder.factor(p0, text.length, "");
     const deletes1: shredder.Subset = shredder.expand(deletes, inserts);
     const union = shredder.apply(text, shredder.synthesize(inserted, inserts));
-    const text1 = shredder.deleteSubset(union, shredder.complement(deletes1));
-    const tombstones = shredder.deleteSubset(
+    const text1 = shredder.apply(
       union,
-      shredder.complement(inserts),
+      shredder.synthesize(
+        "",
+        [[shredder.countBy(deletes1), 0]],
+        shredder.complement(deletes1),
+      ),
+    );
+    const tombstones = shredder.apply(
+      union,
+      shredder.synthesize(
+        "",
+        [[shredder.countBy(inserts), 0]],
+        shredder.complement(inserts),
+      ),
     );
     expect(shredder.synthesize(tombstones, inserts, deletes1)).to.deep.equal(
       p0,
@@ -294,7 +304,7 @@ describe("Document", () => {
     });
   });
 
-  describe("Client.edit", () => {
+  describe("Document.edit", () => {
     it("simple", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([

@@ -1,12 +1,6 @@
 import uuid from "uuid/v4";
 import EventEmitter from "events";
 
-export interface Seq<T> {
-  length: number;
-  slice(start?: number, end?: number): Seq<T>;
-  concat(...items: (T | Seq<T>)[]): Seq<T>;
-}
-
 // length, count
 export type Segment = [number, number];
 // TODO: we might not need subsets to be multisets, so consider switching from [[length, count]] to [flag, ...length] where flag is boolean which alternates based on state
@@ -215,33 +209,24 @@ export function rebase(
   return result;
 }
 
-export function deleteSubset<T>(text: Seq<T>, subset: Subset): Seq<T> {
-  let result = text.slice(0, 0);
-  let consumed = 0;
-  for (const [length, count] of subset) {
-    consumed += length;
-    if (!count) {
-      if (typeof result === "string") {
-        result += text.slice(consumed - length, consumed);
-      } else {
-        result = result.concat(text.slice(consumed - length, consumed));
-      }
-    }
-  }
-  return result;
+export interface Seq {
+  length: number;
+  slice(start?: number, end?: number): Seq;
+  concat(...items: (string | Seq)[]): Seq;
+  toString(): string;
 }
 
 // To apply a patch, copy from start (inclusive) to end (exclusive) and splice insert at end.
 // Deletes are represented via omission
-export interface PatchElement<T> {
+export interface PatchElement {
   start: number;
   end: number;
-  insert: Seq<T>;
+  insert: string;
 }
 
-export type Patch<T> = PatchElement<T>[];
+export type Patch = PatchElement[];
 
-export function apply<T>(text: Seq<T>, patch: Patch<T>): Seq<T> {
+export function apply(text: Seq, patch: Patch): Seq {
   let result = text.slice(0, 0);
   for (const { start, end, insert } of patch) {
     if (typeof result === "string") {
@@ -255,14 +240,14 @@ export function apply<T>(text: Seq<T>, patch: Patch<T>): Seq<T> {
   return result;
 }
 
-export function factor<T>(
-  patch: Patch<T>,
+export function factor(
+  patch: Patch,
   length: number,
-  empty: Seq<T>,
-): [Subset, Subset, Seq<T>] {
+  empty: Seq,
+): [Subset, Subset, Seq] {
   const inserts: Subset = [];
   const deletes: Subset = [];
-  let inserted: Seq<T> = empty.slice();
+  let inserted: Seq = empty.slice();
   let consumed = 0;
   for (const { start, end, insert } of patch) {
     if (end - start > 0) {
@@ -289,24 +274,24 @@ export function factor<T>(
   return [inserts, deletes, inserted];
 }
 
-export function synthesize<T>(
-  inserted: Seq<T>,
+export function synthesize(
+  inserted: Seq,
   from: Subset,
   to: Subset = [[countBy(from), 0]],
-): Patch<T> {
-  const patch: Patch<T> = [];
+): Patch {
+  const patch: Patch = [];
   let consumed = 0;
   let index = 0;
-  let pe: PatchElement<T> = {
+  let pe: PatchElement = {
     start: consumed,
     end: consumed,
-    insert: inserted.slice(0, 0),
+    insert: "",
   };
   for (const [length, count1, count2] of zip(from, to)) {
     if (count1 === 0) {
       if (pe.insert.length || pe.end > pe.start) {
         patch.push(pe);
-        pe = { start: consumed, end: consumed, insert: inserted.slice(0, 0) };
+        pe = { start: consumed, end: consumed, insert: "" };
       }
       consumed += length;
       if (count2 === 0) {
@@ -318,14 +303,14 @@ export function synthesize<T>(
         if (pe.end > pe.start) {
           patch.push(pe);
         }
-        pe = { start: consumed, end: consumed, insert: inserted.slice(0, 0) };
+        pe = { start: consumed, end: consumed, insert: "" };
       }
       index += length;
       if (count2 === 0) {
-        if (typeof pe.insert === "string") {
+        if (typeof inserted === "string") {
           pe.insert += inserted.slice(index - length, index);
         } else {
-          pe.insert = pe.insert.concat(inserted.slice(index - length, index));
+          pe.insert += inserted.slice(index - length, index).toString();
         }
       }
     }
@@ -337,19 +322,19 @@ export function synthesize<T>(
 }
 
 // Do the variable names make sense? Does this belong here?
-export function shuffle<T>(
-  from: Seq<T>,
-  to: Seq<T>,
+export function shuffle(
+  from: Seq,
+  to: Seq,
   inserts: Subset,
   deletes: Subset,
-): [Seq<T>, Seq<T>] {
+): [Seq, Seq] {
   const fromPatch = synthesize(to, inserts, deletes);
   const toPatch = synthesize(from, complement(inserts), complement(deletes));
   return [apply(from, fromPatch), apply(to, toPatch)];
 }
 
-export interface Message<T> {
-  patch: Patch<T>;
+export interface Message {
+  patch: Patch;
   clientId: string;
   version: number;
   parentClientId: string;
@@ -357,11 +342,10 @@ export interface Message<T> {
   intent?: string;
 }
 
-export interface Snapshot<T> {
-  visible: Seq<T>;
-  hidden: Seq<T>;
+export interface Snapshot {
+  visible: Seq;
+  hidden: Seq;
   deletes: Subset;
-  index: number;
 }
 
 export interface Revision {
@@ -411,19 +395,21 @@ export class ArrayRevisionLog implements RevisionLog {
   }
 }
 
-export class Document<T> {
+export class Document extends EventEmitter {
   public constructor(
     public clientId: string,
-    public visible: Seq<T>,
-    public hidden: Seq<T>,
+    public visible: Seq,
+    public hidden: Seq,
     public deletes: Subset,
     public intents: string[],
     public revisions: RevisionLog,
-  ) {}
+  ) {
+    super();
+  }
 
-  public static initialize<T>(
+  public static initialize(
     clientId: string,
-    initial: Seq<T>,
+    initial: Seq = "",
     intents: string[] = [],
     RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
   ) {
@@ -434,23 +420,15 @@ export class Document<T> {
       inserts: initial.length ? [[initial.length, 1]] : [],
       deletes: initial.length ? [[initial.length, 0]] : [],
     });
-    return new Document<T>(
+    return new Document(
       clientId,
       initial,
       initial.slice(0, 0),
-      [[initial.length, 0]],
+      initial.length ? [[initial.length, 0]] : [],
       intents,
       revisions,
     );
   }
-
-  // public static restore<T>(
-  //   clientId: string,
-  //   snapshot: Seq<T>,
-  //   revisions: RevisionLog,
-  //   intents: string[],
-  // ) {
-  // }
 
   public getDeletesForIndex(index: number): Subset {
     let deletes: Subset = this.deletes;
@@ -462,12 +440,12 @@ export class Document<T> {
   }
 
   protected revise(
-    patch: Patch<T>,
+    patch: Patch,
     pi: number, // parent index
     clientId: string = this.clientId,
     intent?: string,
     version?: number,
-  ): Message<T> {
+  ): Message {
     if (clientId === this.clientId && version != null) {
       throw new Error("Cannot specify version for local edit");
     } else if (pi < 0 || pi > this.revisions.length - 1) {
@@ -514,14 +492,13 @@ export class Document<T> {
       currentDeletes,
       newDeletes,
     );
-    const revision: Revision = {
+    this.revisions.push({
       clientId,
       version,
       inserts,
       deletes,
       intent,
-    };
-    this.revisions.push(revision);
+    });
     this.visible = visible1;
     this.hidden = hidden;
     this.deletes = newDeletes;
@@ -531,23 +508,25 @@ export class Document<T> {
         visibleInserts,
         shrink(deletes, currentDeletes),
       ),
+      intent,
       clientId,
       version,
       parentClientId: parent.clientId,
       parentVersion: parent.version,
-      intent,
     };
   }
 
   public edit(
-    patch: Patch<T>,
+    patch: Patch,
     intent?: string,
     pi: number = this.revisions.length - 1, // parent index
-  ): Message<T> {
-    return this.revise(patch, pi, this.clientId, intent);
+  ): Message {
+    const message = this.revise(patch, pi, this.clientId, intent);
+    this.emit("message", message);
+    return message;
   }
 
-  public ingest(message: Message<T>): Message<T> | undefined {
+  public ingest(message: Message): Message | undefined {
     const {
       patch,
       clientId,
@@ -561,39 +540,63 @@ export class Document<T> {
     if (pi === -1) {
       return;
     }
-    return this.revise(patch, pi, clientId, intent, version);
+    message = this.revise(patch, pi, clientId, intent, version);
+    this.emit("message", message);
+    return message;
   }
 }
 
-export interface Client {
-  getDocument(id: string): Document<any> | undefined;
-  connect(id: string, doc: Document<any>): void;
-  disconnect(id: string): void;
-  // edit(id: string, patch: Patch, parentIndex: number, source?: string): void;
+export interface Transport {
+  getDocument(id: string): Promise<Document | undefined>;
+  sendMessage(message: Message): Promise<void>;
+}
+
+export class LocalTransport implements Transport {
+  async getDocument(): Promise<undefined> {
+    return;
+  }
+
+  async sendMessage(message: Message): Promise<void> {
+    message;
+  }
 }
 
 export interface Server {
   TODO: number;
 }
 
-export class LocalClient extends EventEmitter implements Client {
-  private documents: Record<string, Document<any>> = {};
-  constructor(public readonly id: string = uuid(), public server: Server) {
+export class Client extends EventEmitter {
+  private documents: Record<string, Document> = {};
+  private handlers: WeakMap<
+    Document,
+    (message: Message) => void
+  > = new WeakMap();
+  constructor(
+    public readonly id: string = uuid(),
+    public transport: Transport = new LocalTransport(),
+  ) {
     super();
   }
 
-  getDocument(id: string): Document<any> | undefined {
-    return this.documents[id];
-  }
-
-  connect(id: string, doc: Document<any>): void {
-    if (this.documents[id]) {
-      throw new Error(`Document with id ${id} already exists`);
+  async getOrCreateDocument(
+    id: string,
+    intents?: string[],
+    RevisionLog?: RevisionLogConstructor,
+  ): Promise<Document> {
+    let doc: Document | undefined = this.documents[id];
+    if (doc == null) {
+      doc = await this.transport.getDocument(id);
     }
-    this.documents[id] = doc;
-  }
-
-  disconnect(id: string): void {
-    delete this.documents[id];
+    if (doc == null) {
+      doc = Document.initialize(this.id, "", intents, RevisionLog);
+    }
+    const handler = (message: Message) => {
+      if (message.clientId === this.id) {
+        this.transport.sendMessage(message);
+      }
+    };
+    doc.on("message", handler);
+    this.handlers.set(doc, handler);
+    return doc;
   }
 }
