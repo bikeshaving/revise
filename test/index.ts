@@ -368,6 +368,23 @@ describe("Document", () => {
       doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
       expect(doc.visible).to.equal("Hello, Brian");
     });
+    it("sequential 3", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([{ start: 6, end: 11, insert: "" }]);
+      doc.edit([
+        { start: 0, end: 0, insert: "hello " },
+        { start: 0, end: 5, insert: "" },
+      ]);
+      doc.edit(
+        [
+          { start: 0, end: 0, insert: "goodbye " },
+          { start: 6, end: 11, insert: "" },
+        ],
+        "concurrent",
+        0,
+      );
+      expect(doc.visible).to.equal("goodbye hello world");
+    });
     it("concurrent 1", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([

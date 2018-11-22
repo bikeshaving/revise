@@ -321,7 +321,7 @@ export function synthesize(
   return patch;
 }
 
-// Do the variable names make sense? Does this belong here?
+// TODO: Do the variable names make sense?
 export function shuffle(
   from: Seq,
   to: Seq,
@@ -333,12 +333,23 @@ export function shuffle(
   return [apply(from, fromPatch), apply(to, toPatch)];
 }
 
+export function createId(clientId: string, version: number) {
+  return clientId + "@" + version;
+}
+
+export function splitId(id: string): [string, number] {
+  const i = id.lastIndexOf("@");
+  const clientId = id.slice(0, i);
+  const version = parseInt(id.slice(i + 1));
+  return [clientId, version];
+}
+
 export interface Message {
   patch: Patch;
   clientId: string;
   version: number;
-  parentClientId: string;
-  parentVersion: number;
+  parentClientId?: string;
+  parentVersion?: number;
   intent?: string;
 }
 
@@ -346,6 +357,7 @@ export interface Snapshot {
   visible: Seq;
   hidden: Seq;
   deletes: Subset;
+  parentId?: string;
 }
 
 export interface Revision {
@@ -430,6 +442,33 @@ export class Document extends EventEmitter {
     );
   }
 
+  public static fromMessages(
+    clientId: string,
+    messages: Message[],
+    snapshot: Snapshot = { visible: "", hidden: "", deletes: [] },
+    intents: string[] = [],
+    RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
+  ) {
+    let doc = new Document(
+      clientId,
+      snapshot.visible,
+      snapshot.hidden,
+      snapshot.deletes,
+      intents,
+      new RevisionLog(),
+    );
+    for (const message of messages) {
+      doc.revise(
+        message.patch,
+        doc.revisions.length - 1,
+        message.clientId,
+        message.intent,
+        message.clientId === clientId ? undefined : message.version,
+      );
+    }
+    return doc;
+  }
+
   public getDeletesForIndex(index: number): Subset {
     let deletes: Subset = this.deletes;
     for (const revision of this.revisions.slice(index + 1).reverse()) {
@@ -441,7 +480,8 @@ export class Document extends EventEmitter {
 
   protected revise(
     patch: Patch,
-    pi: number, // parent index
+    // parent index
+    pi: number,
     clientId: string = this.clientId,
     intent?: string,
     version?: number,
@@ -519,7 +559,8 @@ export class Document extends EventEmitter {
   public edit(
     patch: Patch,
     intent?: string,
-    pi: number = this.revisions.length - 1, // parent index
+    // parent index
+    pi: number = this.revisions.length - 1,
   ): Message {
     const message = this.revise(patch, pi, this.clientId, intent);
     this.emit("message", message);
@@ -535,6 +576,9 @@ export class Document extends EventEmitter {
       parentVersion,
       intent,
     } = message;
+    if (parentClientId == null || parentVersion == null) {
+      throw new Error("Cannot ingest initial message");
+    }
     // parent index
     const pi = this.revisions.locate(parentClientId, parentVersion);
     if (pi === -1) {
@@ -546,57 +590,65 @@ export class Document extends EventEmitter {
   }
 }
 
-export interface Transport {
-  getDocument(id: string): Promise<Document | undefined>;
-  sendMessage(message: Message): Promise<void>;
-}
-
-export class LocalTransport implements Transport {
-  async getDocument(): Promise<undefined> {
-    return;
-  }
-
-  async sendMessage(message: Message): Promise<void> {
-    message;
-  }
-}
-
-export interface Server {
-  TODO: number;
-}
-
-export class Client extends EventEmitter {
+export class LocalClient extends EventEmitter {
   private documents: Record<string, Document> = {};
-  private handlers: WeakMap<
-    Document,
-    (message: Message) => void
-  > = new WeakMap();
-  constructor(
-    public readonly id: string = uuid(),
-    public transport: Transport = new LocalTransport(),
-  ) {
+  constructor(public id: string = uuid()) {
     super();
   }
 
-  async getOrCreateDocument(
-    id: string,
+  async getSnapshot(
+    docId: string,
+    initial: Seq = "",
+  ): Promise<Snapshot | undefined> {
+    docId;
+    initial;
+    return;
+  }
+
+  async getMessages(
+    docId: string,
+    startId?: string,
+    endId?: string,
+    create?: Message,
+  ): Promise<Message[]> {
+    docId;
+    startId;
+    endId;
+    const messages: Message[] = [];
+    if (!messages.length && create) {
+      return [create];
+    }
+    return messages;
+  }
+
+  async getDocument(
+    docId: string,
+    initial: Seq = "",
     intents?: string[],
-    RevisionLog?: RevisionLogConstructor,
   ): Promise<Document> {
-    let doc: Document | undefined = this.documents[id];
-    if (doc == null) {
-      doc = await this.transport.getDocument(id);
+    let doc: Document | undefined = this.documents[docId];
+    if (doc) {
+      return doc;
     }
-    if (doc == null) {
-      doc = Document.initialize(this.id, "", intents, RevisionLog);
-    }
-    const handler = (message: Message) => {
-      if (message.clientId === this.id) {
-        this.transport.sendMessage(message);
-      }
+    const snapshot: Snapshot = (await this.getSnapshot(docId, initial)) || {
+      visible: initial,
+      hidden: initial.slice(0, 0),
+      deletes: initial.length ? [[initial.length, 1]] : [],
     };
-    doc.on("message", handler);
-    this.handlers.set(doc, handler);
+    const create: Message = {
+      patch: [{ start: 0, end: 0, insert: initial.toString() }],
+      clientId: this.id,
+      version: 0,
+    };
+    const messages = await this.getMessages(
+      docId,
+      snapshot.parentId,
+      undefined,
+      create,
+    );
+    doc = Document.fromMessages(this.id, messages, snapshot, intents);
+    this.documents[docId] = doc;
+    // TODO: listen for edits from the document
     return doc;
   }
 }
