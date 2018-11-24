@@ -251,19 +251,19 @@ describe("patch", () => {
   });
 
   it("factor", () => {
-    const [inserts, deletes] = shredder.factor(p0, text.length, "");
+    const [inserts, deletes] = shredder.factor(p0, text.length);
     expect(inserts).to.deep.equal([0, 1, 3, 10]);
     expect(deletes).to.deep.equal([0, 1, 8, 2]);
-    const [inserts1, deletes1] = shredder.factor(p1, text.length, "");
+    const [inserts1, deletes1] = shredder.factor(p1, text.length);
     expect(inserts1).to.deep.equal([1, 2, 11]);
     expect(deletes1).to.deep.equal([1, 2, 3, 6]);
-    const [inserts2, deletes2] = shredder.factor(p2, text.length, "");
+    const [inserts2, deletes2] = shredder.factor(p2, text.length);
     expect(inserts2).to.deep.equal([0, 4, 1, 1, 7, 6]);
     expect(deletes2).to.deep.equal([0, 5, 6]);
   });
 
   it("synthesize", () => {
-    const [inserts, deletes, inserted] = shredder.factor(p0, text.length, "");
+    const [inserts, deletes, inserted] = shredder.factor(p0, text.length);
     const deletes1 = shredder.expand(deletes, inserts);
     const union = shredder.apply(text, shredder.synthesize(inserted, inserts));
     const text1 = shredder.apply(
@@ -473,7 +473,10 @@ describe("Document", () => {
     it("revive", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([{ start: 6, end: 11, insert: "" }]);
-      doc.edit([{ start: 0, end: 0, insert: "hello " }, { start: 0, end: 5, insert: "s"}]);
+      doc.edit([
+        { start: 0, end: 0, insert: "hello " },
+        { start: 0, end: 5, insert: "s" },
+      ]);
       expect(doc.visible).to.deep.equal("hello worlds");
       // TODO:
       // expect(doc.hidden).to.deep.equal("");

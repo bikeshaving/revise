@@ -219,44 +219,29 @@ export function rebase(
   return result;
 }
 
-export interface Seq {
-  length: number;
-  slice(start?: number, end?: number): Seq;
-  concat(...items: (string | Seq)[]): Seq;
-}
-
 // To apply a patch, copy from start (inclusive) to end (exclusive) and splice insert at end.
 // Deletes are represented via omission
 export interface PatchElement {
   start: number;
   end: number;
-  insert: Seq;
+  insert: string;
 }
 
 export type Patch = PatchElement[];
 
-export function apply(text: Seq, patch: Patch): Seq {
+export function apply(text: string, patch: Patch): string {
   let result = text.slice(0, 0);
   for (const { start, end, insert } of patch) {
-    if (typeof result === "string") {
-      result += text.slice(start, end);
-      result += insert;
-    } else {
-      result = result.concat(text.slice(start, end));
-      result = result.concat(insert);
-    }
+    result += text.slice(start, end);
+    result += insert;
   }
   return result;
 }
 
-export function factor(
-  patch: Patch,
-  length: number,
-  empty: Seq,
-): [Subseq, Subseq, Seq] {
+export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
   const inserts: Subseq = [];
   const deletes: Subseq = [];
-  let inserted: Seq = empty.slice();
+  let inserted: string = "";
   let consumed = 0;
   for (const { start, end, insert } of patch) {
     if (end - start > 0) {
@@ -267,11 +252,7 @@ export function factor(
       pushSegment(deletes, end - start, false);
     }
     if (insert.length) {
-      if (typeof inserted === "string") {
-        inserted += insert;
-      } else {
-        inserted = inserted.concat(insert);
-      }
+      inserted += insert;
       pushSegment(inserts, insert.length, true);
     }
     consumed = end;
@@ -284,7 +265,7 @@ export function factor(
 }
 
 export function synthesize(
-  inserted: Seq,
+  inserted: string,
   from: Subseq,
   to: Subseq = [0, count(from)],
 ): Patch {
@@ -316,11 +297,7 @@ export function synthesize(
       }
       index += length;
       if (!flag2) {
-        if (typeof inserted === "string") {
-          pe.insert += inserted.slice(index - length, index);
-        } else {
-          pe.insert = pe.insert.concat(inserted.slice(index - length, index));
-        }
+        pe.insert += inserted.slice(index - length, index);
       }
     }
   }
@@ -332,11 +309,11 @@ export function synthesize(
 
 // TODO: Do the variable names make sense?
 export function shuffle(
-  from: Seq,
-  to: Seq,
+  from: string,
+  to: string,
   inserts: Subseq,
   deletes: Subseq,
-): [Seq, Seq] {
+): [string, string] {
   const fromPatch = synthesize(to, inserts, deletes);
   const toPatch = synthesize(from, complement(inserts), complement(deletes));
   return [apply(from, fromPatch), apply(to, toPatch)];
@@ -363,8 +340,8 @@ export interface Message {
 }
 
 export interface Snapshot {
-  visible: Seq;
-  hidden: Seq;
+  visible: string;
+  hidden: string;
   deletes: Subseq;
   parentId?: string;
 }
@@ -419,8 +396,8 @@ export class ArrayRevisionLog implements RevisionLog {
 export class Document extends EventEmitter {
   public constructor(
     public clientId: string,
-    public visible: Seq,
-    public hidden: Seq,
+    public visible: string,
+    public hidden: string,
     public deletes: Subseq,
     public intents: string[],
     public revisions: RevisionLog,
@@ -430,7 +407,7 @@ export class Document extends EventEmitter {
 
   public static initialize(
     clientId: string,
-    initial: Seq = "",
+    initial: string = "",
     intents: string[] = [],
     RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
   ) {
@@ -508,11 +485,7 @@ export class Document extends EventEmitter {
     }
     const oldDeletes = this.getDeletesForIndex(pi);
     const oldLength = count(oldDeletes, false);
-    let [inserts, deletes, inserted] = factor(
-      patch,
-      oldLength,
-      this.visible.slice(0, 0),
-    );
+    let [inserts, deletes, inserted] = factor(patch, oldLength);
     inserts = rebase(inserts, oldDeletes);
     deletes = expand(deletes, oldDeletes);
     const [parent, ...revisions] = this.revisions.slice(pi);
@@ -609,7 +582,7 @@ export class LocalClient extends EventEmitter {
 
   async getSnapshot(
     docId: string,
-    initial: Seq = "",
+    initial: string = "",
   ): Promise<Snapshot | undefined> {
     docId;
     initial;
@@ -634,7 +607,7 @@ export class LocalClient extends EventEmitter {
 
   async getDocument(
     docId: string,
-    initial: Seq = "",
+    initial: string = "",
     intents?: string[],
   ): Promise<Document> {
     let doc: Document | undefined = this.documents[docId];
