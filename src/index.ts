@@ -1,58 +1,61 @@
 import uuid from "uuid/v4";
 import EventEmitter from "events";
 
-// length, count
-export type Segment = [number, number];
-// TODO: we might not need subsets to be multisets, so consider switching from [[length, count]] to [flag, ...length] where flag is boolean which alternates based on state
-export type Subset = Segment[];
+// [flag, ...lengths]
+export type Subseq = number[];
 
-export function countBy(subset: Subset, test?: (c: number) => boolean): number {
-  return subset.reduce(
-    (l, [l1, c]) => (test == null || test(c) ? l + l1 : l),
-    0,
-  );
+export function count(subseq: Subseq, test?: boolean): number {
+  let flag: boolean = !!subseq[0];
+  let result: number = 0;
+  for (const length of subseq.slice(1)) {
+    if (test == null || test === flag) {
+      result += length;
+    }
+    flag = !flag;
+  }
+  return result;
 }
 
 export function pushSegment(
-  subset: Subset,
+  subseq: Subseq,
   length: number,
-  count: number,
+  flag: boolean,
 ): number {
   if (length <= 0) {
     throw new Error("Cannot push empty segment");
-  } else if (!subset.length) {
-    subset.push([length, count]);
+  } else if (!subseq.length) {
+    subseq.push(flag ? 1 : 0, length);
   } else {
-    const [length1, count1] = subset[subset.length - 1];
-    if (count1 === count) {
-      subset[subset.length - 1] = [length1 + length, count];
+    const flag1: boolean = !subseq[0] === (subseq.length % 2 === 1);
+    if (flag === flag1) {
+      subseq[subseq.length - 1] += length;
     } else {
-      subset.push([length, count]);
+      subseq.push(length);
     }
   }
-  return subset.length;
+  return subseq.length;
 }
 
-type ZipValue = [number, number, number];
+type ZipValue = [number, boolean, boolean];
 class ZipIterator implements IterableIterator<ZipValue> {
-  private i1: number = 0;
-  private i2: number = 0;
+  private i1: number = 1;
+  private i2: number = 1;
   private consumed1: number = 0;
   private consumed2: number = 0;
   private consumed: number = 0;
-  constructor(private subset1: Subset, private subset2: Subset) {}
+  constructor(private subseq1: Subseq, private subseq2: Subseq) {}
 
   public next(): IteratorResult<ZipValue> {
-    const segment1 = this.subset1[this.i1];
-    const segment2 = this.subset2[this.i2];
-    if (segment1 == null || segment2 == null) {
-      if (segment1 || segment2) {
+    const length1 = this.subseq1[this.i1];
+    const length2 = this.subseq2[this.i2];
+    const flag1 = !this.subseq1[0] === (this.i1 % 2 === 0);
+    const flag2 = !this.subseq2[0] === (this.i2 % 2 === 0);
+    if (length1 == null || length2 == null) {
+      if (length1 || length2) {
         throw new Error("Length mismatch");
       }
       return ({ done: true } as any) as IteratorResult<ZipValue>;
     }
-    const [length1, count1] = segment1;
-    const [length2, count2] = segment2;
     let length: number;
     if (length1 + this.consumed1 === length2 + this.consumed2) {
       this.consumed1 += length1;
@@ -72,7 +75,7 @@ class ZipIterator implements IterableIterator<ZipValue> {
     this.consumed += length;
     return {
       done: false,
-      value: [length, count1, count2],
+      value: [length, flag1, flag2],
     };
   }
 
@@ -80,128 +83,131 @@ class ZipIterator implements IterableIterator<ZipValue> {
     return this;
   }
 
-  public join(fn: (count1: number, count2: number) => number): Subset {
-    const subset: Subset = [];
-    for (const [length, count1, count2] of this) {
-      pushSegment(subset, length, fn(count1, count2));
+  public join(fn: (flag1: boolean, flag2: boolean) => boolean): Subseq {
+    const subseq: Subseq = [];
+    for (const [length, flag1, flag2] of this) {
+      pushSegment(subseq, length, fn(flag1, flag2));
     }
-    return subset;
+    return subseq;
   }
 }
 
-export function zip(a: Subset, b: Subset): ZipIterator {
+export function zip(a: Subseq, b: Subseq): ZipIterator {
   return new ZipIterator(a, b);
 }
 
-export function complement(subset: Subset): Subset {
-  return subset.map(
-    ([length, count]) => [length, count === 0 ? 1 : 0] as Segment,
-  );
+export function complement(subseq: Subseq): Subseq {
+  return [subseq[0] ? 0 : 1, ...subseq.slice(1)];
 }
 
-export function union(subset1: Subset, subset2: Subset): Subset {
-  return zip(subset1, subset2).join((c1, c2) => c1 + c2);
+export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
+  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 || flag2);
 }
 
-export function subtract(subset1: Subset, subset2: Subset): Subset {
-  return zip(subset1, subset2).join((c1, c2) => {
-    if (c1 < c2) {
-      throw new Error("Negative count detected");
-    }
-    return c1 - c2;
-  });
+export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
+  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
 
-export function expand(subset1: Subset, subset2: Subset): Subset {
-  const result: Subset = [];
-  let segment1: Segment | undefined;
-  for (let [length2, count2] of subset2) {
-    if (count2) {
-      pushSegment(result, length2, 0);
+export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
+  const result: Subseq = [];
+
+  let length1: number | undefined;
+  let flag1: boolean = !subseq1[0];
+  let flag2: boolean = !subseq2[0];
+  subseq1 = subseq1.slice(1);
+  for (let length2 of subseq2.slice(1)) {
+    flag2 = !flag2;
+    if (flag2) {
+      pushSegment(result, length2, false);
     } else {
       while (length2 > 0) {
-        if (segment1 == null || segment1[0] === 0) {
-          if (!subset1.length) {
+        if (length1 == null || length1 === 0) {
+          if (!subseq1.length) {
             throw new Error("Length mismatch");
           }
-          [segment1, ...subset1] = subset1;
+          flag1 = !flag1;
+          [length1, ...subseq1] = subseq1;
         }
-        const [length1, count1] = segment1;
         const consumed = Math.min(length1, length2);
-        pushSegment(result, consumed, count1);
+        pushSegment(result, consumed, flag1);
+        length1 -= consumed;
         length2 -= consumed;
-        segment1 = [length1 - consumed, count1];
       }
     }
   }
-  if (subset1.length || segment1 == null || segment1[0] > 0) {
+  if (subseq1.length || length1 == null || length1 > 0) {
     throw new Error("Length mismatch");
   }
   return result;
 }
 
-export function shrink(subset1: Subset, subset2: Subset): Subset {
-  const result: Subset = [];
-  for (const [length, count1, count2] of zip(subset1, subset2)) {
-    if (count2 === 0) {
-      pushSegment(result, length, count1);
+export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
+  const result: Subseq = [];
+  for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
+    if (!flag2) {
+      pushSegment(result, length, flag1);
     }
   }
   return result;
 }
 
 export function rebase(
-  subset1: Subset,
-  subset2: Subset,
+  subseq1: Subseq,
+  subseq2: Subseq,
   before?: boolean,
-): Subset {
-  if (countBy(subset1, (c) => c === 0) !== countBy(subset2, (c) => c === 0)) {
+): Subseq {
+  if (count(subseq1, false) !== count(subseq2, false)) {
     throw new Error("Length mismatch");
   }
-  const result: Subset = [];
-  let segment1: Segment | undefined;
-  let segment2: Segment | undefined;
-  [segment1, ...subset1] = subset1;
-  [segment2, ...subset2] = subset2;
-  while (segment1 != null || segment2 != null) {
-    if (segment1 == null) {
-      const [length2, count2] = segment2;
-      if (count2) {
-        pushSegment(result, length2, 0);
+  const result: Subseq = [];
+  let flag1: boolean = !!subseq1[0];
+  let flag2: boolean = !!subseq2[0];
+  let length1: number | undefined;
+  let length2: number | undefined;
+  [length1, ...subseq1] = subseq1.slice(1);
+  [length2, ...subseq2] = subseq2.slice(1);
+  while (length1 != null || length2 != null) {
+    if (length1 == null) {
+      if (flag2) {
+        pushSegment(result, length2, false);
       }
-      [segment2, ...subset2] = subset2;
-    } else if (segment2 == null) {
-      const [length1, count1] = segment1;
-      pushSegment(result, length1, count1);
-      [segment1, ...subset1] = subset1;
+      [length2, ...subseq2] = subseq2;
+      flag2 = !flag2;
+    } else if (length1 == null) {
+      pushSegment(result, length1, flag1);
+      [length1, ...subseq1] = subseq1;
+      flag1 = !flag1;
     } else {
-      const [length1, count1] = segment1 as Segment;
-      const [length2, count2] = segment2 as Segment;
-      if (count2) {
+      if (flag2) {
         if (before) {
-          pushSegment(result, length1, count1);
+          pushSegment(result, length1, flag1);
         }
-        pushSegment(result, length2, 0);
+        pushSegment(result, length2, false);
         if (!before) {
-          pushSegment(result, length1, count1);
+          pushSegment(result, length1, flag1);
         }
-        [segment1, ...subset1] = subset1;
-        [segment2, ...subset2] = subset2;
-      } else if (count1) {
-        pushSegment(result, length1, count1);
-        [segment1, ...subset1] = subset1;
+        [length1, ...subseq1] = subseq1;
+        flag1 = !flag1;
+        [length2, ...subseq2] = subseq2;
+        flag2 = !flag2;
+      } else if (flag1) {
+        pushSegment(result, length1, flag1);
+        [length1, ...subseq1] = subseq1;
+        flag1 = !flag1;
       } else {
         const length = Math.min(length1, length2);
-        pushSegment(result, length, 0);
+        pushSegment(result, length, false);
         if (length1 - length > 0) {
-          segment1 = [length1 - length, count1];
+          length1 -= length;
         } else {
-          [segment1, ...subset1] = subset1;
+          [length1, ...subseq1] = subseq1;
+          flag1 = !flag1;
         }
         if (length2 - length > 0) {
-          segment2 = [length2 - length, count2];
+          length2 -= length;
         } else {
-          [segment2, ...subset2] = subset2;
+          [length2, ...subseq2] = subseq2;
+          flag2 = !flag2;
         }
       }
     }
@@ -244,18 +250,18 @@ export function factor(
   patch: Patch,
   length: number,
   empty: Seq,
-): [Subset, Subset, Seq] {
-  const inserts: Subset = [];
-  const deletes: Subset = [];
+): [Subseq, Subseq, Seq] {
+  const inserts: Subseq = [];
+  const deletes: Subseq = [];
   let inserted: Seq = empty.slice();
   let consumed = 0;
   for (const { start, end, insert } of patch) {
     if (end - start > 0) {
-      pushSegment(inserts, end - consumed, 0);
+      pushSegment(inserts, end - consumed, false);
       if (start > consumed) {
-        pushSegment(deletes, start - consumed, 1);
+        pushSegment(deletes, start - consumed, true);
       }
-      pushSegment(deletes, end - start, 0);
+      pushSegment(deletes, end - start, false);
     }
     if (insert.length) {
       if (typeof inserted === "string") {
@@ -263,21 +269,21 @@ export function factor(
       } else {
         inserted = inserted.concat(insert);
       }
-      pushSegment(inserts, insert.length, 1);
+      pushSegment(inserts, insert.length, true);
     }
     consumed = end;
   }
   if (length > consumed) {
-    pushSegment(inserts, length - consumed, 0);
-    pushSegment(deletes, length - consumed, 1);
+    pushSegment(inserts, length - consumed, false);
+    pushSegment(deletes, length - consumed, true);
   }
   return [inserts, deletes, inserted];
 }
 
 export function synthesize(
   inserted: Seq,
-  from: Subset,
-  to: Subset = [[countBy(from), 0]],
+  from: Subseq,
+  to: Subseq = [0, count(from)],
 ): Patch {
   const patch: Patch = [];
   let consumed = 0;
@@ -287,14 +293,14 @@ export function synthesize(
     end: consumed,
     insert: "",
   };
-  for (const [length, count1, count2] of zip(from, to)) {
-    if (count1 === 0) {
+  for (const [length, flag1, flag2] of zip(from, to)) {
+    if (!flag1) {
       if (pe.insert.length || pe.end > pe.start) {
         patch.push(pe);
         pe = { start: consumed, end: consumed, insert: "" };
       }
       consumed += length;
-      if (count2 === 0) {
+      if (!flag2) {
         pe.start = consumed - length;
         pe.end = consumed;
       }
@@ -306,7 +312,7 @@ export function synthesize(
         pe = { start: consumed, end: consumed, insert: "" };
       }
       index += length;
-      if (count2 === 0) {
+      if (!flag2) {
         if (typeof inserted === "string") {
           pe.insert += inserted.slice(index - length, index);
         } else {
@@ -325,8 +331,8 @@ export function synthesize(
 export function shuffle(
   from: Seq,
   to: Seq,
-  inserts: Subset,
-  deletes: Subset,
+  inserts: Subseq,
+  deletes: Subseq,
 ): [Seq, Seq] {
   const fromPatch = synthesize(to, inserts, deletes);
   const toPatch = synthesize(from, complement(inserts), complement(deletes));
@@ -356,7 +362,7 @@ export interface Message {
 export interface Snapshot {
   visible: Seq;
   hidden: Seq;
-  deletes: Subset;
+  deletes: Subseq;
   parentId?: string;
 }
 
@@ -364,9 +370,9 @@ export interface Revision {
   clientId: string;
   version: number;
   // sequence of characters based on union which were inserted by this revision
-  inserts: Subset;
+  inserts: Subseq;
   // sequence of characters based on union which were deleted by this revision
-  deletes: Subset;
+  deletes: Subseq;
   intent?: string;
 }
 
@@ -412,7 +418,7 @@ export class Document extends EventEmitter {
     public clientId: string,
     public visible: Seq,
     public hidden: Seq,
-    public deletes: Subset,
+    public deletes: Subseq,
     public intents: string[],
     public revisions: RevisionLog,
   ) {
@@ -429,14 +435,14 @@ export class Document extends EventEmitter {
     revisions.push({
       clientId,
       version: 0,
-      inserts: initial.length ? [[initial.length, 1]] : [],
-      deletes: initial.length ? [[initial.length, 0]] : [],
+      inserts: initial.length ? [1, initial.length] : [],
+      deletes: initial.length ? [0, initial.length] : [],
     });
     return new Document(
       clientId,
       initial,
       initial.slice(0, 0),
-      initial.length ? [[initial.length, 0]] : [],
+      initial.length ? [0, initial.length] : [],
       intents,
       revisions,
     );
@@ -469,10 +475,10 @@ export class Document extends EventEmitter {
     return doc;
   }
 
-  public getDeletesForIndex(index: number): Subset {
-    let deletes: Subset = this.deletes;
+  public getDeletesForIndex(index: number): Subseq {
+    let deletes: Subseq = this.deletes;
     for (const revision of this.revisions.slice(index + 1).reverse()) {
-      deletes = subtract(deletes, revision.deletes);
+      deletes = difference(deletes, revision.deletes);
       deletes = shrink(deletes, revision.inserts);
     }
     return deletes;
@@ -498,7 +504,7 @@ export class Document extends EventEmitter {
       intent = undefined;
     }
     const oldDeletes = this.getDeletesForIndex(pi);
-    const oldLength = countBy(oldDeletes, (c) => c === 0);
+    const oldLength = count(oldDeletes, false);
     let [inserts, deletes, inserted] = factor(
       patch,
       oldLength,
@@ -520,6 +526,7 @@ export class Document extends EventEmitter {
         intent === revision.intent ? clientId < revision.clientId : ii < rii;
       inserts = rebase(inserts, revision.inserts, before);
       deletes = expand(deletes, revision.inserts);
+      deletes = difference(deletes, revision.deletes);
     }
     deletes = expand(deletes, inserts);
     const currentDeletes = expand(this.deletes, inserts);
@@ -633,7 +640,7 @@ export class LocalClient extends EventEmitter {
     const snapshot: Snapshot = (await this.getSnapshot(docId, initial)) || {
       visible: initial,
       hidden: initial.slice(0, 0),
-      deletes: initial.length ? [[initial.length, 1]] : [],
+      deletes: initial.length ? [0, initial.length] : [],
     };
     const create: Message = {
       patch: [{ start: 0, end: 0, insert: initial.toString() }],

@@ -9,32 +9,44 @@ import { expect } from "chai";
 import * as shredder from "../src/index";
 import { Document } from "../src/index";
 
-describe("subset", () => {
-  it("countBy", () => {
-    const s: shredder.Subset = [[10, 0], [5, 1], [8, 0], [4, 1], [4, 0]];
-    expect(shredder.countBy(s)).to.equal(31);
-    expect(shredder.countBy(s, (c) => c === 0)).to.equal(22);
-    expect(shredder.countBy(s, (c) => c === 1)).to.equal(9);
+describe("subseq", () => {
+  it("count", () => {
+    const s = [0, 10, 5, 8, 4, 4];
+    expect(shredder.count(s)).to.equal(31);
+    expect(shredder.count(s, false)).to.equal(22);
+    expect(shredder.count(s, true)).to.equal(9);
   });
 
-  it("union", () => {
-    expect(shredder.union([[4, 1], [4, 0]], [[8, 0]])).to.deep.equal([
-      [4, 1],
-      [4, 0],
-    ]);
-    expect(
-      shredder.union(
-        [[2, 1], [2, 0], [2, 1]],
-        [[1, 0], [2, 1], [2, 0], [1, 1]],
-      ),
-    ).to.deep.equal([[1, 1], [1, 2], [1, 1], [1, 0], [1, 1], [1, 2]]);
+  describe("union", () => {
+    it("empty", () => {
+      expect(shredder.union([1, 4, 4], [0, 8])).to.deep.equal([1, 4, 4]);
+    });
+
+    it("complex", () => {
+      const result = [1, 3, 1, 2];
+      expect(shredder.union([1, 2, 2, 2], [0, 1, 2, 2, 1])).to.deep.equal(
+        result,
+      );
+    });
   });
 
-  it("transform", () => {
-    const s: shredder.Subset = [[4, 0], [4, 1], [6, 0], [5, 1], [3, 0]];
-    const t: shredder.Subset = [[10, 0], [5, 1], [8, 0], [4, 1], [4, 0]];
+  describe("difference", () => {
+    it("empty", () => {
+      expect(shredder.difference([1, 8], [1, 4, 4])).to.deep.equal([0, 4, 4]);
+    });
+
+    it("complex", () => {
+      expect(
+        shredder.difference([1, 2, 2, 2], [0, 1, 1, 1, 1, 1, 1]),
+      ).to.deep.equal([1, 1, 3, 1, 1]);
+    });
+  });
+
+  it("expand/shrink", () => {
+    const s = [0, 4, 4, 6, 5, 3];
+    const t = [0, 10, 5, 8, 4, 4];
     const expanded = shredder.expand(s, t);
-    const result = [[4, 0], [4, 1], [11, 0], [4, 1], [4, 0], [1, 1], [3, 0]];
+    const result = [0, 4, 4, 11, 4, 4, 1, 3];
     expect(expanded).to.deep.equal(result);
     expect(shredder.shrink(expanded, t)).to.deep.equal(s);
   });
@@ -42,18 +54,18 @@ describe("subset", () => {
   describe("rebase", () => {
     it("error when mismatched", () => {
       expect(() => {
-        shredder.rebase([[5, 0], [1, 1]], [[1, 1], [4, 0]]);
+        shredder.rebase([0, 5, 1], [1, 1, 4]);
       }).to.throw();
     });
 
     it("empty transform", () => {
-      const s: shredder.Subset = [[1, 0], [2, 1], [7, 0]];
-      const t: shredder.Subset = [[8, 0]];
-      expect(shredder.rebase(s, t)).to.deep.equal([[1, 0], [2, 1], [7, 0]]);
+      const s = [0, 1, 2, 7];
+      const t = [0, 8];
+      expect(shredder.rebase(s, t)).to.deep.equal([0, 1, 2, 7]);
     });
 
     it("same position", () => {
-      // subset
+      // subseq
       // ==++====
       // transform
       // ==++====
@@ -61,16 +73,16 @@ describe("subset", () => {
       // ====++====
       // result before
       // ==++======
-      const s: shredder.Subset = [[2, 0], [2, 1], [4, 0]];
-      const t: shredder.Subset = [[2, 0], [2, 1], [4, 0]];
-      const result = [[4, 0], [2, 1], [4, 0]];
+      const s = [0, 2, 2, 4];
+      const t = [0, 2, 2, 4];
+      const result = [0, 4, 2, 4];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
-      const result1 = [[2, 0], [2, 1], [6, 0]];
+      const result1 = [0, 2, 2, 6];
       expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
     });
 
     it("same position different lengths", () => {
-      // subset
+      // subseq
       // ==++++==
       // transform
       // ==++==
@@ -78,16 +90,16 @@ describe("subset", () => {
       // ====++++==
       // result before
       // ==++++====
-      const s: shredder.Subset = [[2, 0], [4, 1], [2, 0]];
-      const t: shredder.Subset = [[2, 0], [2, 1], [2, 0]];
-      const result = [[4, 0], [4, 1], [2, 0]];
+      const s = [0, 2, 4, 2];
+      const t = [0, 2, 2, 2];
+      const result = [0, 4, 4, 2];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
-      const result1 = [[2, 0], [4, 1], [4, 0]];
+      const result1 = [0, 2, 4, 4];
       expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
     });
 
-    it("subset before", () => {
-      // subset
+    it("subseq before", () => {
+      // subseq
       // +=====
       // transform
       // =++++====
@@ -95,15 +107,15 @@ describe("subset", () => {
       // +=========
       // result before
       // +=========
-      const s: shredder.Subset = [[1, 1], [5, 0]];
-      const t: shredder.Subset = [[1, 0], [4, 1], [4, 0]];
-      const result = [[1, 1], [9, 0]];
+      const s = [1, 1, 5];
+      const t = [0, 1, 4, 4];
+      const result = [1, 1, 9];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
       expect(shredder.rebase(s, t, true)).to.deep.equal(result);
     });
 
-    it("subset before overlapping", () => {
-      // subset
+    it("subseq before overlapping", () => {
+      // subseq
       // ++====
       // transform
       // =++++===
@@ -111,15 +123,15 @@ describe("subset", () => {
       // ++========
       // result before
       // ++========
-      const s: shredder.Subset = [[2, 1], [4, 0]];
-      const t: shredder.Subset = [[1, 0], [4, 1], [3, 0]];
-      const result = [[2, 1], [8, 0]];
+      const s = [1, 2, 4];
+      const t = [0, 1, 4, 3];
+      const result = [1, 2, 8];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
       expect(shredder.rebase(s, t, true)).to.deep.equal(result);
     });
 
-    it("subset after", () => {
-      // subset
+    it("subseq after", () => {
+      // subseq
       // =++++====
       // transform
       // +=====
@@ -127,15 +139,15 @@ describe("subset", () => {
       // ==++++====
       // result before
       // ==++++====
-      const s: shredder.Subset = [[1, 0], [4, 1], [4, 0]];
-      const t: shredder.Subset = [[1, 1], [5, 0]];
-      const result = [[2, 0], [4, 1], [4, 0]];
+      const s = [0, 1, 4, 4];
+      const t = [1, 1, 5];
+      const result = [0, 2, 4, 4];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
       expect(shredder.rebase(s, t, true)).to.deep.equal(result);
     });
 
-    it("subset after overlapping 1", () => {
-      // subset
+    it("subseq after overlapping 1", () => {
+      // subseq
       // ====++
       // transform
       // ==++++==
@@ -143,15 +155,15 @@ describe("subset", () => {
       // ========++
       // result before
       // ========++
-      const s: shredder.Subset = [[4, 0], [2, 1]];
-      const t: shredder.Subset = [[2, 0], [4, 1], [2, 0]];
-      const result = [[8, 0], [2, 1]];
+      const s = [0, 4, 2];
+      const t = [0, 2, 4, 2];
+      const result = [0, 8, 2];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
       expect(shredder.rebase(s, t, true)).to.deep.equal(result);
     });
 
-    it("subset after overlapping 2", () => {
-      // subset
+    it("subseq after overlapping 2", () => {
+      // subseq
       // ==++===
       // transform
       // =+++====
@@ -159,15 +171,15 @@ describe("subset", () => {
       // =====++===
       // result before
       // =====++===
-      const s: shredder.Subset = [[2, 0], [2, 1], [3, 0]];
-      const t: shredder.Subset = [[1, 0], [3, 1], [4, 0]];
-      const result = [[5, 0], [2, 1], [3, 0]];
+      const s = [0, 2, 2, 3];
+      const t = [0, 1, 3, 4];
+      const result = [0, 5, 2, 3];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
       expect(shredder.rebase(s, t, true)).to.deep.equal(result);
     });
 
-    it("subset after overlapping 3", () => {
-      // subset
+    it("subseq after overlapping 3", () => {
+      // subseq
       // =++++===
       // transform
       // ++====
@@ -175,15 +187,15 @@ describe("subset", () => {
       // ===++++===
       // result before
       // ===++++===
-      const s: shredder.Subset = [[1, 0], [4, 1], [3, 0]];
-      const t: shredder.Subset = [[2, 1], [4, 0]];
-      const result = [[3, 0], [4, 1], [3, 0]];
+      const s = [0, 1, 4, 3];
+      const t = [1, 2, 4];
+      const result = [0, 3, 4, 3];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
       expect(shredder.rebase(s, t, true)).to.deep.equal(result);
     });
 
     it("multiple segments", () => {
-      // subset
+      // subseq
       // +=++=+==
       // transform
       // =+===+
@@ -191,18 +203,11 @@ describe("subset", () => {
       // +==++=+===
       // result before
       // +=++==+===
-      const s: shredder.Subset = [
-        [1, 1],
-        [1, 0],
-        [2, 1],
-        [1, 0],
-        [1, 1],
-        [2, 0],
-      ];
-      const t: shredder.Subset = [[1, 0], [1, 1], [3, 0], [1, 1]];
-      const result = [[1, 1], [2, 0], [2, 1], [1, 0], [1, 1], [3, 0]];
+      const s = [1, 1, 1, 2, 1, 1, 2];
+      const t = [0, 1, 1, 3, 1];
+      const result = [1, 1, 2, 2, 1, 1, 3];
       expect(shredder.rebase(s, t)).to.deep.equal(result);
-      const result1 = [[1, 1], [1, 0], [2, 1], [2, 0], [1, 1], [3, 0]];
+      const result1 = [1, 1, 1, 2, 2, 1, 3];
       expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
     });
   });
@@ -230,25 +235,25 @@ describe("patch", () => {
 
   it("factor", () => {
     const [inserts, deletes] = shredder.factor(p0, text.length, "");
-    expect(inserts).to.deep.equal([[1, 0], [3, 1], [10, 0]]);
-    expect(deletes).to.deep.equal([[1, 0], [8, 1], [2, 0]]);
+    expect(inserts).to.deep.equal([0, 1, 3, 10]);
+    expect(deletes).to.deep.equal([0, 1, 8, 2]);
     const [inserts1, deletes1] = shredder.factor(p1, text.length, "");
-    expect(inserts1).to.deep.equal([[2, 1], [11, 0]]);
-    expect(deletes1).to.deep.equal([[2, 1], [3, 0], [6, 1]]);
+    expect(inserts1).to.deep.equal([1, 2, 11]);
+    expect(deletes1).to.deep.equal([1, 2, 3, 6]);
     const [inserts2, deletes2] = shredder.factor(p2, text.length, "");
-    expect(inserts2).to.deep.equal([[4, 0], [1, 1], [1, 0], [7, 1], [6, 0]]);
-    expect(deletes2).to.deep.equal([[5, 0], [6, 1]]);
+    expect(inserts2).to.deep.equal([0, 4, 1, 1, 7, 6]);
+    expect(deletes2).to.deep.equal([0, 5, 6]);
   });
 
   it("synthesize", () => {
     const [inserts, deletes, inserted] = shredder.factor(p0, text.length, "");
-    const deletes1: shredder.Subset = shredder.expand(deletes, inserts);
+    const deletes1 = shredder.expand(deletes, inserts);
     const union = shredder.apply(text, shredder.synthesize(inserted, inserts));
     const text1 = shredder.apply(
       union,
       shredder.synthesize(
         "",
-        [[shredder.countBy(deletes1), 0]],
+        [0, shredder.count(deletes1)],
         shredder.complement(deletes1),
       ),
     );
@@ -256,7 +261,7 @@ describe("patch", () => {
       union,
       shredder.synthesize(
         "",
-        [[shredder.countBy(inserts), 0]],
+        [0, shredder.count(inserts)],
         shredder.complement(inserts),
       ),
     );
@@ -277,14 +282,21 @@ describe("Document", () => {
   describe("Document.getDeletesForIndex", () => {
     it("get deletes for all points in history", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
+      // +++++++++++ inserts
+      // =========== deletes
       //"hello world"
-      // ===========
+      // +======+===== inserts
+      // =+======+==== deletes
+      // =+======+==== deletes from union
       //"Hhello Wworld"
-      // =+======+====
+      // ======+++++++=======
+      // =============++=++++
+      // =+===========+++++++ deletes from union
       //"Hhello, Brian Wworld"
-      // =+===========+++++++
+      // =============++++++++++======= rebased inserts
+      // ============================== overlapping deletes are ignored
+      // =+=====================+++++++ deletes from union
       //"Hhello, Brian, Dr. Evil Wworld"
-      // =+=====================+++++++
       doc.edit([
         { start: 0, end: 0, insert: "H" },
         { start: 1, end: 6, insert: "W" },
@@ -292,13 +304,13 @@ describe("Document", () => {
       ]);
       doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
       doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], "concurrent", 1);
-      const deletes = [[11, 0]];
+      const deletes = [0, 11];
       expect(doc.getDeletesForIndex(0)).to.deep.equal(deletes);
-      const deletes1 = [[1, 0], [1, 1], [6, 0], [1, 1], [4, 0]];
+      const deletes1 = [0, 1, 1, 6, 1, 4];
       expect(doc.getDeletesForIndex(1)).to.deep.equal(deletes1);
-      const deletes2 = [[1, 0], [1, 1], [11, 0], [7, 1]];
+      const deletes2 = [0, 1, 1, 11, 7];
       expect(doc.getDeletesForIndex(2)).to.deep.equal(deletes2);
-      const deletes3 = [[1, 0], [1, 1], [21, 0], [2, 2], [1, 1], [4, 2]];
+      const deletes3 = [0, 1, 1, 21, 7];
       expect(doc.getDeletesForIndex(3)).to.deep.equal(deletes3);
       expect(doc.getDeletesForIndex(3)).to.deep.equal(doc.deletes);
     });
@@ -314,7 +326,7 @@ describe("Document", () => {
       expect(doc.revisions.length).to.equal(2);
       expect(doc.visible).to.equal("herald");
       expect(doc.hidden).to.equal("ello wor");
-      expect(doc.deletes).to.deep.equal([[4, 0], [8, 1], [2, 0]]);
+      expect(doc.deletes).to.deep.equal([0, 4, 8, 2]);
     });
     it("sequential", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
