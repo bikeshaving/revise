@@ -26,7 +26,7 @@ export function pushSegment(
   } else if (!subseq.length) {
     subseq.push(flag ? 1 : 0, length);
   } else {
-    const flag1: boolean = !subseq[0] === (subseq.length % 2 === 1);
+    const flag1: boolean = !!subseq[0] === (subseq.length % 2 === 0);
     if (flag === flag1) {
       subseq[subseq.length - 1] += length;
     } else {
@@ -108,6 +108,10 @@ export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
 
+export function intersection(subseq1: Subseq, subseq2: Subseq): Subseq {
+  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && flag2);
+}
+
 export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
   const result: Subseq = [];
 
@@ -173,7 +177,7 @@ export function rebase(
       }
       [length2, ...subseq2] = subseq2;
       flag2 = !flag2;
-    } else if (length1 == null) {
+    } else if (length2 == null) {
       pushSegment(result, length1, flag1);
       [length1, ...subseq1] = subseq1;
       flag1 = !flag1;
@@ -219,7 +223,6 @@ export interface Seq {
   length: number;
   slice(start?: number, end?: number): Seq;
   concat(...items: (string | Seq)[]): Seq;
-  toString(): string;
 }
 
 // To apply a patch, copy from start (inclusive) to end (exclusive) and splice insert at end.
@@ -227,7 +230,7 @@ export interface Seq {
 export interface PatchElement {
   start: number;
   end: number;
-  insert: string;
+  insert: Seq;
 }
 
 export type Patch = PatchElement[];
@@ -316,7 +319,7 @@ export function synthesize(
         if (typeof inserted === "string") {
           pe.insert += inserted.slice(index - length, index);
         } else {
-          pe.insert += inserted.slice(index - length, index).toString();
+          pe.insert = pe.insert.concat(inserted.slice(index - length, index));
         }
       }
     }
@@ -529,6 +532,7 @@ export class Document extends EventEmitter {
       deletes = difference(deletes, revision.deletes);
     }
     deletes = expand(deletes, inserts);
+    // TODO: put revive logic here
     const currentDeletes = expand(this.deletes, inserts);
     const visibleInserts = shrink(inserts, currentDeletes);
     const visible = apply(this.visible, synthesize(inserted, visibleInserts));
@@ -643,7 +647,7 @@ export class LocalClient extends EventEmitter {
       deletes: initial.length ? [0, initial.length] : [],
     };
     const create: Message = {
-      patch: [{ start: 0, end: 0, insert: initial.toString() }],
+      patch: [{ start: 0, end: 0, insert: initial }],
       clientId: this.id,
       version: 0,
     };

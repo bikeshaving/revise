@@ -64,6 +64,23 @@ describe("subseq", () => {
       expect(shredder.rebase(s, t)).to.deep.equal([0, 1, 2, 7]);
     });
 
+    it("smaller transform", () => {
+      // subseq
+      // +++====+
+      // transform
+      // +++====
+      // result after
+      // ===+++====+
+      // result before
+      // +++=======+
+      const s = [1, 3, 4, 1];
+      const t = [1, 3, 4];
+      const result = [0, 3, 3, 4, 1];
+      expect(shredder.rebase(s, t)).to.deep.equal(result);
+      const result1 = [1, 3, 7, 1];
+      expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
+    });
+
     it("same position", () => {
       // subseq
       // ==++====
@@ -451,6 +468,15 @@ describe("Document", () => {
       // old deletes from union
       // =+======+====
       expect(doc.visible).to.equal("Hello, Brian, Dr. Evil");
+    });
+
+    it("revive", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([{ start: 6, end: 11, insert: "" }]);
+      doc.edit([{ start: 0, end: 0, insert: "hello " }, { start: 0, end: 5, insert: "s"}]);
+      expect(doc.visible).to.deep.equal("hello worlds");
+      // TODO:
+      // expect(doc.hidden).to.deep.equal("");
     });
   });
 });
