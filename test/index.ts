@@ -65,14 +65,10 @@ describe("subseq", () => {
     });
 
     it("smaller transform", () => {
-      // subseq
-      // +++====+
-      // transform
-      // +++====
-      // result after
-      // ===+++====+
-      // result before
-      // +++=======+
+      // +++====+ subseq
+      // +++==== transform
+      // ===+++====+ result after
+      // +++=======+ result before
       const s = [1, 3, 4, 1];
       const t = [1, 3, 4];
       const result = [0, 3, 3, 4, 1];
@@ -82,14 +78,10 @@ describe("subseq", () => {
     });
 
     it("same position", () => {
-      // subseq
-      // ==++====
-      // transform
-      // ==++====
-      // result after
-      // ====++====
-      // result before
-      // ==++======
+      // ==++==== subseq
+      // ==++==== transform
+      // ====++==== result after
+      // ==++====== result before
       const s = [0, 2, 2, 4];
       const t = [0, 2, 2, 4];
       const result = [0, 4, 2, 4];
@@ -99,14 +91,10 @@ describe("subseq", () => {
     });
 
     it("same position different lengths", () => {
-      // subseq
-      // ==++++==
-      // transform
-      // ==++==
-      // result after
-      // ====++++==
-      // result before
-      // ==++++====
+      // ==++++== subseq
+      // ==++== transform
+      // ====++++== result after
+      // ==++++==== result before
       const s = [0, 2, 4, 2];
       const t = [0, 2, 2, 2];
       const result = [0, 4, 4, 2];
@@ -116,14 +104,10 @@ describe("subseq", () => {
     });
 
     it("subseq before", () => {
-      // subseq
-      // +=====
-      // transform
-      // =++++====
-      // result after
-      // +=========
-      // result before
-      // +=========
+      // +===== subseq
+      // =++++==== transform
+      // +========= result after
+      // +========= result before
       const s = [1, 1, 5];
       const t = [0, 1, 4, 4];
       const result = [1, 1, 9];
@@ -132,14 +116,10 @@ describe("subseq", () => {
     });
 
     it("subseq before overlapping", () => {
-      // subseq
-      // ++====
-      // transform
-      // =++++===
-      // result after
-      // ++========
-      // result before
-      // ++========
+      // ++==== subseq
+      // =++++=== transform
+      // ++======== result after
+      // ++======== result before
       const s = [1, 2, 4];
       const t = [0, 1, 4, 3];
       const result = [1, 2, 8];
@@ -148,14 +128,10 @@ describe("subseq", () => {
     });
 
     it("subseq after", () => {
-      // subseq
-      // =++++====
-      // transform
-      // +=====
-      // result after
-      // ==++++====
-      // result before
-      // ==++++====
+      // =++++==== subseq
+      // +===== transform
+      // ==++++==== result after
+      // ==++++==== result before
       const s = [0, 1, 4, 4];
       const t = [1, 1, 5];
       const result = [0, 2, 4, 4];
@@ -164,14 +140,10 @@ describe("subseq", () => {
     });
 
     it("subseq after overlapping 1", () => {
-      // subseq
-      // ====++
-      // transform
-      // ==++++==
-      // result after
-      // ========++
-      // result before
-      // ========++
+      // ====++ subseq
+      // ==++++== transform
+      // ========++ result after
+      // ========++ result before
       const s = [0, 4, 2];
       const t = [0, 2, 4, 2];
       const result = [0, 8, 2];
@@ -180,14 +152,10 @@ describe("subseq", () => {
     });
 
     it("subseq after overlapping 2", () => {
-      // subseq
-      // ==++===
-      // transform
-      // =+++====
-      // result after
-      // =====++===
-      // result before
-      // =====++===
+      // ==++=== subseq
+      // =+++==== transform
+      // =====++=== result after
+      // =====++=== result before
       const s = [0, 2, 2, 3];
       const t = [0, 1, 3, 4];
       const result = [0, 5, 2, 3];
@@ -196,14 +164,10 @@ describe("subseq", () => {
     });
 
     it("subseq after overlapping 3", () => {
-      // subseq
-      // =++++===
-      // transform
-      // ++====
-      // result after
-      // ===++++===
-      // result before
-      // ===++++===
+      // =++++=== subseq
+      // ++==== transform
+      // ===++++=== result after
+      // ===++++=== result before
       const s = [0, 1, 4, 3];
       const t = [1, 2, 4];
       const result = [0, 3, 4, 3];
@@ -212,14 +176,10 @@ describe("subseq", () => {
     });
 
     it("multiple segments", () => {
-      // subseq
-      // +=++=+==
-      // transform
-      // =+===+
-      // result after
-      // +==++=+===
-      // result before
-      // +=++==+===
+      // +=++=+== subseq
+      // =+===+ transform
+      // +==++=+=== result after
+      // +=++==+=== result before
       const s = [1, 1, 1, 2, 1, 1, 2];
       const t = [0, 1, 1, 3, 1];
       const result = [1, 1, 2, 2, 1, 1, 3];
@@ -228,6 +188,23 @@ describe("subseq", () => {
       expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
     });
   });
+});
+
+describe("reviveSegment", () => {
+  expect(shredder.reviveSegment("hello world", "hello ")).to.deep.equal([
+    0,
+    0,
+    6,
+  ]);
+  expect(shredder.reviveSegment("hello world", "world")).to.deep.equal([
+    6,
+    0,
+    5,
+  ]);
+  expect(shredder.reviveSegment("hello world", "ow")).to.deep.equal([4, 0, 1]);
+  expect(shredder.reviveSegment("hello world", " ")).to.deep.equal([5, 0, 1]);
+  expect(shredder.reviveSegment("hello world", "d")).to.deep.equal([10, 0, 1]);
+  expect(shredder.reviveSegment("hello world", "xworld")).to.equal(undefined);
 });
 
 describe("patch", () => {
@@ -243,11 +220,16 @@ describe("patch", () => {
     { start: 0, end: 4, insert: " " },
     { start: 4, end: 5, insert: "n Earth" },
   ];
+  const p3: shredder.Patch = [
+    { start: 0, end: 6, insert: "" },
+    { start: 7, end: 7, insert: "buddy" },
+  ];
   const text = "hello world";
   it("apply", () => {
     expect(shredder.apply(text, p0)).to.equal("herald");
     expect(shredder.apply(text, p1)).to.equal("jello");
     expect(shredder.apply(text, p2)).to.equal("hell on Earth");
+    expect(shredder.apply(text, p3)).to.equal("hello buddy");
   });
 
   it("factor", () => {
@@ -260,6 +242,9 @@ describe("patch", () => {
     const [inserts2, deletes2] = shredder.factor(p2, text.length);
     expect(inserts2).to.deep.equal([0, 4, 1, 1, 7, 6]);
     expect(deletes2).to.deep.equal([0, 5, 6]);
+    const [inserts3, deletes3] = shredder.factor(p3, text.length);
+    expect(inserts3).to.deep.equal([0, 7, 5, 4]);
+    expect(deletes3).to.deep.equal([0, 6, 5]);
   });
 
   it("synthesize", () => {
@@ -308,7 +293,7 @@ describe("Document", () => {
       //"Hhello Wworld"
       // ======+++++++=======
       // =============++=++++
-      // =+===========+++++++ deletes from union
+      // =+===========+++++++
       //"Hhello, Brian Wworld"
       // =============++++++++++======= rebased inserts
       // ============================== overlapping deletes are ignored
@@ -345,15 +330,9 @@ describe("Document", () => {
       expect(doc.hidden).to.equal("ello wor");
       expect(doc.deletes).to.deep.equal([0, 4, 8, 2]);
     });
+
     it("sequential", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
-      //"hello world"
-      // inserts
-      // =+++==
-      //"herald"
-      // deletes
-      // =++++++++==
-      //"hello world"
       doc.edit([
         { start: 0, end: 1, insert: "era" },
         { start: 9, end: 11, insert: "" },
@@ -361,6 +340,7 @@ describe("Document", () => {
       doc.edit([{ start: 0, end: 6, insert: "ry" }]);
       expect(doc.visible).to.equal("heraldry");
     });
+
     it("sequential 2", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([
@@ -368,35 +348,10 @@ describe("Document", () => {
         { start: 1, end: 6, insert: "W" },
         { start: 7, end: 11, insert: "" },
       ]);
-      // union string
-      //"Hhello Wworld"
-      // inserts
-      //"Hello, Brian World"
-      // =====+++++++======
-      // deletes
-      //"Hello World"
-      // =====++++++
-      // old deletes
-      //"Hhello Wworld"
-      // =+======+====
-      // rebased inserts against old deletes
-      //"Hhello, Brian Wworld"
-      // ======+++++++=======
-      // expanded deletes against old deletes
-      //"Hhello Wworld"
-      // ======++=++++
-      // expanded deletes against rebased inserts
-      //"Hhello, Brian Wworld"
-      // =============++=++++
-      // rebased current deletes against rebased inserts
-      //"Hhello, Brian Wworld"
-      // =+=============+====
-      // union of expanded deletes and rebased current deletes
-      //"Hhello, Brian Wworld"
-      // =+===========+++++++
       doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
       expect(doc.visible).to.equal("Hello, Brian");
     });
+
     it("sequential 3", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([{ start: 6, end: 11, insert: "" }]);
@@ -414,6 +369,7 @@ describe("Document", () => {
       );
       expect(doc.visible).to.equal("goodbye hello world");
     });
+
     it("concurrent 1", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([
@@ -439,47 +395,57 @@ describe("Document", () => {
       ]);
       doc.edit([{ start: 0, end: 5, insert: ", Brian" }]);
       doc.edit([{ start: 0, end: 5, insert: ", Dr. Evil" }], "concurrent", 1);
-      // revisions
-      //"hello world"
-      // inserts
-      // +++++++++++
-      // deletes
-      // ===========
-      //"Hhello Wworld"
-      // inserts
-      // +======+=====
-      // deletes
-      // =+======+====
-      //"Hhello, Brian Wworld"
-      // inserts
-      // ======+++++++=======
-      // deletes
-      // =============++=++++
-      // deletes from union
-      // =+===========+++++++
-      // subtract
-      // deletes
-      // =============++=++++
-      // subtracted deletes from union
-      // =+=============+====
-      // shrink
-      // inserts
-      // ======+++++++=======
-      // old deletes from union
-      // =+======+====
       expect(doc.visible).to.equal("Hello, Brian, Dr. Evil");
     });
 
-    it("revive", () => {
+    it("revive 1", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([{ start: 6, end: 11, insert: "" }]);
       doc.edit([
         { start: 0, end: 0, insert: "hello " },
         { start: 0, end: 5, insert: "s" },
       ]);
-      expect(doc.visible).to.deep.equal("hello worlds");
-      // TODO:
-      // expect(doc.hidden).to.deep.equal("");
+      expect(doc.visible).to.equal("hello worlds");
+      // expect(doc.hidden).to.equal("");
+    });
+
+    it("revive 2", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([]);
+      doc.edit([{ start: 0, end: 0, insert: "hello s" }]);
+      doc.edit([
+        { start: 0, end: 6, insert: "world" },
+        { start: 6, end: 7, insert: "" },
+      ]);
+      expect(doc.visible).to.equal("hello worlds");
+      // expect(doc.hidden).to.equal("");
+    });
+
+    it("revive 3", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([]);
+      doc.edit([{ start: 0, end: 0, insert: "worlds" }]);
+      doc.edit([
+        { start: 0, end: 0, insert: "hello " },
+        { start: 0, end: 6, insert: "" },
+      ]);
+      expect(doc.visible).to.equal("hello worlds");
+      // expect(doc.hidden).to.equal("");
+    });
+
+    it("revive 4", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([
+        { start: 0, end: 0, insert: "H" },
+        { start: 1, end: 6, insert: "W" },
+        { start: 7, end: 11, insert: "" },
+      ]);
+      doc.edit([
+        { start: 0, end: 6, insert: "" },
+        { start: 7, end: 7, insert: "weatherworld" },
+      ]);
+      expect(doc.visible).to.equal("Hello weatherworld");
+      // whaw should hidden be with revives???
     });
   });
 });

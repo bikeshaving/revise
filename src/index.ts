@@ -139,7 +139,7 @@ export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
       }
     }
   }
-  if (subseq1.length || length1 == null || length1 > 0) {
+  if (subseq1.length || (length1 != null && length1 > 0)) {
     throw new Error("Length mismatch");
   }
   return result;
@@ -219,6 +219,57 @@ export function rebase(
   return result;
 }
 
+// function prefix(a: string, b:string): number {
+//   const length = Math.min(a.length, b.length);
+//   for (let i = 0; i < length; i++) {
+//     if (a[i] !== b[i]) {
+//       return i;
+//     }
+//   }
+//   return length;
+// }
+
+export function reviveSegment(
+  text1: string,
+  text2: string,
+): [number, number, number] | undefined {
+  let i2 = 0;
+  let start1: number | undefined;
+  let start2: number | undefined;
+  for (let i1 = 0; i1 < text1.length; i1++) {
+    if (start1 != null) {
+      if (text1[i1] !== text2[i2]) {
+        break;
+      }
+      i2++;
+    } else {
+      if (text1[i1] === text2[i2]) {
+        start1 = i1;
+        start2 = i2;
+        i2++;
+      }
+    }
+  }
+  if (start1 != null) {
+    return [start1, start2!, i2 - start2!];
+  }
+}
+
+// export function revive(
+//   inserted: string,
+//   deleted: string,
+//   inserts: Subseq,
+//   deletes: Subseq,
+// ): [string, Subseq] {
+//   inserted;
+//   deleted;
+//   inserts;
+//   deletes;
+//   // console.log(reviveSegment(deleted, inserted), deleted, inserted);
+//   // console.log(reviveSegment(inserted, deleted), inserted, deleted);
+//   return [inserted, []];
+// }
+
 // To apply a patch, copy from start (inclusive) to end (exclusive) and splice insert at end.
 // Deletes are represented via omission
 export interface PatchElement {
@@ -244,11 +295,12 @@ export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
   let inserted: string = "";
   let consumed = 0;
   for (const { start, end, insert } of patch) {
+    if (start > consumed) {
+      pushSegment(inserts, start - consumed, false);
+      pushSegment(deletes, start - consumed, true);
+    }
     if (end - start > 0) {
-      pushSegment(inserts, end - consumed, false);
-      if (start > consumed) {
-        pushSegment(deletes, start - consumed, true);
-      }
+      pushSegment(inserts, end - start, false);
       pushSegment(deletes, end - start, false);
     }
     if (insert.length) {
@@ -506,6 +558,7 @@ export class Document extends EventEmitter {
     }
     deletes = expand(deletes, inserts);
     // TODO: put revive logic here
+    // revive(inserted, this.hidden, inserts, this.deletes);
     const currentDeletes = expand(this.deletes, inserts);
     const visibleInserts = shrink(inserts, currentDeletes);
     const visible = apply(this.visible, synthesize(inserted, visibleInserts));
