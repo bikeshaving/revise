@@ -60,16 +60,16 @@ class ZipIterator implements IterableIterator<ZipValue> {
     if (length1 + this.consumed1 === length2 + this.consumed2) {
       this.consumed1 += length1;
       this.consumed2 += length2;
-      this.i1 += 1;
-      this.i2 += 1;
+      this.i1++;
+      this.i2++;
       length = this.consumed1 - this.consumed;
     } else if (length1 + this.consumed1 < length2 + this.consumed2) {
       this.consumed1 += length1;
-      this.i1 += 1;
+      this.i1++;
       length = this.consumed1 - this.consumed;
     } else {
       this.consumed2 += length2;
-      this.i2 += 1;
+      this.i2++;
       length = this.consumed2 - this.consumed;
     }
     this.consumed += length;
@@ -108,10 +108,6 @@ export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
 
-export function intersection(subseq1: Subseq, subseq2: Subseq): Subseq {
-  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && flag2);
-}
-
 export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
   const result: Subseq = [];
 
@@ -132,10 +128,10 @@ export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
           flag1 = !flag1;
           [length1, ...subseq1] = subseq1;
         }
-        const consumed = Math.min(length1, length2);
-        pushSegment(result, consumed, flag1);
-        length1 -= consumed;
-        length2 -= consumed;
+        const length = Math.min(length1, length2);
+        pushSegment(result, length, flag1);
+        length1 -= length;
+        length2 -= length;
       }
     }
   }
@@ -219,72 +215,21 @@ export function rebase(
   return result;
 }
 
-// function prefix(a: string, b:string): number {
-//   const length = Math.min(a.length, b.length);
-//   for (let i = 0; i < length; i++) {
-//     if (a[i] !== b[i]) {
-//       return i;
-//     }
-//   }
-//   return length;
-// }
-
-export function reviveSegment(
-  text1: string,
-  text2: string,
-): [number, number, number] | undefined {
-  let i2 = 0;
-  let start1: number | undefined;
-  let start2: number | undefined;
-  for (let i1 = 0; i1 < text1.length; i1++) {
-    if (start1 != null) {
-      if (text1[i1] !== text2[i2]) {
-        break;
-      }
-      i2++;
-    } else {
-      if (text1[i1] === text2[i2]) {
-        start1 = i1;
-        start2 = i2;
-        i2++;
-      }
-    }
-  }
-  if (start1 != null) {
-    return [start1, start2!, i2 - start2!];
-  }
-}
-
-// export function revive(
-//   inserted: string,
-//   deleted: string,
-//   inserts: Subseq,
-//   deletes: Subseq,
-// ): [string, Subseq] {
-//   inserted;
-//   deleted;
-//   inserts;
-//   deletes;
-//   // console.log(reviveSegment(deleted, inserted), deleted, inserted);
-//   // console.log(reviveSegment(inserted, deleted), inserted, deleted);
-//   return [inserted, []];
-// }
-
-// To apply a patch, copy from start (inclusive) to end (exclusive) and splice insert at end.
+// inclusive start, exclusive end
+type Copy = [number, number];
+type Insert = string;
 // Deletes are represented via omission
-export interface PatchElement {
-  start: number;
-  end: number;
-  insert: string;
-}
-
-export type Patch = PatchElement[];
+export type Patch = (Copy | Insert)[];
 
 export function apply(text: string, patch: Patch): string {
-  let result = text.slice(0, 0);
-  for (const { start, end, insert } of patch) {
-    result += text.slice(start, end);
-    result += insert;
+  let result = "";
+  for (const el of patch) {
+    if (typeof el === "string") {
+      result += el;
+    } else {
+      const [start, end] = el;
+      result += text.slice(start, end);
+    }
   }
   return result;
 }
@@ -294,20 +239,19 @@ export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
   const deletes: Subseq = [];
   let inserted: string = "";
   let consumed = 0;
-  for (const { start, end, insert } of patch) {
-    if (start > consumed) {
-      pushSegment(inserts, start - consumed, false);
-      pushSegment(deletes, start - consumed, true);
-    }
-    if (end - start > 0) {
-      pushSegment(inserts, end - start, false);
+  for (const el of patch) {
+    if (typeof el === "string") {
+      inserted += el;
+      pushSegment(inserts, el.length, true);
+    } else {
+      const [start, end] = el;
+      pushSegment(inserts, end - consumed, false);
+      if (start > consumed) {
+        pushSegment(deletes, start - consumed, true);
+      }
       pushSegment(deletes, end - start, false);
+      consumed = end;
     }
-    if (insert.length) {
-      inserted += insert;
-      pushSegment(inserts, insert.length, true);
-    }
-    consumed = end;
   }
   if (length > consumed) {
     pushSegment(inserts, length - consumed, false);
@@ -317,44 +261,25 @@ export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
 }
 
 export function synthesize(
-  inserted: string,
+  text: string,
   from: Subseq,
   to: Subseq = [0, count(from)],
 ): Patch {
   const patch: Patch = [];
-  let consumed = 0;
-  let index = 0;
-  let pe: PatchElement = {
-    start: consumed,
-    end: consumed,
-    insert: "",
-  };
+  let ri = 0;
+  let ti = 0;
   for (const [length, flag1, flag2] of zip(from, to)) {
     if (!flag1) {
-      if (pe.insert.length || pe.end > pe.start) {
-        patch.push(pe);
-        pe = { start: consumed, end: consumed, insert: "" };
-      }
-      consumed += length;
+      ri += length;
       if (!flag2) {
-        pe.start = consumed - length;
-        pe.end = consumed;
+        patch.push([ri - length, ri] as Copy);
       }
     } else {
-      if (pe.end < consumed) {
-        if (pe.end > pe.start) {
-          patch.push(pe);
-        }
-        pe = { start: consumed, end: consumed, insert: "" };
-      }
-      index += length;
+      ti += length;
       if (!flag2) {
-        pe.insert += inserted.slice(index - length, index);
+        patch.push(text.slice(ti - length, ti));
       }
     }
-  }
-  if (pe.insert.length || pe.end > pe.start) {
-    patch.push(pe);
   }
   return patch;
 }
@@ -369,6 +294,80 @@ export function shuffle(
   const fromPatch = synthesize(to, inserts, deletes);
   const toPatch = synthesize(from, complement(inserts), complement(deletes));
   return [apply(from, fromPatch), apply(to, toPatch)];
+}
+
+export function match(
+  text1: string,
+  text2: string,
+): [number, number] | undefined {
+  let i2 = 0;
+  let start1: number | undefined;
+  for (let i1 = 0; i1 < text1.length; i1++) {
+    if (start1 != null) {
+      if (text1[i1] !== text2[i2]) {
+        break;
+      }
+      i2++;
+    } else {
+      if (text1[i1] === text2[i2]) {
+        start1 = i1;
+        i2++;
+      }
+    }
+  }
+  if (start1 != null) {
+    return [start1, i2];
+  }
+}
+
+export function revive(
+  deleted: string,
+  inserted: string,
+  deletes: Subseq,
+  inserts: Subseq,
+): Subseq {
+  // console.log({ deleted, deletes }, { inserted, inserts });
+  let revives: Subseq = [];
+  let ins: string | undefined;
+  let del: string | undefined;
+  for (const [length, deleteFlag, insertFlag] of zip(deletes, inserts)) {
+    if (deleteFlag && insertFlag) {
+      throw new Error("Deletes and inserts overlap");
+    } else if (deleteFlag) {
+      del = deleted.slice(0, length);
+      deleted = deleted.slice(length);
+      if (ins != null) {
+        const m = match(del, ins);
+        if (m != null) {
+          // console.log(362, m, length);
+        } else {
+          pushSegment(revives, length, false);
+        }
+      } else {
+        pushSegment(revives, length, false);
+      }
+      ins = undefined;
+    } else if (insertFlag) {
+      ins = inserted.slice(0, length);
+      inserted = inserted.slice(length);
+      if (del != null) {
+        const m = match(del, ins);
+        if (m != null) {
+          // console.log(376, m, length);
+        } else {
+          pushSegment(revives, length, false);
+        }
+      } else {
+        pushSegment(revives, length, false);
+      }
+      del = undefined;
+    } else {
+      ins = undefined;
+      del = undefined;
+      pushSegment(revives, length, false);
+    }
+  }
+  return revives;
 }
 
 export function createId(clientId: string, version: number) {
@@ -557,9 +556,8 @@ export class Document extends EventEmitter {
       deletes = difference(deletes, revision.deletes);
     }
     deletes = expand(deletes, inserts);
-    // TODO: put revive logic here
-    // revive(inserted, this.hidden, inserts, this.deletes);
     const currentDeletes = expand(this.deletes, inserts);
+    revive(this.hidden, inserted, currentDeletes, inserts);
     const visibleInserts = shrink(inserts, currentDeletes);
     const visible = apply(this.visible, synthesize(inserted, visibleInserts));
     const newDeletes = union(deletes, currentDeletes);
@@ -673,7 +671,7 @@ export class LocalClient extends EventEmitter {
       deletes: initial.length ? [0, initial.length] : [],
     };
     const create: Message = {
-      patch: [{ start: 0, end: 0, insert: initial }],
+      patch: [initial],
       clientId: this.id,
       version: 0,
     };
