@@ -190,24 +190,24 @@ describe("subseq", () => {
   });
 });
 
-describe("match", () => {
-  it("match 1", () => {
-    expect(shredder.match("hello world", "hello ")).to.deep.equal([0, 6]);
+describe("overlapping", () => {
+  it("overlapping 1", () => {
+    expect(shredder.overlapping("hello ", "hello ")).to.deep.equal([0, 6]);
   });
-  it("match 2", () => {
-    expect(shredder.match("hello world", "world")).to.deep.equal([6, 5]);
+  it("overlapping 2", () => {
+    expect(shredder.overlapping("hello world", "world")).to.deep.equal([6, 5]);
   });
-  it("match 3", () => {
-    expect(shredder.match("hello world", "ow")).to.deep.equal([4, 1]);
+  it("overlapping 3", () => {
+    expect(shredder.overlapping("hello world", "worlds")).to.deep.equal([6, 5]);
   });
-  it("match 4", () => {
-    expect(shredder.match("hello world", " ")).to.deep.equal([5, 1]);
+  it("overlapping 4", () => {
+    expect(shredder.overlapping("hello world", "d")).to.deep.equal([10, 1]);
   });
-  it("match 5", () => {
-    expect(shredder.match("hello world", "d")).to.deep.equal([10, 1]);
+  it("overlapping 5", () => {
+    expect(shredder.overlapping("hello world", " ")).to.deep.equal([5, 1]);
   });
-  it("match 6", () => {
-    expect(shredder.match("hello world", "xworld")).to.equal(undefined);
+  it("overlapping 6", () => {
+    expect(shredder.overlapping("hello world", "xworld")).to.equal(undefined);
   });
 });
 
@@ -239,34 +239,39 @@ describe("patch", () => {
     expect(deletes3).to.deep.equal([0, 6, 5]);
   });
 
-  it("synthesize", () => {
-    const [inserts, deletes, inserted] = shredder.factor(p0, text.length);
-    const deletes1 = shredder.expand(deletes, inserts);
-    const union = shredder.apply(text, shredder.synthesize(inserted, inserts));
-    const text1 = shredder.apply(
-      union,
-      shredder.synthesize(
-        "",
-        [0, shredder.count(deletes1)],
-        shredder.complement(deletes1),
-      ),
-    );
-    const tombstones = shredder.apply(
-      union,
-      shredder.synthesize(
-        "",
-        [0, shredder.count(inserts)],
-        shredder.complement(inserts),
-      ),
-    );
-    expect(shredder.synthesize(tombstones, inserts, deletes1)).to.deep.equal(
-      p0,
-    );
-    expect(shredder.synthesize(text1, deletes1, inserts)).to.deep.equal([
-      [0, 1],
-      "ello wor",
-      [4, 6],
-    ]);
+  describe("synthesize", () => {
+    it("complex", () => {
+      const [inserts, deletes, inserted] = shredder.factor(p0, text.length);
+      const deletes1 = shredder.expand(deletes, inserts);
+      const union = shredder.apply(
+        text,
+        shredder.synthesize(inserted, inserts),
+      );
+      const text1 = shredder.apply(
+        union,
+        shredder.synthesize(
+          "",
+          [0, shredder.count(deletes1)],
+          shredder.complement(deletes1),
+        ),
+      );
+      const tombstones = shredder.apply(
+        union,
+        shredder.synthesize(
+          "",
+          [0, shredder.count(inserts)],
+          shredder.complement(inserts),
+        ),
+      );
+      expect(shredder.synthesize(tombstones, inserts, deletes1)).to.deep.equal(
+        p0,
+      );
+      expect(shredder.synthesize(text1, deletes1, inserts)).to.deep.equal([
+        [0, 1],
+        "ello wor",
+        [4, 6],
+      ]);
+    });
   });
 });
 
@@ -277,21 +282,21 @@ describe("Document", () => {
     it("get deletes for all points in history", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       //"hello world"
+      doc.edit(["H", [1, 6], "W", [7, 11]]);
       // +======+===== inserts
       // =+======+==== deletes
       // =+======+==== deletes from union
       //"Hhello Wworld"
+      doc.edit([[0, 5], ", Brian"]);
       // ======+++++++======= inserts
       // =============++=++++ deletes
       // =+===========+++++++ deletes from union
       //"Hhello, Brian Wworld"
+      doc.edit([[0, 5], ", Dr. Evil"], "concurrent", 1);
       // =============++++++++++======= rebased inserts
       // ============================== overlapping deletes are ignored
       // =+=====================+++++++ deletes from union
       //"Hhello, Brian, Dr. Evil Wworld"
-      doc.edit(["H", [1, 6], "W", [7, 11]]);
-      doc.edit([[0, 5], ", Brian"]);
-      doc.edit([[0, 5], ", Dr. Evil"], "concurrent", 1);
       const deletes = [0, 11];
       expect(doc.getDeletesForIndex(0)).to.deep.equal(deletes);
       const deletes1 = [0, 1, 1, 6, 1, 4];
@@ -365,8 +370,9 @@ describe("Document", () => {
       // ++++++============ deletes from union
       //"hello hello worlds"
       // with revives
+      // ++++++============ revived deletes [1, 6, 12]
+      // ======++++++====== revived inserts [0, 6, 6, 6]
       // ===========+ inserts
-      // ============ deletes
       // ++++++====== revives
       // ============ deletes from union
       //"hello worlds"
@@ -389,6 +395,8 @@ describe("Document", () => {
       // +++++++++++======= deletes from union
       //"hello worldhello s"
       // with revives
+      // ++++++============ revived deletes [1, 6, 12]
+      // ===========++++++= revived inserts [0, 11, 6, 1]
       // ===========+ inserts
       // ============ deletes
       // ++++++====== revives
@@ -424,11 +432,13 @@ describe("Document", () => {
       //"hello world"
       doc.edit(["worlds"]);
       // without revives
-      // ===========+++++++ inserts
-      // ================== deletes
-      // +++++++++++======= deletes from union
-      //"hello worldhello s"
+      // ===========++++++ inserts
+      // ================= deletes
+      // +++++++++++====== deletes from union
+      //"hello worldworlds"
       // with revives
+      // ======+++++====== revived deletes [0, 6, 5, 6]
+      // ===========+++++= revived inserts [0, 11, 5, 1]
       // ===========+ inserts
       // ============ deletes
       // ======+++++= revives
@@ -461,22 +471,13 @@ describe("Document", () => {
       // +======+===== inserts
       // =+======+==== deletes
       // =+======+==== deletes from union
-      // =======+++++=+===== inserts
       //"Hhello Wworld"
       doc.edit([[0, 6], "waterw", [7, 11]]);
-      // without revives
-      // =======+++++=+===== inserts
-      // ============+====== deletes
-      // =+==========+=+==== deletes from union
-      //"Hhello waterWwworld"
-      // with revives
-      // =======+++++====== inserts
-      // ============+===== deletes
-      // =============+==== revives
-      // =+==========+===== deletes from union
-      //"Hhello waterWworld"
+      // =======++++++====== inserts
+      // =============+===== deletes
+      // =+===========++==== deletes from union
+      //"Hhello waterwWworld"
       expect(doc.visible).to.equal("Hello waterworld");
-      // expect(doc.hidden).to.equal("hW");
     });
 
     it("revive 5", () => {
@@ -486,10 +487,16 @@ describe("Document", () => {
       // =========== inserts
       // ======+++++ deletes
       // ======+++++ deletes from union
-      // ===+++===+++++
-      // HOW DO I TRIGGER 362???
-      // ===+++===+++++
-      //
+      //"hello world"
+      // without revives
+      // ===+++========+++++ inserts
+      // ======++=========== deletes
+      // ======++=+++++===== deletes from union
+      //"heliumlo worldworld"
+      // with revives
+      // ===+++===+++++ inserts
+      // ======++====== deletes
+      // ======++====== deletes from union
       //"heliumlo world"
       doc.edit([[0, 3], "ium", [5, 6], "world"]);
       expect(doc.visible).to.equal("helium world");

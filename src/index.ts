@@ -4,18 +4,6 @@ import EventEmitter from "events";
 // [flag, ...lengths]
 export type Subseq = number[];
 
-export function count(subseq: Subseq, test?: boolean): number {
-  let flag: boolean = !!subseq[0];
-  let result: number = 0;
-  for (const length of subseq.slice(1)) {
-    if (test == null || test === flag) {
-      result += length;
-    }
-    flag = !flag;
-  }
-  return result;
-}
-
 export function pushSegment(
   subseq: Subseq,
   length: number,
@@ -34,6 +22,18 @@ export function pushSegment(
     }
   }
   return subseq.length;
+}
+
+export function count(subseq: Subseq, test?: boolean): number {
+  let flag: boolean = !!subseq[0];
+  let result: number = 0;
+  for (const length of subseq.slice(1)) {
+    if (test == null || test === flag) {
+      result += length;
+    }
+    flag = !flag;
+  }
+  return result;
 }
 
 type ZipValue = [number, boolean, boolean];
@@ -241,8 +241,8 @@ export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
   let consumed = 0;
   for (const el of patch) {
     if (typeof el === "string") {
-      inserted += el;
       pushSegment(inserts, el.length, true);
+      inserted += el;
     } else {
       const [start, end] = el;
       pushSegment(inserts, end - consumed, false);
@@ -296,27 +296,25 @@ export function shuffle(
   return [apply(from, fromPatch), apply(to, toPatch)];
 }
 
-export function match(
+export function overlapping(
   text1: string,
   text2: string,
 ): [number, number] | undefined {
+  let start: number | undefined;
   let i2 = 0;
-  let start1: number | undefined;
   for (let i1 = 0; i1 < text1.length; i1++) {
-    if (start1 != null) {
+    if (start != null) {
       if (text1[i1] !== text2[i2]) {
         break;
       }
       i2++;
-    } else {
-      if (text1[i1] === text2[i2]) {
-        start1 = i1;
-        i2++;
-      }
+    } else if (text1[i1] === text2[i2]) {
+      start = i1;
+      i2++;
     }
   }
-  if (start1 != null) {
-    return [start1, i2];
+  if (start != null) {
+    return [start, i2];
   }
 }
 
@@ -325,49 +323,62 @@ export function revive(
   inserted: string,
   deletes: Subseq,
   inserts: Subseq,
-): Subseq {
-  // console.log({ deleted, deletes }, { inserted, inserts });
-  let revives: Subseq = [];
-  let ins: string | undefined;
+): [Subseq, Subseq, string] {
+  const revivedDeletes: Subseq = [];
+  const revivedInserts: Subseq = [];
+  let ins = "";
   let del: string | undefined;
   for (const [length, deleteFlag, insertFlag] of zip(deletes, inserts)) {
     if (deleteFlag && insertFlag) {
       throw new Error("Deletes and inserts overlap");
     } else if (deleteFlag) {
+      pushSegment(revivedInserts, length, false);
       del = deleted.slice(0, length);
       deleted = deleted.slice(length);
-      if (ins != null) {
-        const m = match(del, ins);
-        if (m != null) {
-          // console.log(362, m, length);
-        } else {
-          pushSegment(revives, length, false);
-        }
-      } else {
-        pushSegment(revives, length, false);
-      }
-      ins = undefined;
     } else if (insertFlag) {
-      ins = inserted.slice(0, length);
-      inserted = inserted.slice(length);
       if (del != null) {
-        const m = match(del, ins);
-        if (m != null) {
-          // console.log(376, m, length);
+        const overlap = overlapping(del, inserted.slice(0, length));
+        if (overlap != null) {
+          const [start, length1] = overlap;
+          if (start > 0) {
+            pushSegment(revivedDeletes, start, false);
+          }
+          pushSegment(revivedDeletes, length1, true);
+          pushSegment(revivedInserts, length1, true);
+          if (del.length > start + length1) {
+            pushSegment(revivedDeletes, del.length - (start + length1), false);
+          }
+          pushSegment(revivedDeletes, length, false);
+          if (length - length1 > 0) {
+            pushSegment(revivedInserts, length - length1, false);
+            ins += inserted.slice(length1, length);
+          }
         } else {
-          pushSegment(revives, length, false);
+          pushSegment(revivedDeletes, del.length + length, false);
+          pushSegment(revivedInserts, length, false);
+          ins += inserted.slice(0, length);
         }
       } else {
-        pushSegment(revives, length, false);
+        pushSegment(revivedDeletes, length, false);
+        pushSegment(revivedInserts, length, false);
+        ins += inserted.slice(0, length);
       }
       del = undefined;
+      inserted = inserted.slice(length);
     } else {
-      ins = undefined;
+      pushSegment(
+        revivedDeletes,
+        del == null ? length : del.length + length,
+        false,
+      );
+      pushSegment(revivedInserts, length, false);
       del = undefined;
-      pushSegment(revives, length, false);
     }
   }
-  return revives;
+  if (del != null) {
+    throw new Error("Delete after inserted segments");
+  }
+  return [revivedDeletes, revivedInserts, ins];
 }
 
 export function createId(clientId: string, version: number) {
@@ -555,29 +566,33 @@ export class Document extends EventEmitter {
       deletes = expand(deletes, revision.inserts);
       deletes = difference(deletes, revision.deletes);
     }
-    deletes = expand(deletes, inserts);
-    const currentDeletes = expand(this.deletes, inserts);
-    revive(this.hidden, inserted, currentDeletes, inserts);
+    let currentDeletes = expand(this.deletes, inserts);
+    // const [revivedDeletes, revivedInserts, inserted1] = revive(
+    //   this.hidden,
+    //   inserted,
+    //   currentDeletes,
+    //   inserts,
+    // );
+    // currentDeletes = shrink(
+    //   difference(currentDeletes, revivedDeletes),
+    //   revivedInserts,
+    // );
+    let visible = this.visible;
+    let hidden = this.hidden;
+    // inserts = shrink(inserts, revivedInserts);
+    // TODO: move revived from hidden to visible???
+    // const revives = shrink(revivedDeletes, revivedInserts);
     const visibleInserts = shrink(inserts, currentDeletes);
-    const visible = apply(this.visible, synthesize(inserted, visibleInserts));
+    visible = apply(visible, synthesize(inserted, visibleInserts));
+    deletes = expand(deletes, inserts);
     const newDeletes = union(deletes, currentDeletes);
-    const [visible1, hidden] = shuffle(
-      visible,
-      this.hidden,
-      currentDeletes,
-      newDeletes,
-    );
-    this.revisions.push({
-      clientId,
-      version,
-      inserts,
-      deletes,
-      intent,
-    });
-    this.visible = visible1;
+    [visible, hidden] = shuffle(visible, hidden, currentDeletes, newDeletes);
+    this.revisions.push({ clientId, version, inserts, deletes, intent });
+    this.visible = visible;
     this.hidden = hidden;
     this.deletes = newDeletes;
     return {
+      // TODO: fix this for revives
       patch: synthesize(
         inserted,
         visibleInserts,
