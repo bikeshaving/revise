@@ -113,7 +113,6 @@ export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
 
 export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
   const result: Subseq = [];
-
   let length1: number | undefined;
   let flag1: boolean = !subseq1[0];
   let flag2: boolean = !subseq2[0];
@@ -159,7 +158,6 @@ export function rebase(
   subseq2: Subseq,
   before?: boolean,
 ): Subseq {
-  // TODO: figure out how to derive length mismatch from the loop
   if (count(subseq1, false) !== count(subseq2, false)) {
     throw new Error("Length mismatch");
   }
@@ -487,7 +485,7 @@ export class Document extends EventEmitter {
     return new Document(
       clientId,
       initial,
-      initial.slice(0, 0),
+      "",
       initial.length ? [0, initial.length] : [],
       intents,
       revisions,
@@ -570,6 +568,7 @@ export class Document extends EventEmitter {
       inserts = rebase(inserts, revision.inserts, before);
       deletes = expand(deletes, revision.inserts);
       deletes = difference(deletes, revision.deletes);
+      // TODO: is this correct
       deletes = difference(deletes, revision.revives);
     }
     // TODO: create a patch here for external consumption
@@ -690,7 +689,7 @@ export class LocalClient extends EventEmitter {
     }
     const snapshot: Snapshot = (await this.getSnapshot(docId, initial)) || {
       visible: initial,
-      hidden: initial.slice(0, 0),
+      hidden: "",
       deletes: initial.length ? [0, initial.length] : [],
     };
     const create: Message = {
