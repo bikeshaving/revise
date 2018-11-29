@@ -159,6 +159,7 @@ export function rebase(
   subseq2: Subseq,
   before?: boolean,
 ): Subseq {
+  // TODO: figure out how to derive length mismatch from the loop
   if (count(subseq1, false) !== count(subseq2, false)) {
     throw new Error("Length mismatch");
   }
@@ -190,8 +191,8 @@ export function rebase(
           pushSegment(result, length1, flag1);
         }
         [length1, ...subseq1] = subseq1;
-        flag1 = !flag1;
         [length2, ...subseq2] = subseq2;
+        flag1 = !flag1;
         flag2 = !flag2;
       } else if (flag1) {
         pushSegment(result, length1, flag1);
@@ -379,7 +380,7 @@ export function revive(
     }
   }
   if (del != null) {
-    throw new Error("Delete after inserted segments");
+    pushSegment(revivedDeletes, del.length, false);
   }
   return [revivedDeletes, revivedInserts, ins];
 }
@@ -523,6 +524,7 @@ export class Document extends EventEmitter {
   public getDeletesForIndex(index: number): Subseq {
     let deletes: Subseq = this.deletes;
     for (const revision of this.revisions.slice(index + 1).reverse()) {
+      deletes = union(deletes, revision.revives);
       deletes = difference(deletes, revision.deletes);
       deletes = shrink(deletes, revision.inserts);
     }
@@ -568,7 +570,9 @@ export class Document extends EventEmitter {
       inserts = rebase(inserts, revision.inserts, before);
       deletes = expand(deletes, revision.inserts);
       deletes = difference(deletes, revision.deletes);
+      deletes = difference(deletes, revision.revives);
     }
+    // TODO: create a patch here for external consumption
     let currentDeletes = expand(this.deletes, inserts);
     let visible = this.visible;
     let hidden = this.hidden;
