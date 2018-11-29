@@ -521,8 +521,9 @@ describe("Document", () => {
       // =========== deletes
       // ======+++++ revives
       // ++++++===== deletes from union
+      expect(doc.visible).to.equal("world");
       //"hello world"
-      doc.edit([[0, 5], "hello"]);
+      // doc.edit([[0, 5], "hello"]);
       // without revives
       //"hello worldworld"
       // ================+++++ inserts
@@ -535,7 +536,7 @@ describe("Document", () => {
       // ================ revives
       // ++++++========== deletes from union
       //"hello worldhello"
-      expect(doc.visible).to.equal("worldhello");
+      // expect(doc.visible).to.equal("worldhello");
       // expect(doc.hidden).to.equal("hello ");
     });
   });

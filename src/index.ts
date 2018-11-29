@@ -97,7 +97,10 @@ export function zip(a: Subseq, b: Subseq): ZipIterator {
 }
 
 export function complement(subseq: Subseq): Subseq {
-  return [subseq[0] ? 0 : 1, ...subseq.slice(1)];
+  if (subseq.length) {
+    return [subseq[0] ? 0 : 1, ...subseq.slice(1)];
+  }
+  return subseq;
 }
 
 export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
@@ -261,39 +264,39 @@ export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
 }
 
 export function synthesize(
-  text: string,
-  from: Subseq,
-  to: Subseq = [0, count(from)],
+  inserted: string,
+  inserts: Subseq,
+  deletes: Subseq = [0, count(inserts)],
 ): Patch {
   const patch: Patch = [];
-  let ri = 0;
-  let ti = 0;
-  for (const [length, flag1, flag2] of zip(from, to)) {
-    if (!flag1) {
-      ri += length;
-      if (!flag2) {
-        patch.push([ri - length, ri] as Copy);
+  let ii = 0; // inserted index
+  let ci = 0; // copy index
+  for (const [length, insertFlag, deleteFlag] of zip(inserts, deletes)) {
+    if (insertFlag) {
+      ii += length;
+      if (!deleteFlag) {
+        patch.push(inserted.slice(ii - length, ii));
       }
     } else {
-      ti += length;
-      if (!flag2) {
-        patch.push(text.slice(ti - length, ti));
+      ci += length;
+      if (!deleteFlag) {
+        patch.push([ci - length, ci] as Copy);
       }
     }
   }
   return patch;
 }
 
-// TODO: Do the variable names make sense?
 export function shuffle(
-  from: string,
-  to: string,
-  inserts: Subseq,
-  deletes: Subseq,
+  text1: string,
+  text2: string,
+  subseq1: Subseq,
+  subseq2: Subseq,
 ): [string, string] {
-  const fromPatch = synthesize(to, inserts, deletes);
-  const toPatch = synthesize(from, complement(inserts), complement(deletes));
-  return [apply(from, fromPatch), apply(to, toPatch)];
+  return [
+    apply(text1, synthesize(text2, subseq1, subseq2)),
+    apply(text2, synthesize(text1, complement(subseq1), complement(subseq2))),
+  ];
 }
 
 export function overlapping(
@@ -411,10 +414,9 @@ export interface Snapshot {
 export interface Revision {
   clientId: string;
   version: number;
-  // sequence of characters based on union which were inserted by this revision
   inserts: Subseq;
-  // sequence of characters based on union which were deleted by this revision
   deletes: Subseq;
+  revives: Subseq;
   intent?: string;
 }
 
@@ -479,6 +481,7 @@ export class Document extends EventEmitter {
       version: 0,
       inserts: initial.length ? [1, initial.length] : [],
       deletes: initial.length ? [0, initial.length] : [],
+      revives: initial.length ? [0, initial.length] : [],
     });
     return new Document(
       clientId,
@@ -567,37 +570,38 @@ export class Document extends EventEmitter {
       deletes = difference(deletes, revision.deletes);
     }
     let currentDeletes = expand(this.deletes, inserts);
-    // const [revivedDeletes, revivedInserts, inserted1] = revive(
-    //   this.hidden,
-    //   inserted,
-    //   currentDeletes,
-    //   inserts,
-    // );
-    // currentDeletes = shrink(
-    //   difference(currentDeletes, revivedDeletes),
-    //   revivedInserts,
-    // );
     let visible = this.visible;
     let hidden = this.hidden;
-    // inserts = shrink(inserts, revivedInserts);
-    // TODO: move revived from hidden to visible???
-    // const revives = shrink(revivedDeletes, revivedInserts);
-    const visibleInserts = shrink(inserts, currentDeletes);
-    visible = apply(visible, synthesize(inserted, visibleInserts));
+    const [revivedDeletes, revivedInserts, inserted1] = revive(
+      hidden,
+      inserted,
+      currentDeletes,
+      inserts,
+    );
+    inserts = shrink(inserts, revivedInserts);
+    currentDeletes = shrink(currentDeletes, revivedInserts);
+    const revives = shrink(revivedDeletes, revivedInserts);
+    if (inserted1.length) {
+      const visibleInserts = shrink(inserts, currentDeletes);
+      visible = apply(visible, synthesize(inserted1, visibleInserts));
+    }
     deletes = expand(deletes, inserts);
-    const newDeletes = union(deletes, currentDeletes);
+    let newDeletes = union(deletes, difference(currentDeletes, revives));
     [visible, hidden] = shuffle(visible, hidden, currentDeletes, newDeletes);
-    this.revisions.push({ clientId, version, inserts, deletes, intent });
+    this.revisions.push({
+      clientId,
+      version,
+      inserts,
+      deletes,
+      revives,
+      intent,
+    });
     this.visible = visible;
     this.hidden = hidden;
     this.deletes = newDeletes;
     return {
-      // TODO: fix this for revives
-      patch: synthesize(
-        inserted,
-        visibleInserts,
-        shrink(deletes, currentDeletes),
-      ),
+      // TODO: fix this, patch should ignore revives
+      patch: [],
       intent,
       clientId,
       version,
