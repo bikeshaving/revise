@@ -242,40 +242,41 @@ export function apply(text: string, patch: Patch): string {
 }
 
 export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
-  const inserts: Subseq = [];
-  const deletes: Subseq = [];
+  const insertSeq: Subseq = [];
+  const deleteSeq: Subseq = [];
+  // TODO: maybe use type of string[] for performance
   let inserted: string = "";
   let consumed = 0;
   for (const el of patch) {
     if (typeof el === "string") {
-      push(inserts, el.length, true);
+      push(insertSeq, el.length, true);
       inserted += el;
     } else {
       const [start, end] = el;
-      push(inserts, end - consumed, false);
+      push(insertSeq, end - consumed, false);
       if (start > consumed) {
-        push(deletes, start - consumed, true);
+        push(deleteSeq, start - consumed, true);
       }
-      push(deletes, end - start, false);
+      push(deleteSeq, end - start, false);
       consumed = end;
     }
   }
   if (length > consumed) {
-    push(inserts, length - consumed, false);
-    push(deletes, length - consumed, true);
+    push(insertSeq, length - consumed, false);
+    push(deleteSeq, length - consumed, true);
   }
-  return [inserts, deletes, inserted];
+  return [insertSeq, deleteSeq, inserted];
 }
 
 export function synthesize(
   inserted: string,
-  inserts: Subseq,
-  deletes: Subseq = [0, count(inserts)],
+  insertSeq: Subseq,
+  deleteSeq: Subseq = [0, count(insertSeq)],
 ): Patch {
   const patch: Patch = [];
   let ii = 0;
   let ci = 0;
-  for (const [length, insertFlag, deleteFlag] of zip(inserts, deletes)) {
+  for (const [length, insertFlag, deleteFlag] of zip(insertSeq, deleteSeq)) {
     if (insertFlag) {
       ii += length;
       if (!deleteFlag) {
@@ -291,6 +292,7 @@ export function synthesize(
   return patch;
 }
 
+// TODO: maybe rename variables
 export function shuffle(
   text1: string,
   text2: string,
@@ -308,14 +310,14 @@ export function overlapping(
   inserted: string,
   partial?: boolean,
 ): Subseq {
-  const result: Subseq = [];
+  const subseq: Subseq = [];
   let consumed = 0;
   let flag = false;
   let ii = 0;
   for (let di = 0; di < deleted.length; di++) {
     if (ii >= inserted.length) {
       if (di - consumed > 0) {
-        push(result, di - consumed, flag);
+        push(subseq, di - consumed, flag);
       }
       consumed = di;
       flag = !flag;
@@ -327,15 +329,15 @@ export function overlapping(
     }
     if (flag !== match) {
       if (di - consumed > 0) {
-        push(result, di - consumed, flag);
+        push(subseq, di - consumed, flag);
       }
       consumed = di;
       flag = !flag;
     }
   }
   if (ii >= inserted.length || partial) {
-    push(result, deleted.length - consumed, flag);
-    return result;
+    push(subseq, deleted.length - consumed, flag);
+    return subseq;
   }
   return [0, deleted.length];
 }
@@ -343,18 +345,18 @@ export function overlapping(
 export function revive(
   deleted: string,
   inserted: string,
-  deletes: Subseq,
-  inserts: Subseq,
+  deleteSeq: Subseq,
+  insertSeq: Subseq,
 ): [Subseq, Subseq, string] {
-  let revivedDeletes: Subseq = [];
-  const revivedInserts: Subseq = [];
+  let revivedDeleteSeq: Subseq = [];
+  const revivedInsertSeq: Subseq = [];
   let inserted1 = "";
   // TODO: use indexes into string and not
   let del: string | undefined;
   let ins: string | undefined;
   // TODO: do we need to expand here?
-  deletes = expand(deletes, inserts);
-  for (const [length, deleteFlag, insertFlag] of zip(deletes, inserts)) {
+  deleteSeq = expand(deleteSeq, insertSeq);
+  for (const [length, deleteFlag, insertFlag] of zip(deleteSeq, insertSeq)) {
     if (deleteFlag && insertFlag) {
       throw new Error("Deletes and inserts overlap");
     } else if (deleteFlag) {
@@ -363,74 +365,63 @@ export function revive(
         const overlap = overlapping(del, ins);
         const insertLength = count(overlap, true);
         if (insertLength > 0) {
-          revivedDeletes = concat(revivedDeletes, overlap);
-          push(revivedInserts, insertLength, true);
+          revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
+          push(revivedInsertSeq, insertLength, true);
           if (insertLength < ins.length) {
-            push(revivedInserts, ins.length - insertLength, false);
+            push(revivedInsertSeq, ins.length - insertLength, false);
             inserted1 += ins.slice(insertLength);
           }
           del = undefined;
         } else {
-          push(revivedInserts, ins.length, false);
+          push(revivedInsertSeq, ins.length, false);
           inserted1 += ins;
         }
       }
-      push(revivedInserts, length, false);
+      push(revivedInsertSeq, length, false);
       ins = undefined;
       deleted = deleted.slice(length);
     } else if (insertFlag) {
       ins = inserted.slice(0, length);
       if (del != null) {
         const overlap = overlapping(del, ins, true);
-        revivedDeletes = concat(revivedDeletes, overlap);
+        revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
         const insertLength = count(overlap, true);
         if (insertLength > 0) {
-          push(revivedInserts, insertLength, true);
+          push(revivedInsertSeq, insertLength, true);
           if (insertLength < length) {
-            push(revivedInserts, length - insertLength, false);
+            push(revivedInsertSeq, length - insertLength, false);
             inserted1 += ins.slice(insertLength);
           }
           ins = undefined;
         }
       }
-      push(revivedDeletes, length, false);
+      push(revivedDeleteSeq, length, false);
       del = undefined;
       inserted = inserted.slice(length);
     } else {
       if (del != null) {
-        push(revivedDeletes, del.length, false);
+        push(revivedDeleteSeq, del.length, false);
       }
       if (ins != null) {
-        push(revivedInserts, ins.length, false);
+        push(revivedInsertSeq, ins.length, false);
         inserted1 += ins;
       }
-      push(revivedDeletes, length, false);
-      push(revivedInserts, length, false);
+      push(revivedDeleteSeq, length, false);
+      push(revivedInsertSeq, length, false);
       del = undefined;
       ins = undefined;
     }
   }
   if (del != null) {
-    push(revivedDeletes, del.length, false);
+    push(revivedDeleteSeq, del.length, false);
   }
   if (ins != null) {
-    push(revivedInserts, ins.length, false);
+    push(revivedInsertSeq, ins.length, false);
     inserted1 += ins;
   }
-  const revives = shrink(revivedDeletes, revivedInserts);
-  inserts = shrink(inserts, revivedInserts);
-  return [revives, inserts, inserted1];
-}
-
-export function createId(clientId: string, version: number) {
-  return clientId + "@" + version;
-}
-
-export function splitId(id: string): [string, number] {
-  const i = id.lastIndexOf("@");
-  const clientId = id.slice(0, i);
-  const version = parseInt(id.slice(i + 1));
-  return [clientId, version];
+  const reviveSeq = shrink(revivedDeleteSeq, revivedInsertSeq);
+  insertSeq = shrink(insertSeq, revivedInsertSeq);
+  return [reviveSeq, insertSeq, inserted1];
 }
 
 export interface Message {
@@ -445,16 +436,16 @@ export interface Message {
 export interface Snapshot {
   visible: string;
   hidden: string;
-  deletes: Subseq;
+  hiddenSeq: Subseq;
   parentId?: string;
 }
 
 export interface Revision {
   clientId: string;
   version: number;
-  inserts: Subseq;
-  deletes: Subseq;
-  revives: Subseq;
+  insertSeq: Subseq;
+  deleteSeq: Subseq;
+  reviveSeq: Subseq;
   intent?: string;
 }
 
@@ -500,7 +491,7 @@ export class Document extends EventEmitter {
     public clientId: string,
     public visible: string,
     public hidden: string,
-    public deletes: Subseq,
+    public hiddenSeq: Subseq,
     public intents: string[],
     public revisions: RevisionLog,
   ) {
@@ -517,9 +508,9 @@ export class Document extends EventEmitter {
     revisions.push({
       clientId,
       version: 0,
-      inserts: initial.length ? [1, initial.length] : [],
-      deletes: initial.length ? [0, initial.length] : [],
-      revives: initial.length ? [0, initial.length] : [],
+      insertSeq: initial.length ? [1, initial.length] : [],
+      deleteSeq: initial.length ? [0, initial.length] : [],
+      reviveSeq: initial.length ? [0, initial.length] : [],
     });
     return new Document(
       clientId,
@@ -534,7 +525,7 @@ export class Document extends EventEmitter {
   public static fromMessages(
     clientId: string,
     messages: Message[],
-    snapshot: Snapshot = { visible: "", hidden: "", deletes: [] },
+    snapshot: Snapshot = { visible: "", hidden: "", hiddenSeq: [] },
     intents: string[] = [],
     RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
   ) {
@@ -542,7 +533,7 @@ export class Document extends EventEmitter {
       clientId,
       snapshot.visible,
       snapshot.hidden,
-      snapshot.deletes,
+      snapshot.hiddenSeq,
       intents,
       new RevisionLog(),
     );
@@ -558,14 +549,14 @@ export class Document extends EventEmitter {
     return doc;
   }
 
-  public getDeletesForIndex(index: number): Subseq {
-    let deletes: Subseq = this.deletes;
+  public hiddenSeqAt(index: number): Subseq {
+    let hiddenSeq: Subseq = this.hiddenSeq;
     for (const revision of this.revisions.slice(index + 1).reverse()) {
-      deletes = union(deletes, revision.revives);
-      deletes = difference(deletes, revision.deletes);
-      deletes = shrink(deletes, revision.inserts);
+      hiddenSeq = union(hiddenSeq, revision.reviveSeq);
+      hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
+      hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
     }
-    return deletes;
+    return hiddenSeq;
   }
 
   protected revise(
@@ -585,11 +576,11 @@ export class Document extends EventEmitter {
     if (ii === -1) {
       intent = undefined;
     }
-    const oldDeletes = this.getDeletesForIndex(pi);
-    const oldLength = count(oldDeletes, false);
-    let [inserts, deletes, inserted] = factor(patch, oldLength);
-    inserts = rebase(inserts, oldDeletes);
-    deletes = expand(deletes, oldDeletes);
+    const oldHiddenSeq = this.hiddenSeqAt(pi);
+    const oldLength = count(oldHiddenSeq, false);
+    let [insertSeq, deleteSeq, inserted] = factor(patch, oldLength);
+    insertSeq = rebase(insertSeq, oldHiddenSeq);
+    deleteSeq = expand(deleteSeq, oldHiddenSeq);
     const [parent, ...revisions] = this.revisions.slice(pi);
     for (const revision of revisions) {
       if (intent === revision.intent && clientId === revision.clientId) {
@@ -601,41 +592,41 @@ export class Document extends EventEmitter {
         revision.intent == null ? -1 : this.intents.indexOf(revision.intent);
       const before =
         intent === revision.intent ? clientId < revision.clientId : ii < rii;
-      inserts = rebase(inserts, revision.inserts, before);
-      deletes = expand(deletes, revision.inserts);
-      deletes = difference(deletes, revision.deletes);
-      // TODO: is this correct
-      deletes = difference(deletes, revision.revives);
+      insertSeq = rebase(insertSeq, revision.insertSeq, before);
+      deleteSeq = expand(deleteSeq, revision.insertSeq);
+      deleteSeq = difference(deleteSeq, revision.deleteSeq);
+      // TODO: is this correct????????????
+      deleteSeq = difference(deleteSeq, revision.reviveSeq);
     }
     // TODO: create a patch here for external consumption
     let visible = this.visible;
     let hidden = this.hidden;
-    let revives: Subseq;
-    [revives, inserts, inserted] = revive(
+    let reviveSeq: Subseq;
+    [reviveSeq, insertSeq, inserted] = revive(
       hidden,
       inserted,
-      this.deletes,
-      inserts,
+      this.hiddenSeq,
+      insertSeq,
     );
-    const currentDeletes = expand(this.deletes, inserts);
+    const hiddenSeq = expand(this.hiddenSeq, insertSeq);
     if (inserted.length) {
-      const visibleInserts = shrink(inserts, currentDeletes);
-      visible = apply(visible, synthesize(inserted, visibleInserts));
+      const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
+      visible = apply(visible, synthesize(inserted, visibleInsertSeq));
     }
-    deletes = expand(deletes, inserts);
-    const newDeletes = union(deletes, difference(currentDeletes, revives));
-    [visible, hidden] = shuffle(visible, hidden, currentDeletes, newDeletes);
+    deleteSeq = expand(deleteSeq, insertSeq);
+    const newHiddenSeq = union(deleteSeq, difference(hiddenSeq, reviveSeq));
+    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, newHiddenSeq);
     this.revisions.push({
       clientId,
       version,
-      inserts,
-      deletes,
-      revives,
+      insertSeq,
+      deleteSeq,
+      reviveSeq,
       intent,
     });
     this.visible = visible;
     this.hidden = hidden;
-    this.deletes = newDeletes;
+    this.hiddenSeq = newHiddenSeq;
     return {
       // TODO: fix this, patch should ignore revives
       patch: [],
@@ -722,7 +713,7 @@ export class LocalClient extends EventEmitter {
     const snapshot: Snapshot = (await this.getSnapshot(docId, initial)) || {
       visible: initial,
       hidden: "",
-      deletes: initial.length ? [0, initial.length] : [],
+      hiddenSeq: initial.length ? [0, initial.length] : [],
     };
     const create: Message = {
       patch: [initial],
