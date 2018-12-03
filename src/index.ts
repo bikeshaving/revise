@@ -601,21 +601,23 @@ export class Document extends EventEmitter {
     // TODO: create a patch here for external consumption
     let visible = this.visible;
     let hidden = this.hidden;
+    let hiddenSeq = union(this.hiddenSeq, deleteSeq);
+    [visible, hidden] = shuffle(visible, hidden, this.hiddenSeq, hiddenSeq);
     let reviveSeq: Subseq;
     [reviveSeq, insertSeq, inserted] = revive(
       hidden,
       inserted,
-      this.hiddenSeq,
+      hiddenSeq,
       insertSeq,
     );
-    const hiddenSeq = expand(this.hiddenSeq, insertSeq);
+    hiddenSeq = expand(hiddenSeq, insertSeq);
+    deleteSeq = expand(deleteSeq, insertSeq);
     if (inserted.length) {
       const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, visibleInsertSeq));
     }
-    deleteSeq = expand(deleteSeq, insertSeq);
-    const newHiddenSeq = union(deleteSeq, difference(hiddenSeq, reviveSeq));
-    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, newHiddenSeq);
+    const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
+    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
     this.revisions.push({
       clientId,
       version,
@@ -626,7 +628,7 @@ export class Document extends EventEmitter {
     });
     this.visible = visible;
     this.hidden = hidden;
-    this.hiddenSeq = newHiddenSeq;
+    this.hiddenSeq = hiddenSeq1;
     return {
       // TODO: fix this, patch should ignore revives
       patch: [],

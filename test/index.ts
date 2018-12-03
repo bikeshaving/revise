@@ -683,7 +683,6 @@ describe("Document", () => {
       // =++======++==== deletes from union
       //"hHhello wWworld"
       expect(doc.visible).to.equal("hello world");
-      // TODO:
       expect(doc.hidden).to.equal("HW");
     });
 
