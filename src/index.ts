@@ -573,14 +573,18 @@ export class Document extends EventEmitter {
     }
     version = version == null ? this.revisions.length : version;
     const ii = intent == null ? -1 : this.intents.indexOf(intent);
-    if (ii === -1) {
-      intent = undefined;
+    intent = ii === -1 ? undefined : intent;
+
+    let insertSeq: Subseq;
+    let deleteSeq: Subseq;
+    let inserted: string;
+    {
+      const oldHiddenSeq = this.hiddenSeqAt(pi);
+      const oldLength = count(oldHiddenSeq, false);
+      [insertSeq, deleteSeq, inserted] = factor(patch, oldLength);
+      insertSeq = rebase(insertSeq, oldHiddenSeq);
+      deleteSeq = expand(deleteSeq, oldHiddenSeq);
     }
-    const oldHiddenSeq = this.hiddenSeqAt(pi);
-    const oldLength = count(oldHiddenSeq, false);
-    let [insertSeq, deleteSeq, inserted] = factor(patch, oldLength);
-    insertSeq = rebase(insertSeq, oldHiddenSeq);
-    deleteSeq = expand(deleteSeq, oldHiddenSeq);
     const [parent, ...revisions] = this.revisions.slice(pi);
     for (const revision of revisions) {
       if (intent === revision.intent && clientId === revision.clientId) {
@@ -601,8 +605,12 @@ export class Document extends EventEmitter {
     // TODO: create a patch here for external consumption
     let visible = this.visible;
     let hidden = this.hidden;
-    let hiddenSeq = union(this.hiddenSeq, deleteSeq);
-    [visible, hidden] = shuffle(visible, hidden, this.hiddenSeq, hiddenSeq);
+    let hiddenSeq = this.hiddenSeq;
+    if (count(deleteSeq, true) > 0) {
+      const hiddenSeq1 = union(this.hiddenSeq, deleteSeq);
+      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+      hiddenSeq = hiddenSeq1;
+    }
     let reviveSeq: Subseq;
     [reviveSeq, insertSeq, inserted] = revive(
       hidden,
@@ -616,8 +624,11 @@ export class Document extends EventEmitter {
       const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, visibleInsertSeq));
     }
-    const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
-    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+    if (count(reviveSeq, true) > 0) {
+      const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
+      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+      hiddenSeq = hiddenSeq1;
+    }
     this.revisions.push({
       clientId,
       version,
@@ -628,7 +639,7 @@ export class Document extends EventEmitter {
     });
     this.visible = visible;
     this.hidden = hidden;
-    this.hiddenSeq = hiddenSeq1;
+    this.hiddenSeq = hiddenSeq;
     return {
       // TODO: fix this, patch should ignore revives
       patch: [],

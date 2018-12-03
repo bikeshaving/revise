@@ -714,7 +714,6 @@ describe("Document", () => {
       //"Hhello Wacky World Wworld"
       // ======++================= revived inserts
       // ==================++===== revived deletes
-      // When deletes come after insertions, you have to be careful about what you revive b/c shit gets cray
       expect(doc.visible).to.equal("Hello Wacky World");
       expect(doc.hidden).to.equal("h Wworld");
     });
