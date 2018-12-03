@@ -29,10 +29,12 @@ describe("subseq", () => {
     });
 
     it("complex", () => {
-      const result = [1, 3, 1, 2];
-      expect(shredder.union([1, 2, 2, 2], [0, 1, 2, 2, 1])).to.deep.equal(
-        result,
-      );
+      expect(shredder.union([1, 2, 2, 2], [0, 1, 2, 2, 1])).to.deep.equal([
+        1,
+        3,
+        1,
+        2,
+      ]);
     });
   });
 
@@ -48,13 +50,15 @@ describe("subseq", () => {
     });
   });
 
-  it("expand/shrink", () => {
-    const s = [0, 4, 4, 6, 5, 3];
-    const t = [0, 10, 5, 8, 4, 4];
-    const expanded = shredder.expand(s, t);
-    const result = [0, 4, 4, 11, 4, 4, 1, 3];
-    expect(expanded).to.deep.equal(result);
-    expect(shredder.shrink(expanded, t)).to.deep.equal(s);
+  describe("expand/shrink", () => {
+    it("complex", () => {
+      const s = [0, 4, 4, 6, 5, 3];
+      const t = [0, 10, 5, 8, 4, 4];
+      const expanded = shredder.expand(s, t);
+      const result = [0, 4, 4, 11, 4, 4, 1, 3];
+      expect(expanded).to.deep.equal(result);
+      expect(shredder.shrink(expanded, t)).to.deep.equal(s);
+    });
   });
 
   describe("rebase", () => {
@@ -358,7 +362,7 @@ describe("Document", () => {
   const clientId = "id1";
   const intents = ["concurrent"];
   describe("Document.hiddenSeqAt", () => {
-    it("get hiddenSeq for entire history", () => {
+    it("concurrent revisions", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       //"hello world"
       doc.edit(["H", [1, 6], "W", [7, 11]]);
@@ -376,15 +380,26 @@ describe("Document", () => {
       // ============================== overlapping deletes are ignored
       // =+=====================+++++++ deletes from union
       //"Hhello, Brian, Dr. Evil Wworld"
-      const deletes = [0, 11];
-      expect(doc.hiddenSeqAt(0)).to.deep.equal(deletes);
-      const deletes1 = [0, 1, 1, 6, 1, 4];
-      expect(doc.hiddenSeqAt(1)).to.deep.equal(deletes1);
-      const deletes2 = [0, 1, 1, 11, 7];
-      expect(doc.hiddenSeqAt(2)).to.deep.equal(deletes2);
-      const deletes3 = [0, 1, 1, 21, 7];
-      expect(doc.hiddenSeqAt(3)).to.deep.equal(deletes3);
+      expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
+      expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
+      expect(doc.hiddenSeqAt(2)).to.deep.equal([0, 1, 1, 11, 7]);
+      expect(doc.hiddenSeqAt(3)).to.deep.equal([0, 1, 1, 21, 7]);
       expect(doc.hiddenSeqAt(3)).to.deep.equal(doc.hiddenSeq);
+    });
+
+    it("revisions with revives", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      doc.edit(["H", [1, 6], "W", [7, 11]]);
+      // =+======+====
+      //"Hhello Wworld"
+      doc.edit(["h", [1, 6], "w", [7, 11]]);
+      // +======+=====
+      //"Hhello Wworld"
+      expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
+      expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
+      expect(doc.hiddenSeqAt(2)).to.deep.equal([1, 1, 6, 1, 5]);
+      expect(doc.hiddenSeqAt(2)).to.deep.equal(doc.hiddenSeq);
     });
   });
 
@@ -679,11 +694,14 @@ describe("Document", () => {
       doc.edit(["h", [1, 6], "w", [7, 11]]);
       // +=======+====== inserts
       // =+=======+===== deletes
-      // =============== revives
-      // =++======++==== deletes from union
-      //"hHhello wWworld"
+      // +=======+====== revived inserts
+      // ==+=======+==== revived deletes
+      // =+======+==== revives
+      // +======+===== deletes from union
+      //"Hhello Wworld"
       expect(doc.visible).to.equal("hello world");
       expect(doc.hidden).to.equal("HW");
+      expect(doc.hiddenSeq).to.deep.equal([1, 1, 6, 1, 5]);
     });
 
     it("no revive 1", () => {
@@ -716,6 +734,90 @@ describe("Document", () => {
       // ==================++===== revived deletes
       expect(doc.visible).to.equal("Hello Wacky World");
       expect(doc.hidden).to.equal("h Wworld");
+    });
+
+    it("revive concurrent 1", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      doc.edit(["H", [1, 6], "W", [7, 11]]);
+      // +======+===== inserts
+      // =+======+==== deletes
+      // =+======+==== deletes from union
+      //"Hhello Wworld"
+      doc.edit(["h", [1, 6], "w", [7, 11]]);
+      // =+======+==== revives
+      // +======+===== deletes from union
+      //"Hhello Wworld"
+      doc.edit([[0, 6], "Brian"], "concurrent", 1);
+      // ========+++++
+      //
+      expect(doc.visible).to.equal("hello Brianw");
+      expect(doc.hidden).to.equal("HWorld");
+    });
+
+    it("revive concurrent 2", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      doc.edit([[6, 11]]);
+      // ++++++===== deletes
+      // ++++++===== deletes from union
+      //"hello world"
+      doc.edit(["hey ", [0, 5]]);
+      // ======++===== inserts
+      // ============= deletes
+      // ++=========== revives
+      // ==++++======= deletes from union
+      //"hello y world"
+      //"hello world"
+      doc.edit(["goodbye ", [0, 5]], "concurrent", 1);
+      expect(doc.visible).to.equal("hey goodbye world");
+      expect(doc.hidden).to.equal("llo ");
+    });
+
+    it("revive concurrent 3", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      doc.edit([[6, 11]]);
+      // ++++++===== deletes
+      // ++++++===== deletes from union
+      //"hello world"
+      doc.edit(["hey ", [0, 5]], "concurrent");
+      // ======++===== inserts
+      // ============= deletes
+      // ++=========== revives
+      // ==++++======= deletes from union
+      //"hello y world"
+      //"hello world"
+      doc.edit(["goodbye ", [0, 5]], undefined, 1);
+      // TODO: is there a way to preserve contiguity with revives?
+      expect(doc.visible).to.equal("hegoodbye y world");
+      expect(doc.hidden).to.equal("llo ");
+    });
+
+    it("revive concurrent 4", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      doc.edit([[6, 11]]);
+      // ++++++===== deletes
+      // ++++++===== deletes from union
+      //"hello world"
+      doc.edit(["hey ", [0, 5]]);
+      // ======++===== inserts
+      // ============= deletes
+      // ++=========== revives
+      // ==++++======= deletes from union
+      //"hello y world"
+      //"hello world"
+      doc.edit(["goodbye ", [6, 11]], "concurrent", 0);
+      // ++++++++=========== inserts
+      // ========++++++===== deletes
+      // ++++++++============= rebased inserts
+      // ===================== rebased deletes
+      //"goodbye hello y world
+      // ==========++++======= deletes from union
+      expect(doc.visible).to.equal("goodbye hey world");
+      expect(doc.hidden).to.equal("llo ");
+      expect(doc.hiddenSeq).to.deep.equal([0, 10, 4, 7]);
     });
   });
 });
