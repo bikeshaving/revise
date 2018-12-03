@@ -308,8 +308,7 @@ export function shuffle(
 export function overlapping(
   deleted: string,
   inserted: string,
-  partial?: boolean,
-): Subseq {
+): Subseq | undefined {
   const subseq: Subseq = [];
   let consumed = 0;
   let flag = false;
@@ -335,11 +334,10 @@ export function overlapping(
       flag = !flag;
     }
   }
-  if (ii >= inserted.length || partial) {
+  if (ii >= inserted.length) {
     push(subseq, deleted.length - consumed, flag);
     return subseq;
   }
-  return [0, deleted.length];
 }
 
 export function revive(
@@ -363,14 +361,9 @@ export function revive(
       del = deleted.slice(0, length);
       if (ins != null) {
         const overlap = overlapping(del, ins);
-        const insertLength = count(overlap, true);
-        if (insertLength > 0) {
+        if (overlap != null) {
           revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
-          push(revivedInsertSeq, insertLength, true);
-          if (insertLength < ins.length) {
-            push(revivedInsertSeq, ins.length - insertLength, false);
-            inserted1 += ins.slice(insertLength);
-          }
+          push(revivedInsertSeq, ins.length, true);
           del = undefined;
         } else {
           push(revivedInsertSeq, ins.length, false);
@@ -383,16 +376,13 @@ export function revive(
     } else if (insertFlag) {
       ins = inserted.slice(0, length);
       if (del != null) {
-        const overlap = overlapping(del, ins, true);
-        revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
-        const insertLength = count(overlap, true);
-        if (insertLength > 0) {
-          push(revivedInsertSeq, insertLength, true);
-          if (insertLength < length) {
-            push(revivedInsertSeq, length - insertLength, false);
-            inserted1 += ins.slice(insertLength);
-          }
+        const overlap = overlapping(del, ins);
+        if (overlap != null) {
+          revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
+          push(revivedInsertSeq, ins.length, true);
           ins = undefined;
+        } else {
+          push(revivedDeleteSeq, del.length, false);
         }
       }
       push(revivedDeleteSeq, length, false);
@@ -599,7 +589,6 @@ export class Document extends EventEmitter {
       insertSeq = rebase(insertSeq, revision.insertSeq, before);
       deleteSeq = expand(deleteSeq, revision.insertSeq);
       deleteSeq = difference(deleteSeq, revision.deleteSeq);
-      // TODO: is this correct????????????
       deleteSeq = difference(deleteSeq, revision.reviveSeq);
     }
     // TODO: create a patch here for external consumption
@@ -612,12 +601,16 @@ export class Document extends EventEmitter {
       hiddenSeq = hiddenSeq1;
     }
     let reviveSeq: Subseq;
-    [reviveSeq, insertSeq, inserted] = revive(
-      hidden,
-      inserted,
-      hiddenSeq,
-      insertSeq,
-    );
+    if (inserted.length) {
+      [reviveSeq, insertSeq, inserted] = revive(
+        hidden,
+        inserted,
+        hiddenSeq,
+        insertSeq,
+      );
+    } else {
+      reviveSeq = [0, count(insertSeq)];
+    }
     hiddenSeq = expand(hiddenSeq, insertSeq);
     deleteSeq = expand(deleteSeq, insertSeq);
     if (inserted.length) {
