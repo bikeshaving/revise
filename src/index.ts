@@ -10,7 +10,7 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
   } else if (!subseq.length) {
     subseq.push(flag ? 1 : 0, length);
   } else {
-    const flag1: boolean = !!subseq[0] === (subseq.length % 2 === 0);
+    const flag1: boolean = !subseq[0] === (subseq.length % 2 === 1);
     if (flag === flag1) {
       subseq[subseq.length - 1] += length;
     } else {
@@ -352,7 +352,6 @@ export function revive(
   // TODO: use indexes into string and not
   let del: string | undefined;
   let ins: string | undefined;
-  // TODO: do we need to expand here?
   deleteSeq = expand(deleteSeq, insertSeq);
   for (const [length, deleteFlag, insertFlag] of zip(deleteSeq, insertSeq)) {
     if (deleteFlag && insertFlag) {
@@ -539,9 +538,9 @@ export class Document extends EventEmitter {
     return doc;
   }
 
-  public hiddenSeqAt(index: number): Subseq {
+  public hiddenSeqAt(i: number): Subseq {
     let hiddenSeq: Subseq = this.hiddenSeq;
-    for (const revision of this.revisions.slice(index + 1).reverse()) {
+    for (const revision of this.revisions.slice(i + 1).reverse()) {
       hiddenSeq = union(hiddenSeq, revision.reviveSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
       hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
@@ -592,11 +591,9 @@ export class Document extends EventEmitter {
       deleteSeq = difference(deleteSeq, revision.reviveSeq);
     }
     // TODO: create a patch here for external consumption
-    let visible = this.visible;
-    let hidden = this.hidden;
-    let hiddenSeq = this.hiddenSeq;
+    let { visible, hidden, hiddenSeq } = this;
     if (count(deleteSeq, true) > 0) {
-      const hiddenSeq1 = union(this.hiddenSeq, deleteSeq);
+      const hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
@@ -611,9 +608,9 @@ export class Document extends EventEmitter {
     } else {
       reviveSeq = [0, count(insertSeq)];
     }
-    hiddenSeq = expand(hiddenSeq, insertSeq);
-    deleteSeq = expand(deleteSeq, insertSeq);
     if (inserted.length) {
+      hiddenSeq = expand(hiddenSeq, insertSeq);
+      deleteSeq = expand(deleteSeq, insertSeq);
       const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, visibleInsertSeq));
     }
