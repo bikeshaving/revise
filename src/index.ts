@@ -158,7 +158,7 @@ export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
   return result;
 }
 
-export function rebase(
+export function interleave(
   subseq1: Subseq,
   subseq2: Subseq,
   before?: boolean,
@@ -426,7 +426,7 @@ export interface Snapshot {
   visible: string;
   hidden: string;
   hiddenSeq: Subseq;
-  parentId?: string;
+  id?: string;
 }
 
 export interface Revision {
@@ -548,6 +548,15 @@ export class Document extends EventEmitter {
     return hiddenSeq;
   }
 
+  protected factor(patch: Patch, i: number): [Subseq, Subseq, string] {
+    const hiddenSeq = this.hiddenSeqAt(i);
+    const length = count(hiddenSeq, false);
+    let [insertSeq, deleteSeq, inserted] = factor(patch, length);
+    insertSeq = interleave(insertSeq, hiddenSeq);
+    deleteSeq = expand(deleteSeq, hiddenSeq);
+    return [insertSeq, deleteSeq, inserted];
+  }
+
   protected revise(
     patch: Patch,
     pi: number,
@@ -564,17 +573,8 @@ export class Document extends EventEmitter {
     const ii = intent == null ? -1 : this.intents.indexOf(intent);
     intent = ii === -1 ? undefined : intent;
 
-    let insertSeq: Subseq;
-    let deleteSeq: Subseq;
-    let inserted: string;
-    {
-      const oldHiddenSeq = this.hiddenSeqAt(pi);
-      const oldLength = count(oldHiddenSeq, false);
-      [insertSeq, deleteSeq, inserted] = factor(patch, oldLength);
-      insertSeq = rebase(insertSeq, oldHiddenSeq);
-      deleteSeq = expand(deleteSeq, oldHiddenSeq);
-    }
-    const [parent, ...revisions] = this.revisions.slice(pi);
+    let [insertSeq, deleteSeq, inserted] = this.factor(patch, pi);
+    const [parentRevision, ...revisions] = this.revisions.slice(pi);
     for (const revision of revisions) {
       if (intent === revision.intent && clientId === revision.clientId) {
         throw new Error(
@@ -585,18 +585,24 @@ export class Document extends EventEmitter {
         revision.intent == null ? -1 : this.intents.indexOf(revision.intent);
       const before =
         intent === revision.intent ? clientId < revision.clientId : ii < rii;
-      insertSeq = rebase(insertSeq, revision.insertSeq, before);
+      insertSeq = interleave(insertSeq, revision.insertSeq, before);
       deleteSeq = expand(deleteSeq, revision.insertSeq);
-      deleteSeq = difference(deleteSeq, revision.deleteSeq);
-      deleteSeq = difference(deleteSeq, revision.reviveSeq);
+      deleteSeq = difference(
+        deleteSeq,
+        union(revision.deleteSeq, revision.reviveSeq),
+      );
     }
-    // TODO: create a patch here for external consumption
+    if (revisions.length) {
+      patch = synthesize(inserted, insertSeq, expand(deleteSeq, insertSeq));
+    }
+
     let { visible, hidden, hiddenSeq } = this;
     if (count(deleteSeq, true) > 0) {
       const hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
+
     let reviveSeq: Subseq;
     if (inserted.length) {
       [reviveSeq, insertSeq, inserted] = revive(
@@ -608,17 +614,20 @@ export class Document extends EventEmitter {
     } else {
       reviveSeq = [0, count(insertSeq)];
     }
+
     if (inserted.length) {
       hiddenSeq = expand(hiddenSeq, insertSeq);
       deleteSeq = expand(deleteSeq, insertSeq);
       const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, visibleInsertSeq));
     }
+
     if (count(reviveSeq, true) > 0) {
       const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
+
     this.revisions.push({
       clientId,
       version,
@@ -631,14 +640,43 @@ export class Document extends EventEmitter {
     this.hidden = hidden;
     this.hiddenSeq = hiddenSeq;
     return {
-      // TODO: fix this, patch should ignore revives
-      patch: [],
+      patch,
       intent,
       clientId,
       version,
-      parentClientId: parent.clientId,
-      parentVersion: parent.version,
+      parentClientId: parentRevision.clientId,
+      parentVersion: parentRevision.version,
     };
+  }
+
+  public undo(i: number): Message {
+    const [parentRevision, ...revisions] = this.revisions.slice(i);
+    let reviveSeq = parentRevision.deleteSeq;
+    let deleteSeq = union(parentRevision.insertSeq, parentRevision.reviveSeq);
+    for (const revision of revisions) {
+      reviveSeq = expand(reviveSeq, revision.insertSeq);
+      const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
+      reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
+      deleteSeq = expand(deleteSeq, revision.insertSeq);
+      deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
+    }
+    let { visible, hidden, hiddenSeq } = this;
+    const patch = synthesize(hidden, reviveSeq, deleteSeq);
+    const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
+    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+    this.visible = visible;
+    this.hidden = hidden;
+    this.hiddenSeq = hiddenSeq1;
+    const message = {
+      patch,
+      intent: "undo",
+      clientId: this.clientId,
+      version: this.revisions.length,
+      parentClientId: parentRevision.clientId,
+      parentVersion: parentRevision.version,
+    };
+    this.emit("message", message);
+    return message;
   }
 
   public edit(
@@ -725,7 +763,7 @@ export class LocalClient extends EventEmitter {
     };
     const messages = await this.getMessages(
       docId,
-      snapshot.parentId,
+      snapshot.id,
       undefined,
       create,
     );

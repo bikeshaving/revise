@@ -1,6 +1,4 @@
 /* eslint-env mocha */
-// import * as fs from "fs";
-// import * as path from "path";
 import { expect } from "chai";
 // import * as testcheck from "mocha-testcheck";
 // import { check, gen } from "mocha-testcheck";
@@ -61,17 +59,17 @@ describe("subseq", () => {
     });
   });
 
-  describe("rebase", () => {
+  describe("interleave", () => {
     it("error when mismatched", () => {
       expect(() => {
-        shredder.rebase([0, 5, 1], [1, 1, 4]);
+        shredder.interleave([0, 5, 1], [1, 1, 4]);
       }).to.throw();
     });
 
     it("empty transform", () => {
       const s = [0, 1, 2, 7];
       const t = [0, 8];
-      expect(shredder.rebase(s, t)).to.deep.equal([0, 1, 2, 7]);
+      expect(shredder.interleave(s, t)).to.deep.equal([0, 1, 2, 7]);
     });
 
     it("smaller transform", () => {
@@ -82,9 +80,9 @@ describe("subseq", () => {
       const s = [1, 3, 4, 1];
       const t = [1, 3, 4];
       const result = [0, 3, 3, 4, 1];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
       const result1 = [1, 3, 7, 1];
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
 
     it("same position", () => {
@@ -95,9 +93,9 @@ describe("subseq", () => {
       const s = [0, 2, 2, 4];
       const t = [0, 2, 2, 4];
       const result = [0, 4, 2, 4];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
       const result1 = [0, 2, 2, 6];
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
 
     it("same position different lengths", () => {
@@ -108,9 +106,9 @@ describe("subseq", () => {
       const s = [0, 2, 4, 2];
       const t = [0, 2, 2, 2];
       const result = [0, 4, 4, 2];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
       const result1 = [0, 2, 4, 4];
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
 
     it("subseq before", () => {
@@ -121,8 +119,8 @@ describe("subseq", () => {
       const s = [1, 1, 5];
       const t = [0, 1, 4, 4];
       const result = [1, 1, 9];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq before overlapping", () => {
@@ -133,8 +131,8 @@ describe("subseq", () => {
       const s = [1, 2, 4];
       const t = [0, 1, 4, 3];
       const result = [1, 2, 8];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after", () => {
@@ -145,8 +143,8 @@ describe("subseq", () => {
       const s = [0, 1, 4, 4];
       const t = [1, 1, 5];
       const result = [0, 2, 4, 4];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after overlapping 1", () => {
@@ -157,8 +155,8 @@ describe("subseq", () => {
       const s = [0, 4, 2];
       const t = [0, 2, 4, 2];
       const result = [0, 8, 2];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after overlapping 2", () => {
@@ -169,8 +167,8 @@ describe("subseq", () => {
       const s = [0, 2, 2, 3];
       const t = [0, 1, 3, 4];
       const result = [0, 5, 2, 3];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after overlapping 3", () => {
@@ -181,8 +179,8 @@ describe("subseq", () => {
       const s = [0, 1, 4, 3];
       const t = [1, 2, 4];
       const result = [0, 3, 4, 3];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("multiple segments", () => {
@@ -193,9 +191,9 @@ describe("subseq", () => {
       const s = [1, 1, 1, 2, 1, 1, 2];
       const t = [0, 1, 1, 3, 1];
       const result = [1, 1, 2, 2, 1, 1, 3];
-      expect(shredder.rebase(s, t)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
       const result1 = [1, 1, 1, 2, 2, 1, 3];
-      expect(shredder.rebase(s, t, true)).to.deep.equal(result1);
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
   });
 });
@@ -331,22 +329,9 @@ describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
     it("concurrent revisions", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
-      //"hello world"
       doc.edit(["H", [1, 6], "W", [7, 11]]);
-      // +======+===== inserts
-      // =+======+==== deletes
-      // =+======+==== deletes from union
-      //"Hhello Wworld"
       doc.edit([[0, 5], ", Brian"]);
-      // ======+++++++======= inserts
-      // =============++=++++ deletes
-      // =+===========+++++++ deletes from union
-      //"Hhello, Brian Wworld"
       doc.edit([[0, 5], ", Dr. Evil"], "concurrent", 1);
-      // =============++++++++++======= rebased inserts
-      // ============================== overlapping deletes are ignored
-      // =+=====================+++++++ deletes from union
-      //"Hhello, Brian, Dr. Evil Wworld"
       expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
       expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
       expect(doc.hiddenSeqAt(2)).to.deep.equal([0, 1, 1, 11, 7]);
@@ -356,13 +341,8 @@ describe("Document", () => {
 
     it("revisions with revives", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
-      //"hello world"
       doc.edit(["H", [1, 6], "W", [7, 11]]);
-      // =+======+====
-      //"Hhello Wworld"
       doc.edit(["h", [1, 6], "w", [7, 11]]);
-      // +======+=====
-      //"Hhello Wworld"
       expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
       expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
       expect(doc.hiddenSeqAt(2)).to.deep.equal([1, 1, 6, 1, 5]);
@@ -555,6 +535,16 @@ describe("Document", () => {
       doc.edit(["goodbye ", [0, 5]], undefined, 1);
       expect(doc.visible).to.equal("hello goodbye world");
       expect(doc.hidden).to.equal("");
+    });
+  });
+
+  describe("Document.undo", () => {
+    it("simple", () => {
+      const doc = Document.initialize(clientId, "Hello world", intents);
+      doc.edit(["Goodbye", [5, 11]]);
+      doc.edit([[0, 13], "s"]);
+      doc.undo(1);
+      expect(doc.visible).to.equal("Hello worlds");
     });
   });
 });
