@@ -441,8 +441,9 @@ export interface Revision {
 export interface RevisionLog {
   slice(start?: number, end?: number): Revision[];
   push(revision: Revision): number;
-  locate(clientId: string, version: number): number;
   length: number;
+  locate(clientId: string, version: number): number;
+  clone(): RevisionLog;
 }
 
 export interface RevisionLogConstructor {
@@ -451,7 +452,7 @@ export interface RevisionLogConstructor {
 
 export class ArrayRevisionLog implements RevisionLog {
   public length: number;
-  constructor(private revisions: Revision[] = []) {
+  public constructor(private revisions: Revision[] = []) {
     this.length = revisions.length;
   }
 
@@ -473,10 +474,14 @@ export class ArrayRevisionLog implements RevisionLog {
     this.length = this.revisions.push(revision);
     return this.length;
   }
+
+  public clone(): ArrayRevisionLog {
+    return new ArrayRevisionLog(this.revisions.slice());
+  }
 }
 
 export class Document extends EventEmitter {
-  public constructor(
+  private constructor(
     public clientId: string,
     public visible: string,
     public hidden: string,
@@ -587,10 +592,8 @@ export class Document extends EventEmitter {
         intent === revision.intent ? clientId < revision.clientId : ii < rii;
       insertSeq = interleave(insertSeq, revision.insertSeq, before);
       deleteSeq = expand(deleteSeq, revision.insertSeq);
-      deleteSeq = difference(
-        deleteSeq,
-        union(revision.deleteSeq, revision.reviveSeq),
-      );
+      const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
+      deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
     }
     if (revisions.length) {
       patch = synthesize(inserted, insertSeq, expand(deleteSeq, insertSeq));
@@ -689,25 +692,15 @@ export class Document extends EventEmitter {
     return message;
   }
 
-  public ingest(message: Message): Message | undefined {
-    const {
-      patch,
+  public clone(clientId: string): Document {
+    return new Document(
       clientId,
-      version,
-      parentClientId,
-      parentVersion,
-      intent,
-    } = message;
-    if (parentClientId == null || parentVersion == null) {
-      throw new Error("Cannot ingest initial message");
-    }
-    const pi = this.revisions.locate(parentClientId, parentVersion);
-    if (pi === -1) {
-      return;
-    }
-    message = this.revise(patch, pi, clientId, intent, version);
-    this.emit("message", message);
-    return message;
+      this.visible,
+      this.hidden,
+      this.hiddenSeq.slice(),
+      this.intents.slice(),
+      this.revisions.clone(),
+    );
   }
 }
 

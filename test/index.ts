@@ -416,6 +416,13 @@ describe("Document", () => {
       expect(doc.hiddenSeq).to.deep.equal([1, 6, 17]);
     });
 
+    it("concurrent 5", () => {
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit([[6, 11]]);
+      doc.edit(["hey ", [0, 5]]);
+      doc.edit(["goodbye ", [6, 11]], "concurrent", 0);
+    });
+
     it("revive 1", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([[6, 11]]);
