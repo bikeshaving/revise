@@ -168,9 +168,6 @@ export function interleave(
   subseq2: Subseq,
   before?: boolean,
 ): Subseq {
-  if (count(subseq1, false) !== count(subseq2, false)) {
-    throw new Error("Length mismatch");
-  }
   const result: Subseq = [];
   let flag1: boolean = !!subseq1[0];
   let flag2: boolean = !!subseq2[0];
@@ -178,15 +175,8 @@ export function interleave(
   let length2: number | undefined;
   [length1, ...subseq1] = subseq1.slice(1);
   [length2, ...subseq2] = subseq2.slice(1);
-  while (length1 != null || length2 != null) {
-    if (length1 == null) {
-      push(result, length2, false);
-      [length2, ...subseq2] = subseq2;
-    } else if (length2 == null) {
-      push(result, length1, flag1);
-      flag1 = !flag1;
-      [length1, ...subseq1] = subseq1;
-    } else if (flag1 && flag2) {
+  while (length1 != null && length2 != null) {
+    if (flag1 && flag2) {
       if (before) {
         push(result, length1, true);
         push(result, length2, false);
@@ -221,6 +211,17 @@ export function interleave(
         flag2 = !flag2;
         [length2, ...subseq2] = subseq2;
       }
+    }
+  }
+  if (length1 != null) {
+    push(result, length1, flag1);
+    if (subseq1.length) {
+      throw new Error("Length mismatch");
+    }
+  } else if (length2 != null) {
+    push(result, length2, false);
+    if (subseq2.length) {
+      throw new Error("Length mismatch");
     }
   }
   return result;
