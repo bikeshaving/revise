@@ -73,126 +73,134 @@ describe("subseq", () => {
     });
 
     it("smaller transform", () => {
-      // +++====+ subseq
-      // +++==== transform
-      // ===+++====+ result after
-      // +++=======+ result before
+      // +++====+
       const s = [1, 3, 4, 1];
+      // ***====
       const t = [1, 3, 4];
+      // ***+++====+
       const result = [0, 3, 3, 4, 1];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
+      // +++***====+
       const result1 = [1, 3, 7, 1];
       expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
 
     it("same position", () => {
-      // ==++==== subseq
-      // ==++==== transform
-      // ====++==== result after
-      // ==++====== result before
+      // ==++  ====
       const s = [0, 2, 2, 4];
+      // ==**  ====
       const t = [0, 2, 2, 4];
+      // ==**++====
       const result = [0, 4, 2, 4];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
+      // ==++**====
       const result1 = [0, 2, 2, 6];
       expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
 
     it("same position different lengths", () => {
-      // ==++++== subseq
-      // ==++== transform
-      // ====++++== result after
-      // ==++++==== result before
+      // ==++++  ==
       const s = [0, 2, 4, 2];
+      // ==**    ==
       const t = [0, 2, 2, 2];
+      // ==**++++==
       const result = [0, 4, 4, 2];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
+      // ==++++**==
       const result1 = [0, 2, 4, 4];
       expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
 
     it("subseq before", () => {
-      // +===== subseq
-      // =++++==== transform
-      // +========= result after
-      // +========= result before
+      // +=    ====
       const s = [1, 1, 5];
+      //  =****====
       const t = [0, 1, 4, 4];
+      // +=****====
       const result = [1, 1, 9];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
       expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq before overlapping", () => {
-      // ++==== subseq
-      // =++++=== transform
-      // ++======== result after
-      // ++======== result before
+      // ++=    ===
       const s = [1, 2, 4];
+      //   =****===
       const t = [0, 1, 4, 3];
+      // ++=****===
       const result = [1, 2, 8];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
       expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after", () => {
-      // =++++==== subseq
-      // +===== transform
-      // ==++++==== result after
-      // ==++++==== result before
+      //  =++++====
       const s = [0, 1, 4, 4];
+      // *=    ====
       const t = [1, 1, 5];
+      // *=++++====
       const result = [0, 2, 4, 4];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
       expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after overlapping 1", () => {
-      // ====++ subseq
-      // ==++++== transform
-      // ========++ result after
-      // ========++ result before
+      // ==    ==++
       const s = [0, 4, 2];
+      // ==****==
       const t = [0, 2, 4, 2];
+      // ==****==++
       const result = [0, 8, 2];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
       expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after overlapping 2", () => {
-      // ==++=== subseq
-      // =+++==== transform
-      // =====++=== result after
-      // =====++=== result before
+      // =   =++===
       const s = [0, 2, 2, 3];
+      // =***=  ===
       const t = [0, 1, 3, 4];
+      // =***=++===
       const result = [0, 5, 2, 3];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
       expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("subseq after overlapping 3", () => {
-      // =++++=== subseq
-      // ++==== transform
-      // ===++++=== result after
-      // ===++++=== result before
+      //   =++++===
       const s = [0, 1, 4, 3];
+      // **=    ===
       const t = [1, 2, 4];
+      // **=++++===
       const result = [0, 3, 4, 3];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
       expect(shredder.interleave(s, t, true)).to.deep.equal(result);
     });
 
     it("multiple segments", () => {
-      // +=++=+== subseq
-      // =+===+ transform
-      // +==++=+=== result after
-      // +=++==+=== result before
+      // +=++ =+==
       const s = [1, 1, 1, 2, 1, 1, 2];
+      //  =*  = ==*
       const t = [0, 1, 1, 3, 1];
+      // +=*++=+==*
+      // +==++=+===
       const result = [1, 1, 2, 2, 1, 1, 3];
       expect(shredder.interleave(s, t)).to.deep.equal(result);
+      // +=++*=+==*
       const result1 = [1, 1, 1, 2, 2, 1, 3];
+      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
+    });
+
+    it("complex", () => {
+      //     =====      ======++++
+      const s = [0, 11, 4];
+      // ****=====******======*
+      const t = [1, 4, 5, 6, 6, 1];
+      // ****=====******======*++++
+      const result = [0, 22, 4];
+      expect(shredder.interleave(s, t)).to.deep.equal(result);
+      // ****=====******======++++*
+      const result1 = [0, 21, 4, 1];
       expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
     });
   });
@@ -253,7 +261,7 @@ describe("overlapping", () => {
     expect(shredder.overlapping("hello world", "worlds")).to.equal(undefined);
   });
 
-  it("no overlap 4", () => {
+  it("no overlap 5", () => {
     expect(shredder.overlapping("hello", "hexo")).to.equal(undefined);
   });
 });
@@ -388,6 +396,7 @@ describe("Document", () => {
       doc.edit(["Great H", [2, 5]], "concurrent", 0);
       expect(doc.visible).to.equal("Great Hera");
     });
+
     it("concurrent 2", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit(["H", [1, 6], "W", [7, 11]]);
@@ -421,6 +430,24 @@ describe("Document", () => {
       doc.edit([[6, 11]]);
       doc.edit(["hey ", [0, 5]]);
       doc.edit(["goodbye ", [6, 11]], "concurrent", 0);
+      expect(doc.visible).to.equal("goodbye hey world");
+      expect(doc.hidden).to.equal("hello ");
+      expect(doc.hiddenSeq).to.deep.equal([0, 8, 6, 9]);
+    });
+
+    it("concurrent 6", () => {
+      const doc1 = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      // ++++=====++++++======+
+      //"why hello there worlds"
+      // ===========++++
+      //"hello worldstar"
+      // ++++=====++++++======+
+      // =====================++++=
+      //"why hello there worldstars"
+      doc1.edit(["why ", [0, 5], " there", [5, 11], "s"]);
+      doc1.edit([[0, 11], "star"], "concurrent", 0);
+      expect(doc1.visible).to.equal("why hello there worldsstar");
     });
 
     it("revive 1", () => {
@@ -552,6 +579,12 @@ describe("Document", () => {
       doc.edit([[0, 13], "s"]);
       doc.undo(1);
       expect(doc.visible).to.equal("Hello worlds");
+    });
+  });
+
+  describe("Document.ingest", () => {
+    it("simple", () => {
+      // doc1.edit([[0, 15], " hip hop"]);
     });
   });
 });

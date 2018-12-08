@@ -116,7 +116,12 @@ export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
 
-export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
+export function expand(
+  subseq1: Subseq,
+  subseq2: Subseq,
+  options: { union?: boolean } = {},
+): Subseq {
+  const { union = false } = options;
   const result: Subseq = [];
   let length1: number | undefined;
   let flag1: boolean = !subseq1[0];
@@ -125,7 +130,7 @@ export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
   for (let length2 of subseq2.slice(1)) {
     flag2 = !flag2;
     if (flag2) {
-      push(result, length2, false);
+      push(result, length2, union ? flag2 : false);
     } else {
       while (length2 > 0) {
         if (length1 == null || length1 === 0) {
@@ -175,47 +180,46 @@ export function interleave(
   [length2, ...subseq2] = subseq2.slice(1);
   while (length1 != null || length2 != null) {
     if (length1 == null) {
-      if (flag2) {
-        push(result, length2, false);
-      }
+      push(result, length2, false);
       [length2, ...subseq2] = subseq2;
-      flag2 = !flag2;
     } else if (length2 == null) {
       push(result, length1, flag1);
-      [length1, ...subseq1] = subseq1;
       flag1 = !flag1;
-    } else {
-      if (flag2) {
-        if (before) {
-          push(result, length1, flag1);
-        }
+      [length1, ...subseq1] = subseq1;
+    } else if (flag1 && flag2) {
+      if (before) {
+        push(result, length1, true);
         push(result, length2, false);
-        if (!before) {
-          push(result, length1, flag1);
-        }
-        [length1, ...subseq1] = subseq1;
-        [length2, ...subseq2] = subseq2;
-        flag1 = !flag1;
-        flag2 = !flag2;
-      } else if (flag1) {
-        push(result, length1, flag1);
-        [length1, ...subseq1] = subseq1;
-        flag1 = !flag1;
       } else {
-        const length = Math.min(length1, length2);
-        push(result, length, false);
-        if (length1 - length > 0) {
-          length1 -= length;
-        } else {
-          [length1, ...subseq1] = subseq1;
-          flag1 = !flag1;
-        }
-        if (length2 - length > 0) {
-          length2 -= length;
-        } else {
-          [length2, ...subseq2] = subseq2;
-          flag2 = !flag2;
-        }
+        push(result, length2, false);
+        push(result, length1, true);
+      }
+      flag1 = !flag1;
+      flag2 = !flag2;
+      [length1, ...subseq1] = subseq1;
+      [length2, ...subseq2] = subseq2;
+    } else if (flag1) {
+      push(result, length1, true);
+      flag1 = !flag1;
+      [length1, ...subseq1] = subseq1;
+    } else if (flag2) {
+      push(result, length2, false);
+      flag2 = !flag2;
+      [length2, ...subseq2] = subseq2;
+    } else {
+      const length = Math.min(length1, length2);
+      push(result, length, false);
+      if (length1 - length > 0) {
+        length1 = length1 - length;
+      } else {
+        flag1 = !flag1;
+        [length1, ...subseq1] = subseq1;
+      }
+      if (length2 - length > 0) {
+        length2 = length2 - length;
+      } else {
+        flag2 = !flag2;
+        [length2, ...subseq2] = subseq2;
       }
     }
   }
@@ -338,6 +342,10 @@ export function overlapping(
     push(subseq, deleted.length - consumed, flag);
     return subseq;
   }
+}
+
+export function createRevisionId(clientId: string, version: number) {
+  return clientId + "@" + version;
 }
 
 export function revive(
@@ -592,8 +600,9 @@ export class Document extends EventEmitter {
         intent === revision.intent ? clientId < revision.clientId : ii < rii;
       insertSeq = interleave(insertSeq, revision.insertSeq, before);
       deleteSeq = expand(deleteSeq, revision.insertSeq);
-      const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
-      deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
+      deleteSeq = difference(deleteSeq, revision.deleteSeq);
+      // TODO: IS THIS CORRECT I CAN’T TELL
+      deleteSeq = difference(deleteSeq, revision.reviveSeq);
     }
     if (revisions.length) {
       patch = synthesize(inserted, insertSeq, expand(deleteSeq, insertSeq));
@@ -619,8 +628,8 @@ export class Document extends EventEmitter {
     }
 
     if (inserted.length) {
-      hiddenSeq = expand(hiddenSeq, insertSeq);
       deleteSeq = expand(deleteSeq, insertSeq);
+      hiddenSeq = expand(hiddenSeq, insertSeq);
       const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, visibleInsertSeq));
     }
