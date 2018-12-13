@@ -234,6 +234,7 @@ type Insert = string;
 type Copy = [number, number];
 // Deletes are represented via omission
 // TODO: make Patch of type (string | number)[] where the last number represents the length of the text being patched, and copies are represented as two adjacent numbers
+// export type Patch = (string | number)[];
 export type Patch = (Insert | Copy)[];
 
 export function apply(text: string, patch: Patch): string {
@@ -731,8 +732,8 @@ export class Document extends EventEmitter {
     for (const revision of revisions) {
       const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
       reviveSeq = expand(reviveSeq, revision.insertSeq);
-      reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
       deleteSeq = expand(deleteSeq, revision.insertSeq);
+      reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
       deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
     }
     let { visible, hidden, hiddenSeq } = this;

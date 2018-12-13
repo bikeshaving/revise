@@ -690,11 +690,51 @@ describe("Document", () => {
       expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
     });
 
-    it("three clients", () => {
-      // const doc1 = Document.initialize(clientId, "hello world", intents);
-      // const doc2 = doc1.clone("id2");
-      // const doc3 = doc1.clone("id3");
-      // doc1.edit([]);
+    it("three clients 1", () => {
+      const docA = Document.initialize(clientId, "hello world", intents);
+      const docB = docA.clone("id2");
+      const docC = docA.clone("id3");
+      const messageA = docA.edit([[0, 5], "_", [6, 11]]);
+      const messageB = docB.edit(["H", [1, 6], "W", [7, 11]]);
+      const messageC = docC.edit(["(", [0, 5], [6, 11], ")"]);
+      docA.ingest(messageB);
+      docA.ingest(messageC);
+      expect(docA.visible).to.equal("H(ello_World)");
+      docB.ingest(messageA);
+      docB.ingest(messageC);
+      expect(docA.visible).to.equal(docB.visible);
+      expect(docA.hidden).to.equal(docB.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
+      docC.ingest(messageB);
+      docC.ingest(messageA);
+      expect(docA.visible).to.equal(docC.visible);
+      expect(docA.hidden).to.equal(docC.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docC.hiddenSeq);
+    });
+
+    it("three clients 2", () => {
+      const docA = Document.initialize(clientId, "hello world", intents);
+      const docB = docA.clone("id2");
+      const docC = docA.clone("id3");
+      const messageA0 = docA.edit([[0, 5], "_", [6, 11]]);
+      const messageA1 = docA.edit([[0, 6], "_", [6, 11]]);
+      const messageB0 = docB.edit(["H", [1, 6], "W", [7, 11]]);
+      const messageB1 = docB.edit([[0, 5], [6, 11]]);
+      const messageC0 = docC.edit(["(", [0, 11], ")"]);
+      const messageC1 = docC.edit([[0, 1], "Hey", [7, 13]]);
+      docA.ingest(messageB0);
+      docA.ingest(messageC0);
+      docA.ingest(messageB1);
+      docA.ingest(messageC1);
+      expect(docA.visible).to.equal("H(Hey__World)");
+      docB.ingest(messageA0);
+      docB.ingest(messageC0);
+      docB.ingest(messageA1);
+      docB.ingest(messageC1);
+      expect(docA.visible).to.equal(docB.visible);
+      expect(docA.hidden).to.equal(docB.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
+      messageA0; messageA1; messageB0; messageB1; messageC0; messageC1;
     });
 
     /*
