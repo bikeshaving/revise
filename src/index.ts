@@ -495,6 +495,7 @@ export class ArrayRevisionLog implements RevisionLog {
 export class Document extends EventEmitter {
   private constructor(
     public clientId: string,
+    // TODO: group these fields in a snapshot
     public visible: string,
     public hidden: string,
     public hiddenSeq: Subseq,

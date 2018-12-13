@@ -23,28 +23,32 @@ describe("subseq", () => {
 
   describe("union", () => {
     it("empty", () => {
-      expect(shredder.union([1, 4, 4], [0, 8])).to.deep.equal([1, 4, 4]);
+      const s = [1, 4, 4];
+      const t = [0, 8];
+      expect(shredder.union(s, t)).to.deep.equal(s);
     });
 
     it("complex", () => {
-      expect(shredder.union([1, 2, 2, 2], [0, 1, 2, 2, 1])).to.deep.equal([
-        1,
-        3,
-        1,
-        2,
-      ]);
+      const s = [1, 2, 2, 2];
+      const t = [0, 1, 2, 2, 1];
+      const result = [1, 3, 1, 2];
+      expect(shredder.union(s, t)).to.deep.equal(result);
     });
   });
 
   describe("difference", () => {
     it("empty", () => {
-      expect(shredder.difference([1, 8], [1, 4, 4])).to.deep.equal([0, 4, 4]);
+      const s = [1, 8];
+      const t = [1, 4, 4];
+      const result = [0, 4, 4];
+      expect(shredder.difference(s, t)).to.deep.equal(result);
     });
 
     it("complex", () => {
-      expect(
-        shredder.difference([1, 2, 2, 2], [0, 1, 1, 1, 1, 1, 1]),
-      ).to.deep.equal([1, 1, 3, 1, 1]);
+      const s = [1, 2, 2, 2];
+      const t = [0, 1, 1, 1, 1, 1, 1];
+      const result = [1, 1, 3, 1, 1];
+      expect(shredder.difference(s, t)).to.deep.equal(result);
     });
   });
 
@@ -69,7 +73,7 @@ describe("subseq", () => {
     it("empty transform", () => {
       const s = [0, 1, 2, 7];
       const t = [0, 8];
-      expect(shredder.interleave(s, t)).to.deep.equal([0, 1, 2, 7]);
+      expect(shredder.interleave(s, t)).to.deep.equal(s);
     });
 
     it("smaller transform", () => {
@@ -208,41 +212,33 @@ describe("subseq", () => {
 
 describe("overlapping", () => {
   it("overlapping 1", () => {
-    expect(shredder.overlapping("hello ", "hello ")).to.deep.equal([1, 6]);
+    const result = [1, 6];
+    expect(shredder.overlapping("hello ", "hello ")).to.deep.equal(result);
   });
 
   it("overlapping 2", () => {
-    expect(shredder.overlapping("hello world", "world")).to.deep.equal([
-      0,
-      6,
-      5,
-    ]);
+    const result = [0, 6, 5];
+    expect(shredder.overlapping("hello world", "world")).to.deep.equal(result);
   });
 
   it("overlapping 3", () => {
-    expect(shredder.overlapping("hello world", "d")).to.deep.equal([0, 10, 1]);
+    const result = [0, 10, 1];
+    expect(shredder.overlapping("hello world", "d")).to.deep.equal(result);
   });
 
   it("overlapping 4", () => {
-    expect(shredder.overlapping("hello world", " ")).to.deep.equal([
-      0,
-      5,
-      1,
-      5,
-    ]);
+    const result = [0, 5, 1, 5];
+    expect(shredder.overlapping("hello world", " ")).to.deep.equal(result);
   });
 
   it("overlapping 5", () => {
-    expect(shredder.overlapping(" Wworld", " World")).to.deep.equal([
-      1,
-      2,
-      1,
-      4,
-    ]);
+    const result = [1, 2, 1, 4];
+    expect(shredder.overlapping(" Wworld", " World")).to.deep.equal(result);
   });
 
   it("overlapping 6", () => {
-    expect(shredder.overlapping("Hhello", "Hello")).to.deep.equal([1, 1, 1, 4]);
+    const result = [1, 1, 1, 4];
+    expect(shredder.overlapping("Hhello", "Hello")).to.deep.equal(result);
   });
 
   it("no overlap 1", () => {
@@ -438,15 +434,13 @@ describe("Document", () => {
     it("concurrent 6", () => {
       const doc1 = Document.initialize(clientId, "hello world", intents);
       //"hello world"
+      // ===========++++
+      doc1.edit(["why ", [0, 5], " there", [5, 11], "s"]);
       // ++++=====++++++======+
       //"why hello there worlds"
-      // ===========++++
-      //"hello worldstar"
-      // ++++=====++++++======+
-      // =====================++++=
-      //"why hello there worldstars"
-      doc1.edit(["why ", [0, 5], " there", [5, 11], "s"]);
       doc1.edit([[0, 11], "star"], "concurrent", 0);
+      // ======================++++
+      //"why hello there worldsstar"
       expect(doc1.visible).to.equal("why hello there worldsstar");
     });
 
@@ -584,114 +578,123 @@ describe("Document", () => {
 
   describe("Document.ingest", () => {
     it("simple", () => {
-      const doc1 = Document.initialize(clientId, "hello world", intents);
-      const doc2 = doc1.clone("id2");
+      const docA = Document.initialize(clientId, "hello world", intents);
+      const docB = docA.clone("id2");
       //"hello world"
-      const message = doc1.edit(["goodbye", [5, 11]]);
+      const messageA1 = docA.edit(["goodbye", [5, 11]]);
       // +++++++-----====== patch
+      // =======-----====== hiddenSeq
       //"goodbyehello world"
-      const message1 = doc2.edit([[0, 6], "Brian"]);
+      const messageB1 = docB.edit([[0, 6], "Brian"]);
       // ======+++++----- patch
       // ===========----- hiddenSeq
       //"hello Brianworld"
-      const message2 = doc2.edit([[0, 11], " Kim"]);
+      const messageB2 = docB.edit([[0, 11], " Kim"]);
       // ================++++ patch
       // ===========-----==== hiddenSeq
       //"hello Brianworld Kim"
-      const message3 = doc2.edit([[6, 15]]);
+      const messageB3 = docB.edit([[6, 15]]);
       // ------============== patch
       // ------=====-----==== hiddenSeq
       //"hello Brianworld Kim"
-      doc1.ingest(message1);
-      //        ======+++++----- patch
-      // +++++++-----=     ===== revision
+      docA.ingest(messageB1);
       // =============+++++----- ingested patch
       // +++++++================ baseInsertSeq
       // =======-----=========== baseDeleteSeq
       // =======-----======----- hiddenSeq
       //"goodbyehello Brianworld"
-      doc1.ingest(message2);
-      //        ================++++ patch
+      docA.ingest(messageB2);
       // =======================++++ ingested patch
       // +++++++==================== baseInsertSeq
       // =======-----=============== baseDeleteSeq
+      // =======-----=============== hiddenSeq
       //"goodbyehello Brianworld Kim"
-      doc1.ingest(message3);
-      //        ------============== patch
-      // =======_____-============== ingested patch
-      // =======------=====-----==== hiddenSeq
+      docA.ingest(messageB3);
+      // ============-============== ingested patch
       // +++++++==================== baseInsertSeq
       // =======-----=============== baseDeleteSeq
-      doc2.ingest(message);
-      expect(doc1.visible).to.equal("goodbyeBrian Kim");
-      expect(doc1.visible).to.equal(doc2.visible);
-      expect(doc1.hidden).to.equal(doc2.hidden);
-      expect(doc1.hiddenSeq).to.deep.equal(doc2.hiddenSeq);
+      // =======------=====-----==== hiddenSeq
+      //"goodbyehello Brianworld Kim"
+      expect(docA.visible).to.equal("goodbyeBrian Kim");
+      docB.ingest(messageA1);
+      expect(docA.visible).to.equal(docB.visible);
+      expect(docA.hidden).to.equal(docB.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
     });
 
     it("concurrent deletes", () => {
-      const doc1 = Document.initialize(clientId, "hello world", intents);
+      const docA = Document.initialize(clientId, "hello world", intents);
       //"hello world"
-      const doc2 = doc1.clone("id2");
-      const message1 = doc1.edit([]);
+      const docB = docA.clone("id2");
+      const messageA1 = docA.edit([]);
       // ----------- patch
+      // ----------- hiddenSeq
       //"hello world"
-      const message2 = doc2.edit([[0, 5]]);
+      const messageB1 = docB.edit([[0, 5]]);
       // =====------ patch
+      // =====------ hiddenSeq
       //"hello world"
-      const message3 = doc2.edit([[0, 5], "!"]);
+      const messageB2 = docB.edit([[0, 5], "!"]);
       // ===========+ patch
+      // =====------= hiddenSeq
       //"hello world!"
-      doc1.ingest(message2);
+      docA.ingest(messageB1);
       // =========== ingested patch
       // -----====== baseDeleteSeq
       // ----------- hiddenSeq
       //"hello world"
-      doc1.ingest(message3);
+      docA.ingest(messageB2);
       // ===========+ ingested patch
       // -----======= baseDeleteSeq
       // -----------= hiddenSeq
       //"hello world!"
-      doc2.ingest(message1);
-      expect(doc1.visible).to.equal("!");
-      expect(doc1.visible).to.equal(doc2.visible);
-      expect(doc1.hidden).to.equal(doc2.hidden);
-      expect(doc1.hiddenSeq).to.deep.equal(doc2.hiddenSeq);
+      docB.ingest(messageA1);
+      expect(docA.visible).to.equal("!");
+      expect(docA.visible).to.equal(docB.visible);
+      expect(docA.hidden).to.equal(docB.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
     });
 
     it("inserts at same position", () => {
-      const doc1 = Document.initialize(clientId, "hello world", intents);
-      const doc2 = doc1.clone("id2");
+      const docA = Document.initialize(clientId, "hello world", intents);
+      const docB = docA.clone("id2");
       //"hello world"
-      const message1 = doc1.edit(["goodbye", [5, 11]]);
+      const messageA1 = docA.edit(["goodbye", [5, 11]]);
       // +++++++-----====== patch
       // =======-----====== hiddenSeq
       //"goodbyehello world"
-      const message2 = doc2.edit(["H", [1, 11]]);
+      const messageB1 = docB.edit(["H", [1, 11]]);
       // +-========== patch
       // =-========== hiddenSeq
       //"Hhello world"
-      const message3 = doc2.edit([[0, 6], "W", [7, 11]]);
+      const messageB2 = docB.edit([[0, 6], "W", [7, 11]]);
       // =======+-==== patch
       // =-======-==== hiddenSeq
       //"Hhello Wworld"
-      doc1.ingest(message2);
-      //        +-========== patch
+      docA.ingest(messageB1);
       // =======+=========== ingested patch
       // +++++++============ baseInsertSeq
       // =========----====== baseDeleteSeq
       // ========-----====== hiddenSeq
       //"goodbyeHhello world"
-      doc1.ingest(message3);
-      //        =======+-==== patch
+      docA.ingest(messageB2);
+      // ==============+-==== ingested patch
       // +++++++============= baseInsertSeq
       // =========----======= baseDeleteSeq
+      // ========-----==-==== hiddenSeq
       //"goodbyeHhello Wworld"
-      doc2.ingest(message1);
-      expect(doc1.visible).to.equal("goodbyeH World");
-      expect(doc1.visible).to.equal(doc2.visible);
-      expect(doc1.hidden).to.equal(doc2.hidden);
-      expect(doc1.hiddenSeq).to.deep.equal(doc2.hiddenSeq);
+      docB.ingest(messageA1);
+      expect(docA.visible).to.equal("goodbyeH World");
+      expect(docA.visible).to.equal(docB.visible);
+      expect(docA.hidden).to.equal(docB.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
+    });
+
+    it("three clients", () => {
+      // const doc1 = Document.initialize(clientId, "hello world", intents);
+      // const doc2 = doc1.clone("id2");
+      // const doc3 = doc1.clone("id3");
+      // doc1.edit([]);
     });
 
     /*
