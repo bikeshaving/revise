@@ -281,48 +281,48 @@ describe("patch", () => {
   });
 
   it("factor", () => {
-    const [inserts, deletes] = shredder.factor(p0, text.length);
-    expect(inserts).to.deep.equal([0, 1, 3, 10]);
-    expect(deletes).to.deep.equal([0, 1, 8, 2]);
-    const [inserts1, deletes1] = shredder.factor(p1, text.length);
-    expect(inserts1).to.deep.equal([1, 2, 11]);
-    expect(deletes1).to.deep.equal([1, 2, 3, 6]);
-    const [inserts2, deletes2] = shredder.factor(p2, text.length);
-    expect(inserts2).to.deep.equal([0, 4, 1, 1, 7, 6]);
-    expect(deletes2).to.deep.equal([0, 5, 6]);
-    const [inserts3, deletes3] = shredder.factor(p3, text.length);
-    expect(inserts3).to.deep.equal([0, 6, 5, 5]);
-    expect(deletes3).to.deep.equal([0, 6, 5]);
+    const [insertSeq, deleteSeq] = shredder.factor(p0, text.length);
+    expect(insertSeq).to.deep.equal([0, 1, 3, 10]);
+    expect(deleteSeq).to.deep.equal([0, 1, 8, 2]);
+    const [insertSeq1, deleteSeq1] = shredder.factor(p1, text.length);
+    expect(insertSeq1).to.deep.equal([1, 2, 11]);
+    expect(deleteSeq1).to.deep.equal([1, 2, 3, 6]);
+    const [insertSeq2, deleteSeq2] = shredder.factor(p2, text.length);
+    expect(insertSeq2).to.deep.equal([0, 4, 1, 1, 7, 6]);
+    expect(deleteSeq2).to.deep.equal([0, 5, 6]);
+    const [insertSeq3, deleteSeq3] = shredder.factor(p3, text.length);
+    expect(insertSeq3).to.deep.equal([0, 6, 5, 5]);
+    expect(deleteSeq3).to.deep.equal([0, 6, 5]);
   });
 
   describe("synthesize", () => {
     it("complex", () => {
-      const [inserts, deletes, inserted] = shredder.factor(p0, text.length);
-      const deletes1 = shredder.expand(deletes, inserts);
+      const [insertSeq, deleteSeq, inserted] = shredder.factor(p0, text.length);
+      const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
       const union = shredder.apply(
         text,
-        shredder.synthesize(inserted, inserts),
+        shredder.synthesize(inserted, insertSeq),
       );
       const text1 = shredder.apply(
         union,
         shredder.synthesize(
           "",
-          [0, shredder.count(deletes1)],
-          shredder.complement(deletes1),
+          [0, shredder.count(deleteSeq1)],
+          shredder.complement(deleteSeq1),
         ),
       );
       const tombstones = shredder.apply(
         union,
         shredder.synthesize(
           "",
-          [0, shredder.count(inserts)],
-          shredder.complement(inserts),
+          [0, shredder.count(insertSeq)],
+          shredder.complement(insertSeq),
         ),
       );
-      expect(shredder.synthesize(tombstones, inserts, deletes1)).to.deep.equal(
-        p0,
-      );
-      expect(shredder.synthesize(text1, deletes1, inserts)).to.deep.equal([
+      expect(
+        shredder.synthesize(tombstones, insertSeq, deleteSeq1),
+      ).to.deep.equal(p0);
+      expect(shredder.synthesize(text1, deleteSeq1, insertSeq)).to.deep.equal([
         [0, 1],
         "ello wor",
         [4, 6],
@@ -574,17 +574,172 @@ describe("Document", () => {
 
   describe("Document.undo", () => {
     it("simple", () => {
-      const doc = Document.initialize(clientId, "Hello world", intents);
-      doc.edit(["Goodbye", [5, 11]]);
+      const doc = Document.initialize(clientId, "hello world", intents);
+      doc.edit(["goodbye", [5, 11]]);
       doc.edit([[0, 13], "s"]);
       doc.undo(1);
-      expect(doc.visible).to.equal("Hello worlds");
+      expect(doc.visible).to.equal("hello worlds");
     });
   });
 
   describe("Document.ingest", () => {
     it("simple", () => {
-      // doc1.edit([[0, 15], " hip hop"]);
+      const doc1 = Document.initialize(clientId, "hello world", intents);
+      const doc2 = doc1.clone("id2");
+      //"hello world"
+      const message = doc1.edit(["goodbye", [5, 11]]);
+      // +++++++-----====== patch
+      //"goodbyehello world"
+      const message1 = doc2.edit([[0, 6], "Brian"]);
+      // ======+++++----- patch
+      // ===========----- hiddenSeq
+      //"hello Brianworld"
+      const message2 = doc2.edit([[0, 11], " Kim"]);
+      // ================++++ patch
+      // ===========-----==== hiddenSeq
+      //"hello Brianworld Kim"
+      const message3 = doc2.edit([[6, 15]]);
+      // ------============== patch
+      // ------=====-----==== hiddenSeq
+      //"hello Brianworld Kim"
+      doc1.ingest(message1);
+      //        ======+++++----- patch
+      // +++++++-----=     ===== revision
+      // =============+++++----- ingested patch
+      // +++++++================ baseInsertSeq
+      // =======-----=========== baseDeleteSeq
+      // =======-----======----- hiddenSeq
+      //"goodbyehello Brianworld"
+      doc1.ingest(message2);
+      //        ================++++ patch
+      // =======================++++ ingested patch
+      // +++++++==================== baseInsertSeq
+      // =======-----=============== baseDeleteSeq
+      //"goodbyehello Brianworld Kim"
+      doc1.ingest(message3);
+      //        ------============== patch
+      // =======_____-============== ingested patch
+      // =======------=====-----==== hiddenSeq
+      // +++++++==================== baseInsertSeq
+      // =======-----=============== baseDeleteSeq
+      doc2.ingest(message);
+      expect(doc1.visible).to.equal("goodbyeBrian Kim");
+      expect(doc1.visible).to.equal(doc2.visible);
+      expect(doc1.hidden).to.equal(doc2.hidden);
+      expect(doc1.hiddenSeq).to.deep.equal(doc2.hiddenSeq);
     });
+
+    it("concurrent deletes", () => {
+      const doc1 = Document.initialize(clientId, "hello world", intents);
+      //"hello world"
+      const doc2 = doc1.clone("id2");
+      const message1 = doc1.edit([]);
+      // ----------- patch
+      //"hello world"
+      const message2 = doc2.edit([[0, 5]]);
+      // =====------ patch
+      //"hello world"
+      const message3 = doc2.edit([[0, 5], "!"]);
+      // ===========+ patch
+      //"hello world!"
+      doc1.ingest(message2);
+      // =========== ingested patch
+      // -----====== baseDeleteSeq
+      // ----------- hiddenSeq
+      //"hello world"
+      doc1.ingest(message3);
+      // ===========+ ingested patch
+      // -----======= baseDeleteSeq
+      // -----------= hiddenSeq
+      //"hello world!"
+      doc2.ingest(message1);
+      expect(doc1.visible).to.equal("!");
+      expect(doc1.visible).to.equal(doc2.visible);
+      expect(doc1.hidden).to.equal(doc2.hidden);
+      expect(doc1.hiddenSeq).to.deep.equal(doc2.hiddenSeq);
+    });
+
+    it("inserts at same position", () => {
+      const doc1 = Document.initialize(clientId, "hello world", intents);
+      const doc2 = doc1.clone("id2");
+      //"hello world"
+      const message1 = doc1.edit(["goodbye", [5, 11]]);
+      // +++++++-----====== patch
+      // =======-----====== hiddenSeq
+      //"goodbyehello world"
+      const message2 = doc2.edit(["H", [1, 11]]);
+      // +-========== patch
+      // =-========== hiddenSeq
+      //"Hhello world"
+      const message3 = doc2.edit([[0, 6], "W", [7, 11]]);
+      // =======+-==== patch
+      // =-======-==== hiddenSeq
+      //"Hhello Wworld"
+      doc1.ingest(message2);
+      //        +-========== patch
+      // =======+=========== ingested patch
+      // +++++++============ baseInsertSeq
+      // =========----====== baseDeleteSeq
+      // ========-----====== hiddenSeq
+      //"goodbyeHhello world"
+      doc1.ingest(message3);
+      //        =======+-==== patch
+      // +++++++============= baseInsertSeq
+      // =========----======= baseDeleteSeq
+      //"goodbyeHhello Wworld"
+      doc2.ingest(message1);
+      expect(doc1.visible).to.equal("goodbyeH World");
+      expect(doc1.visible).to.equal(doc2.visible);
+      expect(doc1.hidden).to.equal(doc2.hidden);
+      expect(doc1.hiddenSeq).to.deep.equal(doc2.hiddenSeq);
+    });
+
+    /*
+    TODO: test this situation
+    a  b  c  d
+    a0 b0 c0 d0
+       d0 a0
+       a0 b0
+       b1 b1
+    "hello world"
+     ===========
+    a0
+    "why hello world"
+     ++++===========
+    b0
+    "Hhello world"
+     +-==========
+    c0
+    "hello world!"
+     =====-=====+
+    d0
+    "hello Wworld"
+     ======+-====
+    d0 applied to b
+    "Hhello Wworld"
+     =======+-====
+    a0 applied to b
+    "why Hhello Wworld"
+     ++++=============
+    b1
+    "why Hhello Wworld."
+     =================+
+    a0 applied to c
+    "why hello world!"
+     ++++============
+    b0 applied to c
+    "why Hhello world!"
+     ====+-===========
+    b1 applied to c
+    "why Hhello world!."
+     =================+
+    d0 applied to c
+    "why Hhello Wworld!."
+     ===========+-======
+    c0 applied to b
+    "why Hhello Wworld.!"
+     ==========-=======+
+    A revision depends on every revision before it, so b1 cannot be applied to c because d0 is missing. Is this an intractable problem???
+    */
   });
 });
