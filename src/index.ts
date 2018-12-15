@@ -602,7 +602,7 @@ export class Document extends EventEmitter {
 
     if (clientId !== this.clientId) {
       if (baseInsertSeq != null) {
-        //TODO: is it correct to ignore priority?
+        //TODO: WHAT IS THE CORRECT PRIORITY HERE AND WHY?
         insertSeq = interleave(insertSeq, baseInsertSeq);
         deleteSeq = expand(deleteSeq, baseInsertSeq);
       }
@@ -724,6 +724,23 @@ export class Document extends EventEmitter {
     return message;
   }
 
+  public ingest(message: Message): Message {
+    const {
+      patch,
+      clientId,
+      intent,
+      version,
+      parentClientId,
+      parentVersion,
+    } = message;
+    if (parentClientId == null || parentVersion == null) {
+      throw new Error("Cannot ingest initial message");
+    }
+    const pi = this.revisions.locate(parentClientId, parentVersion);
+    message = this.revise(patch, pi, clientId, intent, version);
+    return message;
+  }
+
   public undo(i: number): Message {
     const [parentRevision, ...revisions] = this.revisions.slice(i);
     let reviveSeq = parentRevision.deleteSeq;
@@ -752,23 +769,6 @@ export class Document extends EventEmitter {
       parentVersion: parentRevision.version,
     };
     this.emit("message", message);
-    return message;
-  }
-
-  public ingest(message: Message): Message {
-    const {
-      patch,
-      clientId,
-      intent,
-      version,
-      parentClientId,
-      parentVersion,
-    } = message;
-    if (parentClientId == null || parentVersion == null) {
-      throw new Error("Cannot ingest initial message");
-    }
-    const pi = this.revisions.locate(parentClientId, parentVersion);
-    message = this.revise(patch, pi, clientId, intent, version);
     return message;
   }
 

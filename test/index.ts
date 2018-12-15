@@ -577,120 +577,186 @@ describe("Document", () => {
   });
 
   describe("Document.ingest", () => {
-    it("simple", () => {
+    it("two replicas 1", () => {
       const docA = Document.initialize(clientId, "hello world", intents);
       const docB = docA.clone("id2");
       //"hello world"
-      const messageA1 = docA.edit(["goodbye", [5, 11]]);
-      // +++++++-----====== patch
+      const messageA0 = docA.edit(["goodbye", [5, 11]]);
+      // +++++++-----====== patch a0
       // =======-----====== hiddenSeq
       //"goodbyehello world"
-      const messageB1 = docB.edit([[0, 6], "Brian"]);
-      // ======+++++----- patch
+      const messageB0 = docB.edit([[0, 6], "Brian"]);
+      // ======+++++----- patch b0
       // ===========----- hiddenSeq
       //"hello Brianworld"
-      const messageB2 = docB.edit([[0, 11], " Kim"]);
-      // ================++++ patch
+      const messageB1 = docB.edit([[0, 11], " Kim"]);
+      // ================++++ patch b1
       // ===========-----==== hiddenSeq
       //"hello Brianworld Kim"
-      const messageB3 = docB.edit([[6, 15]]);
-      // ------============== patch
+      const messageB2 = docB.edit([[6, 15]]);
+      // ------============== patch b2
       // ------=====-----==== hiddenSeq
       //"hello Brianworld Kim"
-      docA.ingest(messageB1);
+      docA.ingest(messageB0);
+      //        ======+++++----- patch b0
+      // +++++++-----=     ===== patch a0
       // =============+++++----- ingested patch
-      // +++++++================ baseInsertSeq
-      // =======-----=========== baseDeleteSeq
       // =======-----======----- hiddenSeq
       //"goodbyehello Brianworld"
-      docA.ingest(messageB2);
+      docA.ingest(messageB1);
+      //        ================++++ patch b1
+      // +++++++================     baseInsertSeq
+      // =======-----===========     baseDeleteSeq
       // =======================++++ ingested patch
-      // +++++++==================== baseInsertSeq
-      // =======-----=============== baseDeleteSeq
-      // =======-----=============== hiddenSeq
+      // =======-----======-----==== hiddenSeq
       //"goodbyehello Brianworld Kim"
-      docA.ingest(messageB3);
-      // ============-============== ingested patch
+      docA.ingest(messageB2);
+      //        ------============== patch b2
       // +++++++==================== baseInsertSeq
       // =======-----=============== baseDeleteSeq
+      // ============-============== ingested patch
       // =======------=====-----==== hiddenSeq
       //"goodbyehello Brianworld Kim"
       expect(docA.visible).to.equal("goodbyeBrian Kim");
-      docB.ingest(messageA1);
+      docB.ingest(messageA0);
       expect(docA.visible).to.equal(docB.visible);
       expect(docA.hidden).to.equal(docB.hidden);
       expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
     });
 
-    it("concurrent deletes", () => {
+    it("two replicas 2", () => {
       const docA = Document.initialize(clientId, "hello world", intents);
       //"hello world"
       const docB = docA.clone("id2");
-      const messageA1 = docA.edit([]);
-      // ----------- patch
+      const messageA0 = docA.edit([]);
+      // ----------- patch a0
       // ----------- hiddenSeq
       //"hello world"
-      const messageB1 = docB.edit([[0, 5]]);
-      // =====------ patch
+      const messageB0 = docB.edit([[0, 5]]);
+      // =====------ patch b0
       // =====------ hiddenSeq
       //"hello world"
-      const messageB2 = docB.edit([[0, 5], "!"]);
-      // ===========+ patch
+      const messageB1 = docB.edit([[0, 5], "!"]);
+      // ===========+ patch b1
       // =====------= hiddenSeq
       //"hello world!"
-      docA.ingest(messageB1);
+      docA.ingest(messageB0);
+      // =====------ patch b0
+      // ----------- patch a0
       // =========== ingested patch
-      // -----====== baseDeleteSeq
       // ----------- hiddenSeq
       //"hello world"
-      docA.ingest(messageB2);
-      // ===========+ ingested patch
-      // -----======= baseDeleteSeq
+      docA.ingest(messageB1);
+      // ===========+ patch b1
+      // -----======  baseDeleteSeq
       // -----------= hiddenSeq
       //"hello world!"
-      docB.ingest(messageA1);
+      docB.ingest(messageA0);
       expect(docA.visible).to.equal("!");
       expect(docA.visible).to.equal(docB.visible);
       expect(docA.hidden).to.equal(docB.hidden);
       expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
     });
 
-    it("inserts at same position", () => {
+    it("two replicas 3", () => {
       const docA = Document.initialize(clientId, "hello world", intents);
       const docB = docA.clone("id2");
       //"hello world"
-      const messageA1 = docA.edit(["goodbye", [5, 11]]);
-      // +++++++-----====== patch
+      const messageA0 = docA.edit(["goodbye", [5, 11]]);
+      // +++++++-----====== patch a0
       // =======-----====== hiddenSeq
       //"goodbyehello world"
-      const messageB1 = docB.edit(["H", [1, 11]]);
-      // +-========== patch
+      const messageB0 = docB.edit(["H", [1, 11]]);
+      // +-========== patch b0
       // =-========== hiddenSeq
       //"Hhello world"
-      const messageB2 = docB.edit([[0, 6], "W", [7, 11]]);
-      // =======+-==== patch
+      const messageB1 = docB.edit([[0, 6], "W", [7, 11]]);
+      // =======+-==== patch b1
       // =-======-==== hiddenSeq
       //"Hhello Wworld"
-      docA.ingest(messageB1);
-      // =======+=========== ingested patch
-      // +++++++============ baseInsertSeq
-      // =========----====== baseDeleteSeq
+      docA.ingest(messageB0);
+      // +       -========== patch b0
+      // +++++++ -----====== patch a0
+      // ^ insert collision a0 < b0
+      // =======+=========== ingested patch b0
       // ========-----====== hiddenSeq
       //"goodbyeHhello world"
-      docA.ingest(messageB2);
-      // ==============+-==== ingested patch
-      // +++++++============= baseInsertSeq
-      // =========----======= baseDeleteSeq
+      docA.ingest(messageB1);
+      //        =======+-==== patch b1
+      // +++++++======= ===== baseInsertSeq
+      // =========----= ===== baseDeleteSeq
+      // ==============+-==== ingested patch b1
       // ========-----==-==== hiddenSeq
       //"goodbyeHhello Wworld"
-      docB.ingest(messageA1);
+      docB.ingest(messageA0);
       expect(docA.visible).to.equal("goodbyeH World");
       expect(docA.visible).to.equal(docB.visible);
       expect(docA.hidden).to.equal(docB.hidden);
       expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
     });
 
-    it("three clients 1", () => {
+    it.skip("two replicas 4", () => {
+      const docA = Document.initialize(clientId, "hello world", intents);
+      const docB = docA.clone("id2");
+      // const docC = docA.clone("id3");
+      //"hello world"
+      const messageA0 = docA.edit([[0, 5], "_", [6, 11]]);
+      // =====+-===== patch a0
+      // ======-===== hiddenSeq
+      //"hello_ world"
+      const messageA1 = docA.edit([[0, 6], "_", [6, 11]]);
+      // =======+===== patch a1
+      // ======-====== hiddenSeq
+      //"hello_ _world"
+      const messageB0 = docB.edit(["H", [1, 6], "W", [7, 11]]);
+      // +-=====+-==== patch b0
+      // =-======-==== hiddenSeq
+      //"Hhello Wworld"
+      const messageB1 = docB.edit([[0, 5], [6, 11]]);
+      // ======-====== patch b1
+      // =-====-=-==== hiddenSeq
+      //"Hhello Wworld"
+      docA.ingest(messageB0);
+      // +-==== =+-==== patch b0
+      //  =====+- ===== patch a0
+      // +-======+-==== ingested patch b0
+      //"Hhello_ Wworld"
+      // +-======+ -==== patch b0
+      //  =======+ ===== patch a1
+      //         ^ a1 < b0
+      // +-=======+-==== ingested patch
+      // =-=====-==-==== hiddenSeq
+      //"Hhello_ _Wworld"
+      docA.ingest(messageB1);
+      // ====== - ====== patch b1
+      // ======+=+====== baseInsertSeq
+      // =======-======= baseDeleteSeq
+      // =============== ingested patch b1
+      // =-=====-==-==== hiddenSeq
+      docB.ingest(messageA0);
+      //  =====+- ===== patch a0
+      // +-==== =+-==== patch b0
+      // ======+-====== ingested patch a0
+      //"Hhello_ Wworld"
+      // ======+-====== patch a0
+      // ====== -====== patch b1
+      // ======+======= ingested patch a0
+      // =-=====-=-==== hiddenSeq
+      //"Hhello_ Wworld"
+      //  =======+ ===== patch a1
+      // +=======+ ===== baseInsertSeq
+      //         ^ how do we resolve this conflict?
+      //           we can’t just compare clientIds b/c
+      // =-======= -==== baseDeleteSeq
+      // =-=====-==-==== hiddenSeq
+      //"Hhello_ _Wworld"
+      docB.ingest(messageA1);
+      expect(docA.visible).to.equal(docB.visible);
+      expect(docA.hidden).to.equal(docB.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
+    });
+
+    it("three replicas 1", () => {
       const docA = Document.initialize(clientId, "hello world", intents);
       const docB = docA.clone("id2");
       const docC = docA.clone("id3");
@@ -712,77 +778,57 @@ describe("Document", () => {
       expect(docA.hiddenSeq).to.deep.equal(docC.hiddenSeq);
     });
 
-    it("three clients 2", () => {
+    it.skip("three replicas 2", () => {
       const docA = Document.initialize(clientId, "hello world", intents);
       const docB = docA.clone("id2");
       const docC = docA.clone("id3");
+      //"hello world"
       const messageA0 = docA.edit([[0, 5], "_", [6, 11]]);
+      // =====+-===== patch
+      // ======-===== hiddenSeq
+      //"hello_ world"
       const messageA1 = docA.edit([[0, 6], "_", [6, 11]]);
+      // =======+===== patch
+      // ======-====== hiddenSeq
+      //"hello_ _world"
       const messageB0 = docB.edit(["H", [1, 6], "W", [7, 11]]);
+      // +-=====+-==== patch
+      // =-======-==== hiddenSeq
+      //"Hhello Wworld"
       const messageB1 = docB.edit([[0, 5], [6, 11]]);
+      // ======-====== patch
+      // =-====-=-==== hiddenSeq
+      //"Hhello Wworld"
       const messageC0 = docC.edit(["(", [0, 11], ")"]);
+      // +===========+ patch
+      // ============= hiddenSeq
+      //"(hello world)"
       const messageC1 = docC.edit([[0, 1], "Hey", [7, 13]]);
+      // =+++------====== patch
+      //"(Heyhello world)"
       docA.ingest(messageB0);
-      docA.ingest(messageC0);
+      // +-=====+-==== patch
       docA.ingest(messageB1);
+      // ======-====== patch
+      docA.ingest(messageC0);
+      // +===========+ patch
       docA.ingest(messageC1);
       expect(docA.visible).to.equal("H(Hey__World)");
       docB.ingest(messageA0);
+      // =+++------====== patch
       docB.ingest(messageC0);
       docB.ingest(messageA1);
       docB.ingest(messageC1);
       expect(docA.visible).to.equal(docB.visible);
       expect(docA.hidden).to.equal(docB.hidden);
       expect(docA.hiddenSeq).to.deep.equal(docB.hiddenSeq);
-      messageA0; messageA1; messageB0; messageB1; messageC0; messageC1;
+      docC.ingest(messageB0);
+      docC.ingest(messageB1);
+      docC.ingest(messageA0);
+      docC.ingest(messageA1);
+      expect(docA.visible).to.equal(docC.visible);
+      expect(docA.hidden).to.equal(docC.hidden);
+      expect(docA.hiddenSeq).to.deep.equal(docC.hiddenSeq);
     });
-
-    /*
-    TODO: test this situation
-    a  b  c  d
-    a0 b0 c0 d0
-       d0 a0
-       a0 b0
-       b1 b1
-    "hello world"
-     ===========
-    a0
-    "why hello world"
-     ++++===========
-    b0
-    "Hhello world"
-     +-==========
-    c0
-    "hello world!"
-     =====-=====+
-    d0
-    "hello Wworld"
-     ======+-====
-    d0 applied to b
-    "Hhello Wworld"
-     =======+-====
-    a0 applied to b
-    "why Hhello Wworld"
-     ++++=============
-    b1
-    "why Hhello Wworld."
-     =================+
-    a0 applied to c
-    "why hello world!"
-     ++++============
-    b0 applied to c
-    "why Hhello world!"
-     ====+-===========
-    b1 applied to c
-    "why Hhello world!."
-     =================+
-    d0 applied to c
-    "why Hhello Wworld!."
-     ===========+-======
-    c0 applied to b
-    "why Hhello Wworld.!"
-     ==========-=======+
-    A revision depends on every revision before it, so b1 cannot be applied to c because d0 is missing. Is this an intractable problem???
-    */
   });
 });
