@@ -303,6 +303,19 @@ describe("patch", () => {
   });
 
   describe("synthesize", () => {
+    it("empty", () => {
+      expect(shredder.synthesize("", [])).to.deep.equal([0]);
+    });
+
+    it("simple", () => {
+      const insertSeq = [0, 3, 3, 7];
+      const deleteSeq = [0, 6, 3, 3, 1];
+      const result = [0, 3, "foo", 6, 9, 10];
+      expect(shredder.synthesize("foo", insertSeq, deleteSeq)).to.deep.equal(
+        result,
+      );
+    });
+
     it("complex", () => {
       const [insertSeq, deleteSeq, inserted] = shredder.factor(p0);
       const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
