@@ -231,43 +231,71 @@ export function interleave(
 
 // inclusive start, exclusive end
 type Insert = string;
-type Copy = [number, number];
-// Deletes are represented via omission
-// TODO: make Patch of type (string | number)[] where the last number represents the length of the text being patched, and copies are represented as two adjacent numbers
-// export type Patch = (string | number)[];
-export type Patch = (Insert | Copy)[];
+export type Patch = (Insert | number)[];
 
 export function apply(text: string, patch: Patch): string {
-  let result = "";
-  for (const el of patch) {
-    if (typeof el === "string") {
-      result += el;
+  const length = patch[patch.length - 1];
+  if (typeof length !== "number") {
+    throw new Error("Malformed patch");
+  } else if (length !== text.length) {
+    throw new Error("Length mismatch");
+  }
+  let text1 = "";
+  let start: number | undefined;
+  let consumed = 0;
+  for (const p of patch) {
+    if (start != null) {
+      if (typeof p !== "number" || p < consumed) {
+        throw new Error("Malformed patch");
+      }
+      text1 += text.slice(start, p);
+      start = undefined;
+      consumed = p;
+    } else if (typeof p === "number") {
+      if (p < consumed) {
+        throw new Error("Malformed patch");
+      }
+      start = p;
+      consumed = p;
     } else {
-      const [start, end] = el;
-      result += text.slice(start, end);
+      text1 += p;
     }
   }
-  return result;
+  return text1;
 }
 
-export function factor(patch: Patch, length: number): [Subseq, Subseq, string] {
+export function factor(patch: Patch): [Subseq, Subseq, string] {
   const insertSeq: Subseq = [];
   const deleteSeq: Subseq = [];
-  // TODO: maybe use type of string[] for performance
+  const length = patch[patch.length - 1];
+  if (typeof length !== "number") {
+    throw new Error("Malformed patch");
+  }
+  // TODO: maybe use type of string[]
   let inserted: string = "";
+  let start: number | undefined;
   let consumed = 0;
-  for (const el of patch) {
-    if (typeof el === "string") {
-      push(insertSeq, el.length, true);
-      inserted += el;
-    } else {
-      const [start, end] = el;
-      push(insertSeq, end - consumed, false);
-      if (start > consumed) {
-        push(deleteSeq, start - consumed, true);
+  for (const p of patch) {
+    if (start != null) {
+      if (typeof p !== "number" || p < consumed || p > length) {
+        throw new Error("Malformed patch");
       }
-      push(deleteSeq, end - start, false);
-      consumed = end;
+      push(insertSeq, p - start, false);
+      push(deleteSeq, p - start, false);
+      start = undefined;
+      consumed = p;
+    } else if (typeof p === "number") {
+      if (p < consumed) {
+        throw new Error("Malformed patch");
+      } else if (p > consumed) {
+        push(insertSeq, p - consumed, false);
+        push(deleteSeq, p - consumed, true);
+      }
+      start = p;
+      consumed = p;
+    } else {
+      push(insertSeq, p.length, true);
+      inserted += p;
     }
   }
   if (length > consumed) {
@@ -283,8 +311,8 @@ export function synthesize(
   deleteSeq: Subseq = [0, count(insertSeq)],
 ): Patch {
   const patch: Patch = [];
-  let ii = 0;
-  let ci = 0;
+  let ii = 0; // insert index
+  let consumed = 0;
   for (const [length, insertFlag, deleteFlag] of zip(insertSeq, deleteSeq)) {
     if (insertFlag) {
       ii += length;
@@ -292,11 +320,16 @@ export function synthesize(
         patch.push(inserted.slice(ii - length, ii));
       }
     } else {
-      ci += length;
+      consumed += length;
       if (!deleteFlag) {
-        patch.push([ci - length, ci] as Copy);
+        patch.push(consumed - length, consumed);
       }
     }
+  }
+  const last = patch[patch.length - 1];
+  const length = count(insertSeq, false);
+  if (typeof last !== "number" || last < length) {
+    patch.push(length);
   }
   return patch;
 }
@@ -446,8 +479,6 @@ export interface Revision {
   insertSeq: Subseq;
   deleteSeq: Subseq;
   reviveSeq: Subseq;
-  baseInsertSeq?: Subseq;
-  baseDeleteSeq?: Subseq;
   intent?: string;
 }
 
@@ -586,30 +617,10 @@ export class Document extends EventEmitter {
 
     let oldHiddenSeq = this.hiddenSeqAt(pi);
     const [parentRevision, ...revisions] = this.revisions.slice(pi);
-    let { baseInsertSeq, baseDeleteSeq } = parentRevision;
-    if (clientId !== this.clientId) {
-      if (baseDeleteSeq != null) {
-        oldHiddenSeq = difference(oldHiddenSeq, baseDeleteSeq);
-      }
-      if (baseInsertSeq != null) {
-        oldHiddenSeq = shrink(oldHiddenSeq, baseInsertSeq);
-      }
-    }
-    const oldLength = count(oldHiddenSeq, false);
-    let [insertSeq, deleteSeq, inserted] = factor(patch, oldLength);
+    let [insertSeq, deleteSeq, inserted] = factor(patch);
     insertSeq = interleave(insertSeq, oldHiddenSeq);
     deleteSeq = expand(deleteSeq, oldHiddenSeq);
 
-    if (clientId !== this.clientId) {
-      if (baseInsertSeq != null) {
-        //TODO: WHAT IS THE CORRECT PRIORITY HERE AND WHY?
-        insertSeq = interleave(insertSeq, baseInsertSeq);
-        deleteSeq = expand(deleteSeq, baseInsertSeq);
-      }
-      if (baseDeleteSeq != null) {
-        deleteSeq = difference(deleteSeq, baseDeleteSeq);
-      }
-    }
     for (const revision of revisions) {
       if (intent === revision.intent && clientId === revision.clientId) {
         throw new Error(
@@ -623,32 +634,9 @@ export class Document extends EventEmitter {
       if (revision.insertSeq != null) {
         insertSeq = interleave(insertSeq, revision.insertSeq, before);
         deleteSeq = expand(deleteSeq, revision.insertSeq);
-
-        if (clientId !== this.clientId) {
-          if (baseInsertSeq == null) {
-            baseInsertSeq = revision.insertSeq;
-          } else {
-            baseInsertSeq = expand(baseInsertSeq, revision.insertSeq, {
-              union: true,
-            });
-          }
-          if (baseDeleteSeq != null) {
-            baseDeleteSeq = expand(baseDeleteSeq, revision.insertSeq);
-          }
-        }
       }
       if (revision.deleteSeq != null) {
-        const deleteSeq1 = difference(deleteSeq, revision.deleteSeq);
-
-        if (clientId !== this.clientId) {
-          const baseDeleteSeq1 = difference(revision.deleteSeq, deleteSeq);
-          if (baseDeleteSeq == null) {
-            baseDeleteSeq = baseDeleteSeq1;
-          } else {
-            baseDeleteSeq = union(baseDeleteSeq, baseDeleteSeq1);
-          }
-        }
-        deleteSeq = deleteSeq1;
+        deleteSeq = difference(deleteSeq, revision.deleteSeq);
       }
       // TODO: do we need to do something with revision.reviveSeq?
     }
@@ -677,12 +665,6 @@ export class Document extends EventEmitter {
       hiddenSeq = expand(hiddenSeq, insertSeq);
       const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, visibleInsertSeq));
-      if (baseInsertSeq != null) {
-        baseInsertSeq = expand(baseInsertSeq, insertSeq);
-      }
-      if (baseDeleteSeq != null) {
-        baseDeleteSeq = expand(baseDeleteSeq, insertSeq);
-      }
     }
 
     if (count(reviveSeq, true) > 0) {
@@ -697,8 +679,6 @@ export class Document extends EventEmitter {
       insertSeq,
       deleteSeq,
       reviveSeq,
-      baseInsertSeq,
-      baseDeleteSeq,
       intent,
     });
     this.visible = visible;
