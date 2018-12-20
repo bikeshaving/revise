@@ -23,9 +23,10 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
 export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
   const result = subseq1.slice();
   const [flag, length, ...rest] = subseq2;
-  if (length != null) {
-    push(result, length, !!flag);
+  if (length == null) {
+    return result;
   }
+  push(result, length, !!flag);
   return result.concat(rest);
 }
 
@@ -241,22 +242,22 @@ export function apply(text: string, patch: Patch): string {
     throw new Error("Length mismatch");
   }
   let text1 = "";
-  let start: number | undefined;
   let consumed = 0;
+  let start: number | undefined;
   for (const p of patch) {
     if (start != null) {
       if (typeof p !== "number" || p < consumed) {
         throw new Error("Malformed patch");
       }
       text1 += text.slice(start, p);
-      start = undefined;
       consumed = p;
+      start = undefined;
     } else if (typeof p === "number") {
       if (p < consumed) {
         throw new Error("Malformed patch");
       }
-      start = p;
       consumed = p;
+      start = p;
     } else {
       text1 += p;
     }
@@ -273,8 +274,8 @@ export function factor(patch: Patch): [Subseq, Subseq, string] {
   }
   // TODO: maybe use type of string[]
   let inserted: string = "";
-  let start: number | undefined;
   let consumed = 0;
+  let start: number | undefined;
   for (const p of patch) {
     if (start != null) {
       if (typeof p !== "number" || p < consumed || p > length) {
@@ -282,8 +283,8 @@ export function factor(patch: Patch): [Subseq, Subseq, string] {
       }
       push(insertSeq, p - start, false);
       push(deleteSeq, p - start, false);
-      start = undefined;
       consumed = p;
+      start = undefined;
     } else if (typeof p === "number") {
       if (p < consumed) {
         throw new Error("Malformed patch");
@@ -291,8 +292,8 @@ export function factor(patch: Patch): [Subseq, Subseq, string] {
         push(insertSeq, p - consumed, false);
         push(deleteSeq, p - consumed, true);
       }
-      start = p;
       consumed = p;
+      start = p;
     } else {
       push(insertSeq, p.length, true);
       inserted += p;
@@ -379,10 +380,6 @@ export function overlapping(
     push(subseq, deleted.length - consumed, flag);
     return subseq;
   }
-}
-
-export function createRevisionId(clientId: string, version: number) {
-  return clientId + "@" + version;
 }
 
 export function revive(
@@ -528,9 +525,7 @@ export class Document extends EventEmitter {
   private constructor(
     public clientId: string,
     // TODO: group these fields in a snapshot
-    public visible: string,
-    public hidden: string,
-    public hiddenSeq: Subseq,
+    public snapshot: Snapshot,
     public intents: string[],
     public revisions: RevisionLog,
   ) {
@@ -551,14 +546,12 @@ export class Document extends EventEmitter {
       deleteSeq: initial.length ? [0, initial.length] : [],
       reviveSeq: initial.length ? [0, initial.length] : [],
     });
-    return new Document(
-      clientId,
-      initial,
-      "",
-      initial.length ? [0, initial.length] : [],
-      intents,
-      revisions,
-    );
+    const snapshot: Snapshot = {
+      visible: initial,
+      hidden: "",
+      hiddenSeq: initial.length ? [0, initial.length] : [],
+    };
+    return new Document(clientId, snapshot, intents, revisions);
   }
 
   public static fromMessages(
@@ -568,14 +561,7 @@ export class Document extends EventEmitter {
     intents: string[] = [],
     RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
   ) {
-    let doc = new Document(
-      clientId,
-      snapshot.visible,
-      snapshot.hidden,
-      snapshot.hiddenSeq,
-      intents,
-      new RevisionLog(),
-    );
+    let doc = new Document(clientId, snapshot, intents, new RevisionLog());
     for (const message of messages) {
       doc.revise(
         message.patch,
@@ -589,9 +575,9 @@ export class Document extends EventEmitter {
   }
 
   public hiddenSeqAt(i: number): Subseq {
-    let hiddenSeq: Subseq = this.hiddenSeq;
+    let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
     for (const revision of this.revisions.slice(i + 1).reverse()) {
-      // TODO: does the ordering matter?
+      // TODO: does the ordering between reviveSeq and deleteSeq matter?
       hiddenSeq = union(hiddenSeq, revision.reviveSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
       hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
@@ -641,7 +627,7 @@ export class Document extends EventEmitter {
       // TODO: do we need to do something with revision.reviveSeq?
     }
 
-    let { visible, hidden, hiddenSeq } = this;
+    let { visible, hidden, hiddenSeq } = this.snapshot;
     if (count(deleteSeq, true) > 0) {
       const hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
@@ -681,9 +667,7 @@ export class Document extends EventEmitter {
       reviveSeq,
       intent,
     });
-    this.visible = visible;
-    this.hidden = hidden;
-    this.hiddenSeq = hiddenSeq;
+    this.snapshot = { visible, hidden, hiddenSeq };
     return {
       patch,
       intent,
@@ -733,13 +717,11 @@ export class Document extends EventEmitter {
       reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
       deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
     }
-    let { visible, hidden, hiddenSeq } = this;
+    let { visible, hidden, hiddenSeq } = this.snapshot;
     const patch = synthesize(hidden, reviveSeq, deleteSeq);
     const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
     [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-    this.visible = visible;
-    this.hidden = hidden;
-    this.hiddenSeq = hiddenSeq1;
+    this.snapshot = { visible, hidden, hiddenSeq };
     const message = {
       patch,
       intent: "undo",
@@ -755,9 +737,7 @@ export class Document extends EventEmitter {
   public clone(clientId: string): Document {
     return new Document(
       clientId,
-      this.visible,
-      this.hidden,
-      this.hiddenSeq.slice(),
+      Object.assign({}, this.snapshot),
       this.intents.slice(),
       this.revisions.clone(),
     );
