@@ -716,7 +716,7 @@ export class Document extends EventEmitter {
     const patch = synthesize(hidden, reviveSeq, deleteSeq);
     const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
     [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-    this.snapshot = { visible, hidden, hiddenSeq };
+    this.snapshot = { visible, hidden, hiddenSeq: hiddenSeq1 };
     const message = {
       patch,
       intent: "undo",
