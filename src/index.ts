@@ -117,12 +117,7 @@ export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
 
-export function expand(
-  subseq1: Subseq,
-  subseq2: Subseq,
-  options: { union?: boolean } = {},
-): Subseq {
-  const { union = false } = options;
+export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
   const result: Subseq = [];
   let length1: number | undefined;
   let flag1: boolean = !subseq1[0];
@@ -131,7 +126,7 @@ export function expand(
   for (let length2 of subseq2.slice(1)) {
     flag2 = !flag2;
     if (flag2) {
-      push(result, length2, union ? flag2 : false);
+      push(result, length2, false);
     } else {
       while (length2 > 0) {
         if (length1 == null || length1 === 0) {
