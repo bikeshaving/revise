@@ -278,25 +278,25 @@ describe("patch", () => {
 
   describe("factor", () => {
     it("factor 1", () => {
-      const [insertSeq, deleteSeq] = shredder.factor(p0);
+      const [, insertSeq, deleteSeq] = shredder.factor(p0);
       expect(insertSeq).to.deep.equal([0, 1, 3, 10]);
       expect(deleteSeq).to.deep.equal([0, 1, 8, 2]);
     });
 
     it("factor 2", () => {
-      const [insertSeq, deleteSeq] = shredder.factor(p1);
+      const [, insertSeq, deleteSeq] = shredder.factor(p1);
       expect(insertSeq).to.deep.equal([1, 2, 11]);
       expect(deleteSeq).to.deep.equal([1, 2, 3, 6]);
     });
 
     it("factor 3", () => {
-      const [insertSeq, deleteSeq] = shredder.factor(p2);
+      const [, insertSeq, deleteSeq] = shredder.factor(p2);
       expect(insertSeq).to.deep.equal([0, 4, 1, 1, 7, 6]);
       expect(deleteSeq).to.deep.equal([0, 5, 6]);
     });
 
     it("factor 4", () => {
-      const [insertSeq3, deleteSeq3] = shredder.factor(p3);
+      const [, insertSeq3, deleteSeq3] = shredder.factor(p3);
       expect(insertSeq3).to.deep.equal([0, 6, 5, 5]);
       expect(deleteSeq3).to.deep.equal([0, 6, 5]);
     });
@@ -317,7 +317,7 @@ describe("patch", () => {
     });
 
     it("complex", () => {
-      const [insertSeq, deleteSeq, inserted] = shredder.factor(p0);
+      const [inserted, insertSeq, deleteSeq] = shredder.factor(p0);
       const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
       const union = shredder.apply(
         text,
@@ -389,7 +389,7 @@ describe("Document", () => {
       });
     });
 
-    it("sequential", () => {
+    it("sequential 1", () => {
       const doc = Document.initialize(clientId, "hello world", intents);
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);

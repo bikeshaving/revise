@@ -260,7 +260,7 @@ export function apply(text: string, patch: Patch): string {
   return text1;
 }
 
-export function factor(patch: Patch): [Subseq, Subseq, string] {
+export function factor(patch: Patch): [string, Subseq, Subseq] {
   const insertSeq: Subseq = [];
   const deleteSeq: Subseq = [];
   const length = patch[patch.length - 1];
@@ -298,7 +298,7 @@ export function factor(patch: Patch): [Subseq, Subseq, string] {
     push(insertSeq, length - consumed, false);
     push(deleteSeq, length - consumed, true);
   }
-  return [insertSeq, deleteSeq, inserted];
+  return [inserted, insertSeq, deleteSeq];
 }
 
 export function synthesize(
@@ -382,7 +382,7 @@ export function revive(
   inserted: string,
   deleteSeq: Subseq,
   insertSeq: Subseq,
-): [Subseq, Subseq, string] {
+): [string, Subseq, Subseq] {
   let revivedDeleteSeq: Subseq = [];
   const revivedInsertSeq: Subseq = [];
   let inserted1 = "";
@@ -447,7 +447,7 @@ export function revive(
   }
   const reviveSeq = shrink(revivedDeleteSeq, revivedInsertSeq);
   insertSeq = shrink(insertSeq, revivedInsertSeq);
-  return [reviveSeq, insertSeq, inserted1];
+  return [inserted1, insertSeq, reviveSeq];
 }
 
 export interface Message {
@@ -598,7 +598,7 @@ export class Document extends EventEmitter {
 
     let oldHiddenSeq = this.hiddenSeqAt(pi);
     const [parentRevision, ...revisions] = this.revisions.slice(pi);
-    let [insertSeq, deleteSeq, inserted] = factor(patch);
+    let [inserted, insertSeq, deleteSeq] = factor(patch);
     insertSeq = interleave(insertSeq, oldHiddenSeq);
     deleteSeq = expand(deleteSeq, oldHiddenSeq);
 
@@ -631,7 +631,7 @@ export class Document extends EventEmitter {
 
     let reviveSeq: Subseq;
     if (inserted.length) {
-      [reviveSeq, insertSeq, inserted] = revive(
+      [inserted, insertSeq, reviveSeq] = revive(
         hidden,
         inserted,
         hiddenSeq,
@@ -696,8 +696,7 @@ export class Document extends EventEmitter {
       throw new Error("Cannot ingest initial message");
     }
     const pi = this.revisions.locate(parentClientId, parentVersion);
-    message = this.revise(patch, pi, clientId, intent, version);
-    return message;
+    return this.revise(patch, pi, clientId, intent, version);
   }
 
   public undo(i: number): Message {
