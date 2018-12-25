@@ -106,7 +106,7 @@ export function complement(subseq: Subseq): Subseq {
   if (!subseq.length) {
     return subseq;
   }
-  return [subseq[0] ? 0 : 1, ...subseq.slice(1)];
+  return [subseq[0] ? 0 : 1].concat(subseq.slice(1));
 }
 
 export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
