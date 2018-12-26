@@ -1,4 +1,4 @@
-import uuid from "uuid/v4";
+// import uuid from "uuid/v4";
 import EventEmitter from "events";
 
 // [flag, ...lengths]
@@ -60,7 +60,7 @@ class ZipIterator implements IterableIterator<ZipValue> {
       if (length1 || length2) {
         throw new Error("Length mismatch");
       }
-      return ({ done: true } as any) as IteratorResult<ZipValue>;
+      return { done: true } as IteratorResult<ZipValue>;
     }
     let length: number;
     if (length1 + this.consumed1 === length2 + this.consumed2) {
@@ -450,15 +450,6 @@ export function revive(
   return [inserted1, insertSeq, reviveSeq];
 }
 
-export interface Message {
-  patch: Patch;
-  clientId: string;
-  version: number;
-  parentClientId?: string;
-  parentVersion?: number;
-  intent?: string;
-}
-
 export interface Snapshot {
   visible: string;
   hidden: string;
@@ -467,62 +458,25 @@ export interface Snapshot {
 
 export interface Revision {
   clientId: string;
-  version: number;
   insertSeq: Subseq;
   deleteSeq: Subseq;
   reviveSeq: Subseq;
   intent?: string;
 }
 
-export interface RevisionLog {
-  slice(start?: number, end?: number): Revision[];
-  push(revision: Revision): number;
-  length: number;
-  locate(clientId: string, version: number): number;
-  clone(): RevisionLog;
-}
-
-export interface RevisionLogConstructor {
-  new (): RevisionLog;
-}
-
-export class ArrayRevisionLog implements RevisionLog {
-  public length: number;
-  public constructor(private revisions: Revision[] = []) {
-    this.length = revisions.length;
-  }
-
-  public locate(clientId: string, version: number) {
-    for (let i = this.revisions.length - 1; i >= 0; i--) {
-      const revision = this.revisions[i];
-      if (revision.clientId === clientId && revision.version === version) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  public slice(start?: number, end?: number): Revision[] {
-    return this.revisions.slice(start, end);
-  }
-
-  public push(revision: Revision): number {
-    this.length = this.revisions.push(revision);
-    return this.length;
-  }
-
-  public clone(): ArrayRevisionLog {
-    return new ArrayRevisionLog(this.revisions.slice());
-  }
+export interface Message {
+  patch: Patch;
+  clientId: string;
+  version: number;
+  intent?: string;
 }
 
 export class Document extends EventEmitter {
   private constructor(
     public clientId: string,
-    // TODO: group these fields in a snapshot
     public snapshot: Snapshot,
     public intents: string[],
-    public revisions: RevisionLog,
+    public revisions: Revision[],
   ) {
     super();
   }
@@ -531,42 +485,21 @@ export class Document extends EventEmitter {
     clientId: string,
     initial: string = "",
     intents: string[] = [],
-    RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
   ) {
-    const revisions = new RevisionLog();
-    revisions.push({
-      clientId,
-      version: 0,
-      insertSeq: initial.length ? [1, initial.length] : [],
-      deleteSeq: initial.length ? [0, initial.length] : [],
-      reviveSeq: initial.length ? [0, initial.length] : [],
-    });
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
       hiddenSeq: initial.length ? [0, initial.length] : [],
     };
+    const revisions: Revision[] = [
+      {
+        clientId,
+        insertSeq: initial.length ? [1, initial.length] : [],
+        deleteSeq: initial.length ? [0, initial.length] : [],
+        reviveSeq: initial.length ? [0, initial.length] : [],
+      },
+    ];
     return new Document(clientId, snapshot, intents, revisions);
-  }
-
-  public static fromMessages(
-    clientId: string,
-    messages: Message[],
-    snapshot: Snapshot = { visible: "", hidden: "", hiddenSeq: [] },
-    intents: string[] = [],
-    RevisionLog: RevisionLogConstructor = ArrayRevisionLog,
-  ) {
-    let doc = new Document(clientId, snapshot, intents, new RevisionLog());
-    for (const message of messages) {
-      doc.revise(
-        message.patch,
-        doc.revisions.length - 1,
-        message.clientId,
-        message.intent,
-        message.clientId === clientId ? undefined : message.version,
-      );
-    }
-    return doc;
   }
 
   public hiddenSeqAt(i: number): Subseq {
@@ -580,29 +513,24 @@ export class Document extends EventEmitter {
     return hiddenSeq;
   }
 
-  protected revise(
+  public edit(
     patch: Patch,
-    pi: number,
-    clientId: string = this.clientId,
     intent?: string,
-    version?: number,
-  ): Message {
-    if (clientId === this.clientId && version != null) {
-      throw new Error("Cannot specify version for local edit");
-    } else if (pi < 0 || pi > this.revisions.length - 1) {
+    pi: number = this.revisions.length - 1,
+  ): Patch {
+    if (pi < 0 || pi > this.revisions.length - 1) {
       throw new Error("Index out of range of revisions");
     }
-    version = version == null ? this.revisions.length : version;
+    const clientId = this.clientId;
     const ii = intent == null ? -1 : this.intents.indexOf(intent);
     intent = ii === -1 ? undefined : intent;
 
     let oldHiddenSeq = this.hiddenSeqAt(pi);
-    const [parentRevision, ...revisions] = this.revisions.slice(pi);
     let [inserted, insertSeq, deleteSeq] = factor(patch);
     insertSeq = interleave(insertSeq, oldHiddenSeq);
     deleteSeq = expand(deleteSeq, oldHiddenSeq);
 
-    for (const revision of revisions) {
+    for (const revision of this.revisions.slice(pi + 1)) {
       if (intent === revision.intent && clientId === revision.clientId) {
         throw new Error(
           "Cannot have concurrent edits with the same client and source",
@@ -619,7 +547,6 @@ export class Document extends EventEmitter {
       if (revision.deleteSeq != null) {
         deleteSeq = difference(deleteSeq, revision.deleteSeq);
       }
-      // TODO: do we need to do something with revision.reviveSeq?
     }
 
     let { visible, hidden, hiddenSeq } = this.snapshot;
@@ -654,56 +581,21 @@ export class Document extends EventEmitter {
       hiddenSeq = hiddenSeq1;
     }
 
+    this.snapshot = { visible, hidden, hiddenSeq };
     this.revisions.push({
       clientId,
-      version,
       insertSeq,
       deleteSeq,
       reviveSeq,
       intent,
     });
-    this.snapshot = { visible, hidden, hiddenSeq };
-    return {
-      patch,
-      intent,
-      clientId,
-      version,
-      parentClientId: parentRevision.clientId,
-      parentVersion: parentRevision.version,
-    };
+    return patch;
   }
 
-  public edit(
-    patch: Patch,
-    intent?: string,
-    pi: number = this.revisions.length - 1,
-  ): Message {
-    const message = this.revise(patch, pi, this.clientId, intent);
-    this.emit("message", message);
-    return message;
-  }
-
-  public ingest(message: Message): Message {
-    const {
-      patch,
-      clientId,
-      intent,
-      version,
-      parentClientId,
-      parentVersion,
-    } = message;
-    if (parentClientId == null || parentVersion == null) {
-      throw new Error("Cannot ingest initial message");
-    }
-    const pi = this.revisions.locate(parentClientId, parentVersion);
-    return this.revise(patch, pi, clientId, intent, version);
-  }
-
-  public undo(i: number): Message {
+  public undo(i: number): Patch {
     const [parentRevision, ...revisions] = this.revisions.slice(i);
     let reviveSeq = parentRevision.deleteSeq;
     let deleteSeq = union(parentRevision.insertSeq, parentRevision.reviveSeq);
-    // TODO: deduplicate this with revise loop?
     for (const revision of revisions) {
       const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
       reviveSeq = expand(reviveSeq, revision.insertSeq);
@@ -713,90 +605,20 @@ export class Document extends EventEmitter {
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
     const patch = synthesize(hidden, reviveSeq, deleteSeq);
-    const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
-    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-    this.snapshot = { visible, hidden, hiddenSeq: hiddenSeq1 };
-    const message = {
-      patch,
-      intent: "undo",
-      clientId: this.clientId,
-      version: this.revisions.length,
-      parentClientId: parentRevision.clientId,
-      parentVersion: parentRevision.version,
-    };
-    this.emit("message", message);
-    return message;
+    {
+      const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
+      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+      this.snapshot = { visible, hidden, hiddenSeq: hiddenSeq1 };
+    }
+    return patch;
   }
 
   public clone(clientId: string): Document {
     return new Document(
       clientId,
-      Object.assign({}, this.snapshot),
+      { ...this.snapshot },
       this.intents.slice(),
-      this.revisions.clone(),
+      this.revisions.slice(),
     );
-  }
-}
-
-export class LocalClient extends EventEmitter {
-  private documents: Record<string, Document> = {};
-  constructor(public id: string = uuid()) {
-    super();
-  }
-
-  async getSnapshot(
-    docId: string,
-    initial: string = "",
-  ): Promise<Snapshot | undefined> {
-    docId;
-    initial;
-    return;
-  }
-
-  async getMessages(
-    docId: string,
-    startId?: string,
-    endId?: string,
-    create?: Message,
-  ): Promise<Message[]> {
-    docId;
-    startId;
-    endId;
-    const messages: Message[] = [];
-    if (!messages.length && create) {
-      return [create];
-    }
-    return messages;
-  }
-
-  async getDocument(
-    docId: string,
-    initial: string = "",
-    intents?: string[],
-  ): Promise<Document> {
-    let doc: Document | undefined = this.documents[docId];
-    if (doc) {
-      return doc;
-    }
-    const snapshot: Snapshot = (await this.getSnapshot(docId, initial)) || {
-      visible: initial,
-      hidden: "",
-      hiddenSeq: initial.length ? [0, initial.length] : [],
-    };
-    const create: Message = {
-      patch: [initial],
-      clientId: this.id,
-      version: 0,
-    };
-    const messages = await this.getMessages(
-      docId,
-      undefined, // snapshot.id
-      undefined,
-      create,
-    );
-    doc = Document.fromMessages(this.id, messages, snapshot, intents);
-    this.documents[docId] = doc;
-    // TODO: listen for edits from the document
-    return doc;
   }
 }
