@@ -5,7 +5,7 @@ import { expect } from "chai";
 // testcheck.install();
 
 import * as shredder from "../src/index";
-import { Document } from "../src/index";
+import { Client, Document } from "../src/index";
 
 describe("subseq", () => {
   describe("count", () => {
@@ -351,14 +351,14 @@ describe("patch", () => {
 });
 
 describe("Document", () => {
-  const clientId = "id1";
-  const intents = ["concurrent"];
+  const client = new Client("id1");
+
   describe("Document.hiddenSeqAt", () => {
     it("concurrent revisions", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
-      doc.edit([0, 5, ", Dr. Evil", 11], "concurrent", 1);
+      doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
       expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
       expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
       expect(doc.hiddenSeqAt(2)).to.deep.equal([0, 1, 1, 11, 7]);
@@ -367,7 +367,7 @@ describe("Document", () => {
     });
 
     it("revisions with revives", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
       expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
@@ -379,9 +379,9 @@ describe("Document", () => {
 
   describe("Document.edit", () => {
     it("simple", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
-      expect(doc.revisions.length).to.equal(2);
+      expect(doc.revisions().length).to.equal(2);
       expect(doc.snapshot).to.deep.equal({
         visible: "herald",
         hidden: "ello wor",
@@ -390,47 +390,47 @@ describe("Document", () => {
     });
 
     it("sequential 1", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);
       expect(doc.snapshot.visible).to.equal("heraldry");
     });
 
     it("sequential 2", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       expect(doc.snapshot.visible).to.equal("Hello, Brian");
     });
 
     it("sequential 3", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
-      doc.edit(["goodbye ", 6, 11], "concurrent", 0);
+      doc.edit(["goodbye ", 6, 11], 1, 0);
       expect(doc.snapshot.visible).to.equal("goodbye hello world");
     });
 
     it("concurrent 1", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
-      doc.edit(["Great H", 2, 5, 11], "concurrent", 0);
+      doc.edit(["Great H", 2, 5, 11], 1, 0);
       expect(doc.snapshot.visible).to.equal("Great Hera");
     });
 
     it("concurrent 2", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
-      doc.edit([0, 5, ", Dr. Evil", 11], "concurrent", 1);
+      doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
       expect(doc.snapshot.visible).to.equal("Hello, Brian, Dr. Evil");
     });
 
     it("concurrent 3", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
-      doc.edit(["goodbye ", 6, 11], "concurrent", 0);
+      doc.edit(["goodbye ", 6, 11], 1, 0);
       expect(doc.snapshot).to.deep.equal({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -439,9 +439,9 @@ describe("Document", () => {
     });
 
     it("concurrent 4", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
-      doc.edit(["hey ", 0, 5], "concurrent");
+      doc.edit(["hey ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
       expect(doc.snapshot).to.deep.equal({
         visible: "goodbye hey world",
@@ -451,10 +451,10 @@ describe("Document", () => {
     });
 
     it("concurrent 5", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
-      doc.edit(["goodbye ", 6, 11], "concurrent", 0);
+      doc.edit(["goodbye ", 6, 11], 1, 0);
       expect(doc.snapshot).to.deep.equal({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -463,20 +463,20 @@ describe("Document", () => {
     });
 
     it("concurrent 6", () => {
-      const doc1 = Document.initialize(clientId, "hello world", intents);
+      const doc1 = Document.initialize(client, "hello world");
       //"hello world"
       // ===========++++
       doc1.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
       // ++++=====++++++======+
       //"why hello there worlds"
-      doc1.edit([0, 11, "star", 11], "concurrent", 0);
+      doc1.edit([0, 11, "star", 11], 1, 0);
       // ======================++++
       //"why hello there worldsstar"
       expect(doc1.snapshot.visible).to.equal("why hello there worldsstar");
     });
 
     it("revive 1", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5, "s", 5]);
       expect(doc.snapshot).to.deep.equal({
@@ -487,7 +487,7 @@ describe("Document", () => {
     });
 
     it("revive 2", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([11]);
       doc.edit(["hello ", 0]);
       doc.edit([0, 6, "worlds", 6]);
@@ -496,7 +496,7 @@ describe("Document", () => {
     });
 
     it("revive 3", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
       doc.edit(["hello ", 0, 5, "s", 5]);
@@ -505,7 +505,7 @@ describe("Document", () => {
     });
 
     it("revive 4", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 6, "waterw", 7, 11]);
       expect(doc.snapshot.visible).to.equal("Hello waterworld");
@@ -513,7 +513,7 @@ describe("Document", () => {
     });
 
     it("revive 5", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([0, 6, 11]);
       doc.edit([0, 3, "ium", 5, 6, "world", 6]);
       expect(doc.snapshot.visible).to.equal("helium world");
@@ -521,7 +521,7 @@ describe("Document", () => {
     });
 
     it("revive 6", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
       expect(doc.snapshot.visible).to.equal("world");
@@ -531,7 +531,7 @@ describe("Document", () => {
     });
 
     it("revive 7", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([6, 11]);
       doc.edit(["Hello ", 0, 5]);
@@ -540,7 +540,7 @@ describe("Document", () => {
     });
 
     it("revive 8", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
       doc.edit([0, 5, " World", 5]);
@@ -549,7 +549,7 @@ describe("Document", () => {
     });
 
     it("revive 10", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
       expect(doc.snapshot.visible).to.equal("hello world");
@@ -558,7 +558,7 @@ describe("Document", () => {
     });
 
     it("no revive 1", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["xxxxxx", 0, 5]);
       expect(doc.snapshot.visible).to.equal("xxxxxxworld");
@@ -566,7 +566,7 @@ describe("Document", () => {
     });
 
     it("no revive 2", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
       doc.edit([0, 5, " Wacky World", 5]);
@@ -575,27 +575,27 @@ describe("Document", () => {
     });
 
     it("revive concurrent 1", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
-      doc.edit([0, 6, "Brian", 11], "concurrent", 1);
+      doc.edit([0, 6, "Brian", 11], 1, 1);
       expect(doc.snapshot.visible).to.equal("hello Brianw");
       expect(doc.snapshot.hidden).to.equal("HWorld");
     });
 
     it("revive concurrent 2", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
-      doc.edit(["goodbye ", 0, 5], "concurrent", 1);
+      doc.edit(["goodbye ", 0, 5], 1, 1);
       expect(doc.snapshot.visible).to.equal("hello goodbye world");
       expect(doc.snapshot.hidden).to.equal("");
     });
 
     it("revive concurrent 3", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
-      doc.edit(["hello ", 0, 5], "concurrent");
+      doc.edit(["hello ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
       expect(doc.snapshot.visible).to.equal("hello goodbye world");
       expect(doc.snapshot.hidden).to.equal("");
@@ -604,7 +604,7 @@ describe("Document", () => {
 
   describe("Document.undo", () => {
     it("simple", () => {
-      const doc = Document.initialize(clientId, "hello world", intents);
+      const doc = Document.initialize(client, "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
       doc.undo(1);

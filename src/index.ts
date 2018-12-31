@@ -1,4 +1,3 @@
-// import uuid from "uuid/v4";
 import EventEmitter from "events";
 
 // [flag, ...lengths]
@@ -461,50 +460,49 @@ export interface Revision {
   insertSeq: Subseq;
   deleteSeq: Subseq;
   reviveSeq: Subseq;
-  intent?: string;
-}
-
-export interface Message {
-  patch: Patch;
-  clientId: string;
-  version: number;
-  intent?: string;
+  priority: number;
 }
 
 export class Document extends EventEmitter {
   private constructor(
-    public clientId: string,
+    public client: Client,
     public snapshot: Snapshot,
-    public intents: string[],
-    public revisions: Revision[],
+    public acceptedRevisions: Revision[],
+    public pendingRevisions: Revision[],
   ) {
     super();
+    // this.on("revision", console.log);
   }
 
   public static initialize(
-    clientId: string,
+    client: Client,
     initial: string = "",
-    intents: string[] = [],
   ) {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
       hiddenSeq: initial.length ? [0, initial.length] : [],
     };
-    const revisions: Revision[] = [
-      {
-        clientId,
-        insertSeq: initial.length ? [1, initial.length] : [],
-        deleteSeq: initial.length ? [0, initial.length] : [],
-        reviveSeq: initial.length ? [0, initial.length] : [],
-      },
-    ];
-    return new Document(clientId, snapshot, intents, revisions);
+    const revision: Revision = {
+      clientId: client.id,
+      insertSeq: initial.length ? [1, initial.length] : [],
+      deleteSeq: initial.length ? [0, initial.length] : [],
+      reviveSeq: initial.length ? [0, initial.length] : [],
+      priority: 0,
+    };
+    return new Document(client, snapshot, [], [revision]);
+  }
+
+  public revisions(): Revision[] {
+    return this.pendingRevisions.concat(this.acceptedRevisions);
   }
 
   public hiddenSeqAt(i: number): Subseq {
     let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
-    for (const revision of this.revisions.slice(i + 1).reverse()) {
+    const revisions = this.revisions()
+      .slice(i + 1)
+      .reverse();
+    for (const revision of revisions) {
       // TODO: does the ordering between reviveSeq and deleteSeq matter?
       hiddenSeq = union(hiddenSeq, revision.reviveSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
@@ -513,33 +511,30 @@ export class Document extends EventEmitter {
     return hiddenSeq;
   }
 
-  public edit(
-    patch: Patch,
-    intent?: string,
-    pi: number = this.revisions.length - 1,
-  ): Patch {
-    if (pi < 0 || pi > this.revisions.length - 1) {
+  public edit(patch: Patch, priority: number = 0, ri?: number): void {
+    const revisions = this.revisions();
+    const riMax = revisions.length - 1;
+    ri = ri == null ? riMax : ri;
+    if (ri < 0 || ri > riMax) {
       throw new Error("Index out of range of revisions");
     }
-    const clientId = this.clientId;
-    const ii = intent == null ? -1 : this.intents.indexOf(intent);
-    intent = ii === -1 ? undefined : intent;
+    const clientId = this.client.id;
 
-    let oldHiddenSeq = this.hiddenSeqAt(pi);
+    let oldHiddenSeq = this.hiddenSeqAt(ri);
     let [inserted, insertSeq, deleteSeq] = factor(patch);
     insertSeq = interleave(insertSeq, oldHiddenSeq);
     deleteSeq = expand(deleteSeq, oldHiddenSeq);
 
-    for (const revision of this.revisions.slice(pi + 1)) {
-      if (intent === revision.intent && clientId === revision.clientId) {
+    for (const revision of revisions.slice(ri + 1)) {
+      if (priority === revision.priority && clientId === revision.clientId) {
         throw new Error(
-          "Cannot have concurrent edits with the same client and source",
+          "Cannot have concurrent edits with the same client and priority",
         );
       }
-      const rii =
-        revision.intent == null ? -1 : this.intents.indexOf(revision.intent);
       const before =
-        intent === revision.intent ? clientId < revision.clientId : ii < rii;
+        priority === revision.priority
+          ? clientId < revision.clientId
+          : priority < revision.priority;
       if (revision.insertSeq != null) {
         insertSeq = interleave(insertSeq, revision.insertSeq, before);
         deleteSeq = expand(deleteSeq, revision.insertSeq);
@@ -582,20 +577,21 @@ export class Document extends EventEmitter {
     }
 
     this.snapshot = { visible, hidden, hiddenSeq };
-    this.revisions.push({
+    const revision: Revision = {
       clientId,
       insertSeq,
       deleteSeq,
       reviveSeq,
-      intent,
-    });
-    return patch;
+      priority,
+    };
+    this.pendingRevisions.push(revision);
+    this.emit("revision", revision);
   }
 
-  public undo(i: number): Patch {
-    const [parentRevision, ...revisions] = this.revisions.slice(i);
-    let reviveSeq = parentRevision.deleteSeq;
-    let deleteSeq = union(parentRevision.insertSeq, parentRevision.reviveSeq);
+  public undo(i: number) {
+    const [revision, ...revisions] = this.revisions().slice(i);
+    let reviveSeq = revision.deleteSeq;
+    let deleteSeq = union(revision.insertSeq, revision.reviveSeq);
     for (const revision of revisions) {
       const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
       reviveSeq = expand(reviveSeq, revision.insertSeq);
@@ -604,21 +600,35 @@ export class Document extends EventEmitter {
       deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
-    const patch = synthesize(hidden, reviveSeq, deleteSeq);
     {
       const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
       this.snapshot = { visible, hidden, hiddenSeq: hiddenSeq1 };
     }
-    return patch;
+    const revision1: Revision = {
+      clientId: this.client.id,
+      insertSeq: [0, count(reviveSeq)],
+      reviveSeq,
+      deleteSeq,
+      priority: 0,
+    };
+    this.pendingRevisions.push(revision1);
+    this.emit("revision", revision1);
   }
 
-  public clone(clientId: string): Document {
+  public clone(client: Client): Document {
     return new Document(
-      clientId,
+      client,
       { ...this.snapshot },
-      this.intents.slice(),
-      this.revisions.slice(),
+      this.acceptedRevisions.slice(),
+      this.pendingRevisions.slice(),
     );
+  }
+}
+
+import uuidV4 from "uuid/v4";
+export class Client extends EventEmitter {
+  public constructor(public id: string = uuidV4()) {
+    super();
   }
 }
