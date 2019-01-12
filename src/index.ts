@@ -187,13 +187,9 @@ export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
   return result;
 }
 
-// TODO: stop using boolean argument here
-export function interleave(
-  subseq1: Subseq,
-  subseq2: Subseq,
-  before?: boolean,
-): Subseq {
-  const result: Subseq = [];
+export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
+  const result1: Subseq = [];
+  const result2: Subseq = [];
   let flag1: boolean = !!subseq1[0];
   let flag2: boolean = !!subseq2[0];
   let length1: number | undefined;
@@ -202,28 +198,28 @@ export function interleave(
   [length2, ...subseq2] = subseq2.slice(1);
   while (length1 != null && length2 != null) {
     if (flag1 && flag2) {
-      if (before) {
-        push(result, length1, true);
-        push(result, length2, false);
-      } else {
-        push(result, length2, false);
-        push(result, length1, true);
-      }
+      push(result1, length1, true);
+      push(result1, length2, false);
+      push(result2, length2, false);
+      push(result2, length1, true);
       flag1 = !flag1;
       flag2 = !flag2;
       [length1, ...subseq1] = subseq1;
       [length2, ...subseq2] = subseq2;
     } else if (flag1) {
-      push(result, length1, true);
+      push(result1, length1, true);
+      push(result2, length1, true);
       flag1 = !flag1;
       [length1, ...subseq1] = subseq1;
     } else if (flag2) {
-      push(result, length2, false);
+      push(result1, length2, false);
+      push(result2, length2, false);
       flag2 = !flag2;
       [length2, ...subseq2] = subseq2;
     } else {
       const length = Math.min(length1, length2);
-      push(result, length, false);
+      push(result1, length, false);
+      push(result2, length, false);
       if (length1 - length > 0) {
         length1 = length1 - length;
       } else {
@@ -240,18 +236,20 @@ export function interleave(
   }
 
   if (length1 != null) {
-    push(result, length1, flag1);
+    push(result1, length1, flag1);
+    push(result2, length1, flag1);
     if (subseq1.length) {
       throw new Error("Length mismatch");
     }
   } else if (length2 != null) {
-    push(result, length2, false);
+    push(result1, length2, false);
+    push(result2, length2, false);
     if (subseq2.length) {
       throw new Error("Length mismatch");
     }
   }
 
-  return result;
+  return [result1, result2];
 }
 
 // TODO: explain patch format
@@ -627,7 +625,7 @@ export class Document extends EventEmitter {
     {
       const oldHiddenSeq = this.hiddenSeqAt(version);
       [inserted, insertSeq, deleteSeq] = factor(patch);
-      insertSeq = interleave(insertSeq, oldHiddenSeq);
+      [, insertSeq] = interleave(insertSeq, oldHiddenSeq);
       deleteSeq = expand(deleteSeq, oldHiddenSeq);
     }
 
@@ -648,7 +646,11 @@ export class Document extends EventEmitter {
         deleteSeq = difference(deleteSeq, revision.deleteSeq);
       }
       if (revision.insertSeq != null) {
-        insertSeq = interleave(insertSeq, revision.insertSeq, before);
+        if (before) {
+          [insertSeq] = interleave(insertSeq, revision.insertSeq);
+        } else {
+          [, insertSeq] = interleave(insertSeq, revision.insertSeq);
+        }
         deleteSeq = expand(deleteSeq, revision.insertSeq);
       }
     }
@@ -680,7 +682,7 @@ export class Document extends EventEmitter {
     }
     const [, revision1, snapshot] = this.apply("", {
       ...revision,
-      insertSeq: [0, count(reviveSeq)],
+      insertSeq: [0, count(deleteSeq)],
       deleteSeq,
       reviveSeq,
     });
@@ -705,7 +707,7 @@ export class Document extends EventEmitter {
     {
       const oldHiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
       [inserted, insertSeq, deleteSeq] = factor(message.patch);
-      insertSeq = interleave(insertSeq, oldHiddenSeq);
+      [, insertSeq] = interleave(insertSeq, oldHiddenSeq);
       deleteSeq = expand(deleteSeq, oldHiddenSeq);
     }
     for (const revision of this.revisions.slice(
@@ -729,7 +731,11 @@ export class Document extends EventEmitter {
           deleteSeq = difference(deleteSeq, revision.deleteSeq);
         }
         if (revision.insertSeq != null) {
-          insertSeq = interleave(insertSeq, revision.insertSeq, before);
+          if (before) {
+            [insertSeq] = interleave(insertSeq, revision.insertSeq);
+          } else {
+            [, insertSeq] = interleave(insertSeq, revision.insertSeq);
+          }
           deleteSeq = expand(deleteSeq, revision.insertSeq);
         }
       }
@@ -765,7 +771,11 @@ export class Document extends EventEmitter {
         reviveSeq = difference(reviveSeq, revision1.deleteSeq);
       }
       if (revision1.insertSeq != null) {
-        insertSeq = interleave(insertSeq, revision1.insertSeq, before);
+        if (before) {
+          [insertSeq] = interleave(insertSeq, revision1.insertSeq);
+        } else {
+          [, insertSeq] = interleave(insertSeq, revision1.insertSeq);
+        }
         deleteSeq = expand(deleteSeq, revision1.insertSeq);
         reviveSeq = expand(reviveSeq, revision1.insertSeq);
       }

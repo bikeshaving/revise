@@ -73,7 +73,7 @@ describe("subseq", () => {
     it("empty transform", () => {
       const s = [0, 1, 2, 7];
       const t = [0, 8];
-      expect(shredder.interleave(s, t)).to.deep.equal(s);
+      expect(shredder.interleave(s, t)).to.deep.equal([s, s]);
     });
 
     it("smaller transform", () => {
@@ -81,12 +81,11 @@ describe("subseq", () => {
       const s = [1, 3, 4, 1];
       // ***====
       const t = [1, 3, 4];
-      // ***+++====+
-      const result = [0, 3, 3, 4, 1];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
       // +++***====+
-      const result1 = [1, 3, 7, 1];
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
+      const result = [1, 3, 7, 1];
+      // ***+++====+
+      const result1 = [0, 3, 3, 4, 1];
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
     });
 
     it("same position", () => {
@@ -94,12 +93,11 @@ describe("subseq", () => {
       const s = [0, 2, 2, 4];
       // ==**  ====
       const t = [0, 2, 2, 4];
-      // ==**++====
-      const result = [0, 4, 2, 4];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
       // ==++**====
-      const result1 = [0, 2, 2, 6];
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
+      const result = [0, 2, 2, 6];
+      // ==**++====
+      const result1 = [0, 4, 2, 4];
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
     });
 
     it("same position different lengths", () => {
@@ -107,12 +105,11 @@ describe("subseq", () => {
       const s = [0, 2, 4, 2];
       // ==**    ==
       const t = [0, 2, 2, 2];
-      // ==**++++==
-      const result = [0, 4, 4, 2];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
       // ==++++**==
-      const result1 = [0, 2, 4, 4];
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
+      const result = [0, 2, 4, 4];
+      // ==**++++==
+      const result1 = [0, 4, 4, 2];
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
     });
 
     it("subseq before", () => {
@@ -122,8 +119,7 @@ describe("subseq", () => {
       const t = [0, 1, 4, 4];
       // +=****====
       const result = [1, 1, 9];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
     });
 
     it("subseq before overlapping", () => {
@@ -133,8 +129,7 @@ describe("subseq", () => {
       const t = [0, 1, 4, 3];
       // ++=****===
       const result = [1, 2, 8];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
     });
 
     it("subseq after", () => {
@@ -144,8 +139,7 @@ describe("subseq", () => {
       const t = [1, 1, 5];
       // *=++++====
       const result = [0, 2, 4, 4];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
     });
 
     it("subseq after overlapping 1", () => {
@@ -155,8 +149,7 @@ describe("subseq", () => {
       const t = [0, 2, 4, 2];
       // ==****==++
       const result = [0, 8, 2];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
     });
 
     it("subseq after overlapping 2", () => {
@@ -166,8 +159,7 @@ describe("subseq", () => {
       const t = [0, 1, 3, 4];
       // =***=++===
       const result = [0, 5, 2, 3];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
     });
 
     it("subseq after overlapping 3", () => {
@@ -177,8 +169,7 @@ describe("subseq", () => {
       const t = [1, 2, 4];
       // **=++++===
       const result = [0, 3, 4, 3];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result);
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
     });
 
     it("multiple segments", () => {
@@ -186,13 +177,11 @@ describe("subseq", () => {
       const s = [1, 1, 1, 2, 1, 1, 2];
       //  =*  = ==*
       const t = [0, 1, 1, 3, 1];
-      // +=*++=+==*
-      // +==++=+===
-      const result = [1, 1, 2, 2, 1, 1, 3];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
       // +=++*=+==*
-      const result1 = [1, 1, 1, 2, 2, 1, 3];
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
+      const result = [1, 1, 1, 2, 2, 1, 3];
+      // +=*++=+==*
+      const result1 = [1, 1, 2, 2, 1, 1, 3];
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
     });
 
     it("complex", () => {
@@ -200,12 +189,11 @@ describe("subseq", () => {
       const s = [0, 11, 4];
       // ****=====******======*
       const t = [1, 4, 5, 6, 6, 1];
-      // ****=====******======*++++
-      const result = [0, 22, 4];
-      expect(shredder.interleave(s, t)).to.deep.equal(result);
       // ****=====******======++++*
-      const result1 = [0, 21, 4, 1];
-      expect(shredder.interleave(s, t, true)).to.deep.equal(result1);
+      const result = [0, 21, 4, 1];
+      // ****=====******======*++++
+      const result1 = [0, 22, 4];
+      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
     });
   });
 });
