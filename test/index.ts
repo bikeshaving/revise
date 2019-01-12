@@ -351,10 +351,9 @@ describe("patch", () => {
 });
 
 describe("Document", () => {
-  const client = new Client("id1");
-
   describe("Document.hiddenSeqAt", () => {
     it("concurrent revisions", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -367,6 +366,7 @@ describe("Document", () => {
     });
 
     it("revisions with revives", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
@@ -377,11 +377,42 @@ describe("Document", () => {
     });
   });
 
+  describe("Document.snapshotAt", () => {
+    it("concurrent revisions", () => {
+      const client = new Client("id1");
+      const doc = Document.initialize(client, "hello world");
+      doc.edit(["H", 1, 6, "W", 7, 11]);
+      doc.edit([0, 5, ", Brian", 11]);
+      doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
+      expect(doc.snapshotAt(0)).to.deep.equal({
+        visible: "hello world",
+        hidden: "",
+        hiddenSeq: [0, 11],
+      });
+      expect(doc.snapshotAt(1)).to.deep.equal({
+        visible: "Hello World",
+        hidden: "hw",
+        hiddenSeq: [0, 1, 1, 6, 1, 4],
+      });
+      expect(doc.snapshotAt(2)).to.deep.equal({
+        visible: "Hello, Brian",
+        hidden: "h Wworld",
+        hiddenSeq: [0, 1, 1, 11, 7],
+      });
+      expect(doc.snapshotAt(3)).to.deep.equal({
+        visible: "Hello, Brian, Dr. Evil",
+        hidden: "h Wworld",
+        hiddenSeq: [0, 1, 1, 21, 7],
+      });
+      expect(doc.snapshotAt(3)).to.deep.equal(doc.snapshot);
+    });
+  });
+
   describe("Document.edit", () => {
     it("simple", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
-      expect(doc.revisions().length).to.equal(2);
       expect(doc.snapshot).to.deep.equal({
         visible: "herald",
         hidden: "ello wor",
@@ -390,6 +421,7 @@ describe("Document", () => {
     });
 
     it("sequential 1", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);
@@ -397,6 +429,7 @@ describe("Document", () => {
     });
 
     it("sequential 2", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -404,6 +437,7 @@ describe("Document", () => {
     });
 
     it("sequential 3", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
@@ -412,6 +446,7 @@ describe("Document", () => {
     });
 
     it("concurrent 1", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit(["Great H", 2, 5, 11], 1, 0);
@@ -419,6 +454,7 @@ describe("Document", () => {
     });
 
     it("concurrent 2", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -427,6 +463,7 @@ describe("Document", () => {
     });
 
     it("concurrent 3", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
@@ -439,6 +476,7 @@ describe("Document", () => {
     });
 
     it("concurrent 4", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5], 1);
@@ -451,6 +489,7 @@ describe("Document", () => {
     });
 
     it("concurrent 5", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
@@ -463,19 +502,21 @@ describe("Document", () => {
     });
 
     it("concurrent 6", () => {
-      const doc1 = Document.initialize(client, "hello world");
+      const client = new Client("id1");
+      const doc = Document.initialize(client, "hello world");
       //"hello world"
       // ===========++++
-      doc1.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
+      doc.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
       // ++++=====++++++======+
       //"why hello there worlds"
-      doc1.edit([0, 11, "star", 11], 1, 0);
+      doc.edit([0, 11, "star", 11], 1, 0);
       // ======================++++
       //"why hello there worldsstar"
-      expect(doc1.snapshot.visible).to.equal("why hello there worldsstar");
+      expect(doc.snapshot.visible).to.equal("why hello there worldsstar");
     });
 
     it("revive 1", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5, "s", 5]);
@@ -487,6 +528,7 @@ describe("Document", () => {
     });
 
     it("revive 2", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([11]);
       doc.edit(["hello ", 0]);
@@ -496,6 +538,7 @@ describe("Document", () => {
     });
 
     it("revive 3", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
@@ -505,6 +548,7 @@ describe("Document", () => {
     });
 
     it("revive 4", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 6, "waterw", 7, 11]);
@@ -513,6 +557,7 @@ describe("Document", () => {
     });
 
     it("revive 5", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([0, 6, 11]);
       doc.edit([0, 3, "ium", 5, 6, "world", 6]);
@@ -521,6 +566,7 @@ describe("Document", () => {
     });
 
     it("revive 6", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
@@ -531,6 +577,7 @@ describe("Document", () => {
     });
 
     it("revive 7", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([6, 11]);
@@ -540,6 +587,7 @@ describe("Document", () => {
     });
 
     it("revive 8", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
@@ -549,6 +597,7 @@ describe("Document", () => {
     });
 
     it("revive 10", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
@@ -558,6 +607,7 @@ describe("Document", () => {
     });
 
     it("no revive 1", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["xxxxxx", 0, 5]);
@@ -566,6 +616,7 @@ describe("Document", () => {
     });
 
     it("no revive 2", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
@@ -575,6 +626,7 @@ describe("Document", () => {
     });
 
     it("revive concurrent 1", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
@@ -584,6 +636,7 @@ describe("Document", () => {
     });
 
     it("revive concurrent 2", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
@@ -593,6 +646,7 @@ describe("Document", () => {
     });
 
     it("revive concurrent 3", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5], 1);
@@ -604,11 +658,69 @@ describe("Document", () => {
 
   describe("Document.undo", () => {
     it("simple", () => {
+      const client = new Client("id1");
       const doc = Document.initialize(client, "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
       doc.undo(1);
       expect(doc.snapshot.visible).to.equal("hello worlds");
+    });
+  });
+
+  describe("Document.ingest", () => {
+    it("simple", () => {
+      const client1 = new Client("id1");
+      const client2 = new Client("id2");
+      const doc1 = Document.initialize(client1, "hello world");
+      const doc2 = doc1.clone(client2);
+      doc1.edit(["goodbye", 5, 11]);
+      doc1.edit([0, 13, "s", 13]);
+      doc2.edit([0, 5, "_", 6, 11]);
+      doc1.ingest({
+        patch: doc2.patchAt(1),
+        clientId: doc2.client.id,
+        version: 1,
+        lastKnownVersion: 0,
+        priority: 0,
+      });
+      expect(doc1.snapshot).to.deep.equal({
+        visible: "goodbye_worlds",
+        hidden: "hello ",
+        hiddenSeq: [0, 7, 5, 1, 1, 6],
+      });
+      expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
+    });
+
+    it("revive", () => {
+      const client1 = new Client("id1");
+      const client2 = new Client("id2");
+      const doc1 = Document.initialize(client1, "hello world");
+      const doc2 = doc1.clone(client2);
+      doc1.edit(["goodbye", 5, 11]);
+      const message = {
+        patch: doc1.patchAt(1),
+        clientId: doc1.client.id,
+        version: 1,
+        lastKnownVersion: 0,
+        priority: 0,
+      };
+      doc1.ingest(message);
+      doc2.ingest(message);
+      doc2.edit([0, 7, "hello", 7, 13]);
+      doc1.edit([0, 13, "s", 13]);
+      doc1.ingest({
+        patch: doc2.patchAt(2),
+        clientId: doc2.client.id,
+        version: 2,
+        lastKnownVersion: 1,
+        priority: 0,
+      });
+      expect(doc1.snapshot).to.deep.equal({
+        visible: "goodbyehello worlds",
+        hidden: "",
+        hiddenSeq: [0, 19],
+      });
+      expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
     });
   });
 });

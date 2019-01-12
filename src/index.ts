@@ -3,6 +3,16 @@ import EventEmitter from "events";
 // [flag, ...lengths]
 export type Subseq = number[];
 
+export function print(subseq: Subseq): string {
+  let flag = !!subseq[0];
+  let result = "";
+  for (const length of subseq.slice(1)) {
+    result += flag ? "+".repeat(length) : "=".repeat(length);
+    flag = !flag;
+  }
+  return result;
+}
+
 export function push(subseq: Subseq, length: number, flag: boolean): number {
   if (length <= 0) {
     throw new Error("Cannot push empty segment");
@@ -35,6 +45,20 @@ export function count(subseq: Subseq, test?: boolean): number {
   for (const length of subseq.slice(1)) {
     if (test == null || test === flag) {
       result += length;
+    }
+    flag = !flag;
+  }
+  return result;
+}
+
+export function extract(seq: string, subseq: Subseq): string {
+  let consumed = 0;
+  let result = "";
+  let flag = !!subseq[0];
+  for (const length of subseq.slice(1)) {
+    consumed += length;
+    if (flag) {
+      result += seq.slice(consumed - length, consumed);
     }
     flag = !flag;
   }
@@ -116,7 +140,12 @@ export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
 
-export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
+export function expand(
+  subseq1: Subseq,
+  subseq2: Subseq,
+  options: { union?: boolean } = {},
+): Subseq {
+  const union = !!options.union;
   const result: Subseq = [];
   let length1: number | undefined;
   let flag1: boolean = !subseq1[0];
@@ -125,7 +154,7 @@ export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
   for (let length2 of subseq2.slice(1)) {
     flag2 = !flag2;
     if (flag2) {
-      push(result, length2, false);
+      push(result, length2, union);
     } else {
       while (length2 > 0) {
         if (length1 == null || length1 === 0) {
@@ -224,9 +253,8 @@ export function interleave(
   return result;
 }
 
-// inclusive start, exclusive end
-type Insert = string;
-export type Patch = (Insert | number)[];
+// TODO: explain patch format
+export type Patch = (string | number)[];
 
 export function apply(text: string, patch: Patch): string {
   const length = patch[patch.length - 1];
@@ -377,29 +405,29 @@ export function overlapping(
 }
 
 export function revive(
-  deleted: string,
+  hidden: string,
   inserted: string,
-  deleteSeq: Subseq,
+  hiddenSeq: Subseq,
   insertSeq: Subseq,
 ): [string, Subseq, Subseq] {
-  let revivedDeleteSeq: Subseq = [];
+  let revivedHiddenSeq: Subseq = [];
   const revivedInsertSeq: Subseq = [];
   let inserted1 = "";
   // TODO: use indexes rather than slicing deleted and inserted
-  let del: string | undefined;
+  let hid: string | undefined;
   let ins: string | undefined;
-  deleteSeq = expand(deleteSeq, insertSeq);
-  for (const [length, deleteFlag, insertFlag] of zip(deleteSeq, insertSeq)) {
-    if (deleteFlag && insertFlag) {
+  hiddenSeq = expand(hiddenSeq, insertSeq);
+  for (const [length, hiddenFlag, insertFlag] of zip(hiddenSeq, insertSeq)) {
+    if (hiddenFlag && insertFlag) {
       throw new Error("Deletes and inserts overlap");
-    } else if (deleteFlag) {
-      del = deleted.slice(0, length);
+    } else if (hiddenFlag) {
+      hid = hidden.slice(0, length);
       if (ins != null) {
-        const overlap = overlapping(del, ins);
+        const overlap = overlapping(hid, ins);
         if (overlap != null) {
-          revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
+          revivedHiddenSeq = concat(revivedHiddenSeq, overlap);
           push(revivedInsertSeq, ins.length, true);
-          del = undefined;
+          hid = undefined;
         } else {
           push(revivedInsertSeq, ins.length, false);
           inserted1 += ins;
@@ -407,45 +435,45 @@ export function revive(
       }
       push(revivedInsertSeq, length, false);
       ins = undefined;
-      deleted = deleted.slice(length);
+      hidden = hidden.slice(length);
     } else if (insertFlag) {
       ins = inserted.slice(0, length);
-      if (del != null) {
-        const overlap = overlapping(del, ins);
+      if (hid != null) {
+        const overlap = overlapping(hid, ins);
         if (overlap != null) {
-          revivedDeleteSeq = concat(revivedDeleteSeq, overlap);
+          revivedHiddenSeq = concat(revivedHiddenSeq, overlap);
           push(revivedInsertSeq, ins.length, true);
           ins = undefined;
         } else {
-          push(revivedDeleteSeq, del.length, false);
+          push(revivedHiddenSeq, hid.length, false);
         }
       }
-      push(revivedDeleteSeq, length, false);
-      del = undefined;
+      push(revivedHiddenSeq, length, false);
+      hid = undefined;
       inserted = inserted.slice(length);
     } else {
-      if (del != null) {
-        push(revivedDeleteSeq, del.length, false);
+      if (hid != null) {
+        push(revivedHiddenSeq, hid.length, false);
       }
       if (ins != null) {
         push(revivedInsertSeq, ins.length, false);
         inserted1 += ins;
       }
-      push(revivedDeleteSeq, length, false);
+      push(revivedHiddenSeq, length, false);
       push(revivedInsertSeq, length, false);
-      del = undefined;
+      hid = undefined;
       ins = undefined;
     }
   }
-  if (del != null) {
-    push(revivedDeleteSeq, del.length, false);
+  if (hid != null) {
+    push(revivedHiddenSeq, hid.length, false);
   }
   if (ins != null) {
     push(revivedInsertSeq, ins.length, false);
     inserted1 += ins;
   }
-  const reviveSeq = shrink(revivedDeleteSeq, revivedInsertSeq);
   insertSeq = shrink(insertSeq, revivedInsertSeq);
+  const reviveSeq = shrink(revivedHiddenSeq, revivedInsertSeq);
   return [inserted1, insertSeq, reviveSeq];
 }
 
@@ -453,6 +481,14 @@ export interface Snapshot {
   visible: string;
   hidden: string;
   hiddenSeq: Subseq;
+}
+
+export interface ServerMessage {
+  patch: Patch;
+  clientId: string;
+  priority: number;
+  version: number;
+  lastKnownVersion: number;
 }
 
 export interface Revision {
@@ -464,20 +500,17 @@ export interface Revision {
 }
 
 export class Document extends EventEmitter {
-  private constructor(
+  protected constructor(
     public client: Client,
     public snapshot: Snapshot,
-    public acceptedRevisions: Revision[],
-    public pendingRevisions: Revision[],
+    protected revisions: Revision[],
+    protected lastKnownVersion = 0,
   ) {
     super();
     // this.on("revision", console.log);
   }
 
-  public static initialize(
-    client: Client,
-    initial: string = "",
-  ) {
+  public static initialize(client: Client, initial: string = "") {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
@@ -490,18 +523,12 @@ export class Document extends EventEmitter {
       reviveSeq: initial.length ? [0, initial.length] : [],
       priority: 0,
     };
-    return new Document(client, snapshot, [], [revision]);
+    return new Document(client, snapshot, [revision]);
   }
 
-  public revisions(): Revision[] {
-    return this.pendingRevisions.concat(this.acceptedRevisions);
-  }
-
-  public hiddenSeqAt(i: number): Subseq {
+  public hiddenSeqAt(version: number): Subseq {
     let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
-    const revisions = this.revisions()
-      .slice(i + 1)
-      .reverse();
+    const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
       // TODO: does the ordering between reviveSeq and deleteSeq matter?
       hiddenSeq = union(hiddenSeq, revision.reviveSeq);
@@ -511,30 +538,110 @@ export class Document extends EventEmitter {
     return hiddenSeq;
   }
 
-  public edit(patch: Patch, priority: number = 0, ri?: number): void {
-    const revisions = this.revisions();
-    const riMax = revisions.length - 1;
-    ri = ri == null ? riMax : ri;
-    if (ri < 0 || ri > riMax) {
+  public snapshotAt(version: number): Snapshot {
+    const hiddenSeq: Subseq = this.hiddenSeqAt(version);
+    let insertSeq: Subseq = [0, count(hiddenSeq)];
+    for (const revision of this.revisions.slice(version + 1)) {
+      insertSeq = expand(insertSeq, revision.insertSeq, { union: true });
+    }
+    let { visible, hidden, hiddenSeq: newHiddenSeq } = this.snapshot;
+    const expandedHiddenSeq = expand(hiddenSeq, insertSeq);
+    visible = apply(
+      visible,
+      synthesize(hidden, newHiddenSeq, union(expandedHiddenSeq, insertSeq)),
+    );
+    hidden = apply(
+      hidden,
+      synthesize("", complement(newHiddenSeq), complement(expandedHiddenSeq)),
+    );
+    return { visible, hidden, hiddenSeq };
+  }
+
+  public patchAt(version: number): Patch {
+    const revision = this.revisions[version];
+    const snapshot = this.snapshotAt(version);
+    const insertSeq = union(revision.insertSeq, revision.reviveSeq);
+    return synthesize(
+      extract(snapshot.visible, insertSeq),
+      insertSeq,
+      revision.deleteSeq,
+    );
+  }
+
+  public clone(client: Client = this.client): Document {
+    return new Document(client, { ...this.snapshot }, this.revisions.slice());
+  }
+
+  public apply(
+    inserted: string,
+    revision: Revision,
+    snapshot: Snapshot = this.snapshot,
+  ): [string, Revision, Snapshot] {
+    let { insertSeq, deleteSeq, reviveSeq } = revision;
+    let { visible, hidden, hiddenSeq } = snapshot;
+    deleteSeq = shrink(deleteSeq, insertSeq);
+    reviveSeq = shrink(reviveSeq, insertSeq);
+    if (count(deleteSeq, true) > 0) {
+      const hiddenSeq1 = union(hiddenSeq, deleteSeq);
+      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+      hiddenSeq = hiddenSeq1;
+    }
+
+    if (inserted.length) {
+      let reviveSeq1: Subseq;
+      [inserted, insertSeq, reviveSeq1] = revive(
+        hidden,
+        inserted,
+        hiddenSeq,
+        insertSeq,
+      );
+      deleteSeq = expand(deleteSeq, insertSeq);
+      reviveSeq = union(expand(reviveSeq, insertSeq), reviveSeq1);
+      hiddenSeq = expand(hiddenSeq, insertSeq);
+      const insertSeq1 = shrink(insertSeq, hiddenSeq);
+      visible = apply(visible, synthesize(inserted, insertSeq1));
+    }
+
+    if (count(reviveSeq, true) > 0) {
+      const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
+      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+      hiddenSeq = hiddenSeq1;
+    }
+
+    revision = { ...revision, insertSeq, deleteSeq, reviveSeq };
+    snapshot = { visible, hidden, hiddenSeq };
+    return [inserted, revision, snapshot];
+  }
+
+  public edit(
+    patch: Patch,
+    priority: number = 0,
+    version: number = this.revisions.length - 1,
+  ): void {
+    if (version < 0 || version > this.revisions.length - 1) {
       throw new Error("Index out of range of revisions");
     }
-    const clientId = this.client.id;
+    let inserted: string, insertSeq: Subseq, deleteSeq: Subseq;
+    {
+      const oldHiddenSeq = this.hiddenSeqAt(version);
+      [inserted, insertSeq, deleteSeq] = factor(patch);
+      insertSeq = interleave(insertSeq, oldHiddenSeq);
+      deleteSeq = expand(deleteSeq, oldHiddenSeq);
+    }
 
-    let oldHiddenSeq = this.hiddenSeqAt(ri);
-    let [inserted, insertSeq, deleteSeq] = factor(patch);
-    insertSeq = interleave(insertSeq, oldHiddenSeq);
-    deleteSeq = expand(deleteSeq, oldHiddenSeq);
-
-    for (const revision of revisions.slice(ri + 1)) {
-      if (priority === revision.priority && clientId === revision.clientId) {
+    for (const revision of this.revisions.slice(version + 1)) {
+      if (
+        priority === revision.priority &&
+        this.client.id === revision.clientId
+      ) {
         throw new Error(
           "Cannot have concurrent edits with the same client and priority",
         );
       }
       const before =
-        priority === revision.priority
-          ? clientId < revision.clientId
-          : priority < revision.priority;
+        priority !== revision.priority
+          ? priority < revision.priority
+          : this.client.id < revision.clientId;
       if (revision.insertSeq != null) {
         insertSeq = interleave(insertSeq, revision.insertSeq, before);
         deleteSeq = expand(deleteSeq, revision.insertSeq);
@@ -544,52 +651,21 @@ export class Document extends EventEmitter {
       }
     }
 
-    let { visible, hidden, hiddenSeq } = this.snapshot;
-    if (count(deleteSeq, true) > 0) {
-      const hiddenSeq1 = union(hiddenSeq, deleteSeq);
-      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-      hiddenSeq = hiddenSeq1;
-    }
-
-    let reviveSeq: Subseq;
-    if (inserted.length) {
-      [inserted, insertSeq, reviveSeq] = revive(
-        hidden,
-        inserted,
-        hiddenSeq,
-        insertSeq,
-      );
-    } else {
-      reviveSeq = [0, count(insertSeq)];
-    }
-
-    if (inserted.length) {
-      deleteSeq = expand(deleteSeq, insertSeq);
-      hiddenSeq = expand(hiddenSeq, insertSeq);
-      const visibleInsertSeq = shrink(insertSeq, hiddenSeq);
-      visible = apply(visible, synthesize(inserted, visibleInsertSeq));
-    }
-
-    if (count(reviveSeq, true) > 0) {
-      const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
-      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-      hiddenSeq = hiddenSeq1;
-    }
-
-    this.snapshot = { visible, hidden, hiddenSeq };
-    const revision: Revision = {
-      clientId,
+    let revision: Revision = {
       insertSeq,
-      deleteSeq,
-      reviveSeq,
+      deleteSeq: expand(deleteSeq, insertSeq),
+      reviveSeq: [0, count(insertSeq)],
       priority,
+      clientId: this.client.id,
     };
-    this.pendingRevisions.push(revision);
-    this.emit("revision", revision);
+    let snapshot: Snapshot;
+    [, revision, snapshot] = this.apply(inserted, revision);
+    this.revisions.push(revision);
+    this.snapshot = snapshot;
   }
 
-  public undo(i: number) {
-    const [revision, ...revisions] = this.revisions().slice(i);
+  public undo(i: number): void {
+    const [revision, ...revisions] = this.revisions.slice(i);
     let reviveSeq = revision.deleteSeq;
     let deleteSeq = union(revision.insertSeq, revision.reviveSeq);
     for (const revision of revisions) {
@@ -599,30 +675,108 @@ export class Document extends EventEmitter {
       reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
       deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
     }
-    let { visible, hidden, hiddenSeq } = this.snapshot;
-    {
-      const hiddenSeq1 = union(difference(hiddenSeq, reviveSeq), deleteSeq);
-      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-      this.snapshot = { visible, hidden, hiddenSeq: hiddenSeq1 };
-    }
-    const revision1: Revision = {
-      clientId: this.client.id,
+    const [, revision1, snapshot] = this.apply("", {
+      ...revision,
       insertSeq: [0, count(reviveSeq)],
-      reviveSeq,
       deleteSeq,
-      priority: 0,
-    };
-    this.pendingRevisions.push(revision1);
-    this.emit("revision", revision1);
+      reviveSeq,
+    });
+    this.snapshot = snapshot;
+    this.revisions.push(revision1);
   }
 
-  public clone(client: Client): Document {
-    return new Document(
-      client,
-      { ...this.snapshot },
-      this.acceptedRevisions.slice(),
-      this.pendingRevisions.slice(),
-    );
+  public ingest(message: ServerMessage): void {
+    if (
+      this.lastKnownVersion + 1 !== message.version ||
+      this.lastKnownVersion < message.lastKnownVersion
+    ) {
+      // TODO: attempt repair
+      throw new Error("Causality violation");
+    } else if (message.clientId === this.client.id) {
+      this.lastKnownVersion = message.version;
+      return;
+    }
+    let inserted: string, insertSeq: Subseq, deleteSeq: Subseq;
+    {
+      const oldHiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
+      [inserted, insertSeq, deleteSeq] = factor(message.patch);
+      insertSeq = interleave(insertSeq, oldHiddenSeq);
+      deleteSeq = expand(deleteSeq, oldHiddenSeq);
+    }
+    for (const revision of this.revisions.slice(
+      message.lastKnownVersion,
+      this.lastKnownVersion,
+    )) {
+      if (
+        message.priority === revision.priority &&
+        message.clientId === revision.clientId
+      ) {
+        throw new Error(
+          "Cannot have concurrent edits with the same client and priority",
+        );
+      }
+      if (message.clientId !== revision.clientId) {
+        const before =
+          message.priority !== revision.priority
+            ? message.priority < revision.priority
+            : message.clientId < revision.clientId;
+        if (revision.insertSeq != null) {
+          insertSeq = interleave(insertSeq, revision.insertSeq, before);
+          deleteSeq = expand(deleteSeq, revision.insertSeq);
+        }
+        if (revision.deleteSeq != null) {
+          deleteSeq = difference(deleteSeq, revision.deleteSeq);
+        }
+      }
+    }
+    let revision: Revision = {
+      insertSeq,
+      deleteSeq: expand(deleteSeq, insertSeq),
+      reviveSeq: [0, count(insertSeq)],
+      clientId: message.clientId,
+      priority: message.priority,
+    };
+    let snapshot: Snapshot = this.snapshotAt(this.lastKnownVersion);
+    [inserted, revision] = this.apply(inserted, revision, snapshot);
+    this.revisions.splice(this.lastKnownVersion + 1, 0, revision);
+    insertSeq = revision.insertSeq;
+    deleteSeq = shrink(revision.deleteSeq, revision.insertSeq);
+    let reviveSeq: Subseq = shrink(revision.reviveSeq, revision.insertSeq);
+    for (const revision1 of this.revisions.slice(this.lastKnownVersion + 2)) {
+      if (
+        message.priority === revision1.priority &&
+        message.clientId === revision1.clientId
+      ) {
+        throw new Error(
+          "Cannot have concurrent edits with the same client and priority",
+        );
+      }
+      const before =
+        message.priority !== revision1.priority
+          ? message.priority < revision1.priority
+          : message.clientId < revision1.clientId;
+      if (revision1.insertSeq != null) {
+        insertSeq = interleave(insertSeq, revision1.insertSeq, before);
+        deleteSeq = expand(deleteSeq, revision1.insertSeq);
+        reviveSeq = expand(reviveSeq, revision1.insertSeq);
+      }
+      if (revision1.deleteSeq != null) {
+        deleteSeq = difference(deleteSeq, revision1.deleteSeq);
+        reviveSeq = difference(reviveSeq, revision1.deleteSeq);
+      }
+      revision1.insertSeq = expand(revision1.insertSeq, insertSeq);
+      revision1.deleteSeq = expand(revision1.deleteSeq, insertSeq);
+      revision1.reviveSeq = expand(revision1.reviveSeq, insertSeq);
+    }
+    revision = {
+      ...revision,
+      insertSeq,
+      deleteSeq: expand(deleteSeq, insertSeq),
+      reviveSeq: expand(reviveSeq, insertSeq),
+    };
+    [, , snapshot] = this.apply(inserted, revision);
+    this.snapshot = snapshot;
+    this.lastKnownVersion = message.version;
   }
 }
 
