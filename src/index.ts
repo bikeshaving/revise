@@ -187,6 +187,7 @@ export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
   return result;
 }
 
+// TODO: stop using boolean argument here
 export function interleave(
   subseq1: Subseq,
   subseq2: Subseq,
@@ -472,8 +473,8 @@ export function revive(
     push(revivedInsertSeq, ins.length, false);
     inserted1 += ins;
   }
+  const reviveSeq = shrink(revivedHiddenSeq, insertSeq);
   insertSeq = shrink(insertSeq, revivedInsertSeq);
-  const reviveSeq = shrink(revivedHiddenSeq, revivedInsertSeq);
   return [inserted1, insertSeq, reviveSeq];
 }
 
@@ -531,9 +532,9 @@ export class Document extends EventEmitter {
     const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
       // TODO: does the ordering between reviveSeq and deleteSeq matter?
+      hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
       hiddenSeq = union(hiddenSeq, revision.reviveSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
-      hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
     }
     return hiddenSeq;
   }
@@ -558,13 +559,15 @@ export class Document extends EventEmitter {
   }
 
   public patchAt(version: number): Patch {
-    const revision = this.revisions[version];
-    const snapshot = this.snapshotAt(version);
-    const insertSeq = union(revision.insertSeq, revision.reviveSeq);
+    const revision: Revision = this.revisions[version];
+    const snapshot: Snapshot = this.snapshotAt(version);
+    const insertSeq: Subseq = expand(revision.reviveSeq, revision.insertSeq, {
+      union: true,
+    });
     return synthesize(
       extract(snapshot.visible, insertSeq),
       insertSeq,
-      revision.deleteSeq,
+      expand(revision.deleteSeq, revision.insertSeq),
     );
   }
 
@@ -579,8 +582,6 @@ export class Document extends EventEmitter {
   ): [string, Revision, Snapshot] {
     let { insertSeq, deleteSeq, reviveSeq } = revision;
     let { visible, hidden, hiddenSeq } = snapshot;
-    deleteSeq = shrink(deleteSeq, insertSeq);
-    reviveSeq = shrink(reviveSeq, insertSeq);
     if (count(deleteSeq, true) > 0) {
       const hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
@@ -595,15 +596,14 @@ export class Document extends EventEmitter {
         hiddenSeq,
         insertSeq,
       );
-      deleteSeq = expand(deleteSeq, insertSeq);
-      reviveSeq = union(expand(reviveSeq, insertSeq), reviveSeq1);
+      reviveSeq = union(reviveSeq, reviveSeq1);
       hiddenSeq = expand(hiddenSeq, insertSeq);
       const insertSeq1 = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, insertSeq1));
     }
 
     if (count(reviveSeq, true) > 0) {
-      const hiddenSeq1 = difference(hiddenSeq, reviveSeq);
+      const hiddenSeq1 = difference(hiddenSeq, expand(reviveSeq, insertSeq));
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
@@ -621,7 +621,9 @@ export class Document extends EventEmitter {
     if (version < 0 || version > this.revisions.length - 1) {
       throw new Error("Index out of range of revisions");
     }
-    let inserted: string, insertSeq: Subseq, deleteSeq: Subseq;
+    let inserted: string;
+    let insertSeq: Subseq;
+    let deleteSeq: Subseq;
     {
       const oldHiddenSeq = this.hiddenSeqAt(version);
       [inserted, insertSeq, deleteSeq] = factor(patch);
@@ -642,19 +644,18 @@ export class Document extends EventEmitter {
         priority !== revision.priority
           ? priority < revision.priority
           : this.client.id < revision.clientId;
+      if (revision.deleteSeq != null) {
+        deleteSeq = difference(deleteSeq, revision.deleteSeq);
+      }
       if (revision.insertSeq != null) {
         insertSeq = interleave(insertSeq, revision.insertSeq, before);
         deleteSeq = expand(deleteSeq, revision.insertSeq);
       }
-      if (revision.deleteSeq != null) {
-        deleteSeq = difference(deleteSeq, revision.deleteSeq);
-      }
     }
-
     let revision: Revision = {
       insertSeq,
-      deleteSeq: expand(deleteSeq, insertSeq),
-      reviveSeq: [0, count(insertSeq)],
+      deleteSeq,
+      reviveSeq: [0, count(deleteSeq)],
       priority,
       clientId: this.client.id,
     };
@@ -666,14 +667,16 @@ export class Document extends EventEmitter {
 
   public undo(i: number): void {
     const [revision, ...revisions] = this.revisions.slice(i);
-    let reviveSeq = revision.deleteSeq;
-    let deleteSeq = union(revision.insertSeq, revision.reviveSeq);
+    let reviveSeq = expand(revision.deleteSeq, revision.insertSeq);
+    let deleteSeq = expand(revision.reviveSeq, revision.insertSeq, {
+      union: true,
+    });
     for (const revision of revisions) {
       const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
-      reviveSeq = expand(reviveSeq, revision.insertSeq);
-      deleteSeq = expand(deleteSeq, revision.insertSeq);
       reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
       deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
+      reviveSeq = expand(reviveSeq, revision.insertSeq);
+      deleteSeq = expand(deleteSeq, revision.insertSeq);
     }
     const [, revision1, snapshot] = this.apply("", {
       ...revision,
@@ -696,7 +699,9 @@ export class Document extends EventEmitter {
       this.lastKnownVersion = message.version;
       return;
     }
-    let inserted: string, insertSeq: Subseq, deleteSeq: Subseq;
+    let inserted: string;
+    let insertSeq: Subseq;
+    let deleteSeq: Subseq;
     {
       const oldHiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
       [inserted, insertSeq, deleteSeq] = factor(message.patch);
@@ -720,19 +725,19 @@ export class Document extends EventEmitter {
           message.priority !== revision.priority
             ? message.priority < revision.priority
             : message.clientId < revision.clientId;
+        if (revision.deleteSeq != null) {
+          deleteSeq = difference(deleteSeq, revision.deleteSeq);
+        }
         if (revision.insertSeq != null) {
           insertSeq = interleave(insertSeq, revision.insertSeq, before);
           deleteSeq = expand(deleteSeq, revision.insertSeq);
-        }
-        if (revision.deleteSeq != null) {
-          deleteSeq = difference(deleteSeq, revision.deleteSeq);
         }
       }
     }
     let revision: Revision = {
       insertSeq,
-      deleteSeq: expand(deleteSeq, insertSeq),
-      reviveSeq: [0, count(insertSeq)],
+      deleteSeq,
+      reviveSeq: [0, count(deleteSeq)],
       clientId: message.clientId,
       priority: message.priority,
     };
@@ -740,8 +745,8 @@ export class Document extends EventEmitter {
     [inserted, revision] = this.apply(inserted, revision, snapshot);
     this.revisions.splice(this.lastKnownVersion + 1, 0, revision);
     insertSeq = revision.insertSeq;
-    deleteSeq = shrink(revision.deleteSeq, revision.insertSeq);
-    let reviveSeq: Subseq = shrink(revision.reviveSeq, revision.insertSeq);
+    deleteSeq = revision.deleteSeq;
+    let reviveSeq: Subseq = revision.reviveSeq;
     for (const revision1 of this.revisions.slice(this.lastKnownVersion + 2)) {
       if (
         message.priority === revision1.priority &&
@@ -755,25 +760,21 @@ export class Document extends EventEmitter {
         message.priority !== revision1.priority
           ? message.priority < revision1.priority
           : message.clientId < revision1.clientId;
+      if (revision1.deleteSeq != null) {
+        deleteSeq = difference(deleteSeq, revision1.deleteSeq);
+        reviveSeq = difference(reviveSeq, revision1.deleteSeq);
+      }
       if (revision1.insertSeq != null) {
         insertSeq = interleave(insertSeq, revision1.insertSeq, before);
         deleteSeq = expand(deleteSeq, revision1.insertSeq);
         reviveSeq = expand(reviveSeq, revision1.insertSeq);
       }
-      if (revision1.deleteSeq != null) {
-        deleteSeq = difference(deleteSeq, revision1.deleteSeq);
-        reviveSeq = difference(reviveSeq, revision1.deleteSeq);
-      }
       revision1.insertSeq = expand(revision1.insertSeq, insertSeq);
-      revision1.deleteSeq = expand(revision1.deleteSeq, insertSeq);
-      revision1.reviveSeq = expand(revision1.reviveSeq, insertSeq);
+      const insertSeq1 = shrink(insertSeq, revision1.insertSeq);
+      revision1.deleteSeq = expand(revision1.deleteSeq, insertSeq1);
+      revision1.reviveSeq = expand(revision1.reviveSeq, insertSeq1);
     }
-    revision = {
-      ...revision,
-      insertSeq,
-      deleteSeq: expand(deleteSeq, insertSeq),
-      reviveSeq: expand(reviveSeq, insertSeq),
-    };
+    revision = { ...revision, insertSeq, deleteSeq, reviveSeq };
     [, , snapshot] = this.apply(inserted, revision);
     this.snapshot = snapshot;
     this.lastKnownVersion = message.version;
