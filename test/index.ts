@@ -685,30 +685,55 @@ describe("Document", () => {
       const doc1 = Document.initialize(client1, "hello world");
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const message = {
+      const message1 = {
         patch: doc1.patchAt(1),
         clientId: doc1.client.id,
         version: 1,
         lastKnownVersion: 0,
         priority: 0,
       };
-      doc1.ingest(message);
-      doc2.ingest(message);
+      doc1.ingest(message1);
+      doc2.ingest(message1);
       doc2.edit([0, 7, "hello", 7, 13]);
       doc1.edit([0, 13, "s", 13]);
-      doc1.ingest({
+      const message2 = {
         patch: doc2.patchAt(2),
         clientId: doc2.client.id,
         version: 2,
         lastKnownVersion: 1,
         priority: 0,
-      });
+      };
+      doc1.ingest(message2);
       expect(doc1.snapshot).to.deep.equal({
         visible: "goodbyehello worlds",
         hidden: "",
         hiddenSeq: [0, 19],
       });
       expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
+    });
+
+    it("idempotent", () => {
+      const client1 = new Client("id1");
+      const client2 = new Client("id2");
+      const doc1 = Document.initialize(client1, "hello world");
+      const doc2 = doc1.clone(client2);
+      doc1.edit(["goodbye", 5, 11]);
+      const message1 = {
+        patch: doc1.patchAt(1),
+        clientId: doc1.client.id,
+        version: 1,
+        lastKnownVersion: 0,
+        priority: 0,
+      };
+      doc2.ingest(message1);
+      doc2.ingest(message1);
+      doc2.ingest(message1);
+      expect(doc2.snapshot).to.deep.equal({
+        visible: "goodbye world",
+        hidden: "hello",
+        hiddenSeq: [0, 7, 5, 6],
+      });
+      expect(doc2.snapshot).to.deep.equal(doc1.snapshot);
     });
   });
 });

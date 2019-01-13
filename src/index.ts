@@ -482,7 +482,7 @@ export interface Snapshot {
   hiddenSeq: Subseq;
 }
 
-export interface ServerMessage {
+export interface Message {
   patch: Patch;
   clientId: string;
   priority: number;
@@ -690,13 +690,15 @@ export class Document extends EventEmitter {
     this.revisions.push(revision1);
   }
 
-  public ingest(message: ServerMessage): void {
+  public ingest(message: Message): void {
     if (
-      this.lastKnownVersion + 1 !== message.version ||
+      this.lastKnownVersion + 1 < message.version ||
       this.lastKnownVersion < message.lastKnownVersion
     ) {
       // TODO: attempt repair
       throw new Error("Causality violation");
+    } else if (message.version <= this.lastKnownVersion) {
+      return;
     } else if (message.clientId === this.client.id) {
       this.lastKnownVersion = message.version;
       return;
