@@ -482,6 +482,7 @@ export interface Snapshot {
 
 export interface Message {
   patch: Patch;
+  documentId: string;
   clientId: string;
   priority: number;
   version: number;
@@ -695,7 +696,9 @@ export class Document {
   }
 
   public ingest(message: Message): void {
-    if (
+    if (this.id !== message.documentId) {
+      throw new Error("Incorrect document id");
+    } else if (
       this.lastKnownVersion + 1 < message.version ||
       this.lastKnownVersion < message.lastKnownVersion
     ) {
@@ -704,7 +707,7 @@ export class Document {
     } else if (message.version <= this.lastKnownVersion) {
       return;
     } else if (message.clientId === this.client.id) {
-      this.localVersion = message.localVersion;
+      this.localVersion = Math.max(message.localVersion, this.localVersion);
       this.lastKnownVersion = message.version;
       return;
     }
@@ -798,6 +801,7 @@ export class Document {
     const revision: Revision = this.revisions[this.lastKnownVersion + 1];
     return {
       patch: this.patchAt(this.lastKnownVersion + 1),
+      documentId: this.id,
       clientId: revision.clientId,
       priority: revision.priority,
       localVersion: this.localVersion,
@@ -808,5 +812,12 @@ export class Document {
 }
 
 export class Client {
+  private documents: Record<string, Document> = {};
   public constructor(public id: string) {}
+
+  createDocument(id: string, initial?: string): Document {
+    const doc = Document.create(id, this, initial);
+    this.documents[id] = doc;
+    return doc;
+  }
 }
