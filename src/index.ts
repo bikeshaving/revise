@@ -1,5 +1,3 @@
-import EventEmitter from "events";
-
 // [flag, ...lengths]
 export type Subseq = number[];
 
@@ -51,14 +49,14 @@ export function count(subseq: Subseq, test?: boolean): number {
   return result;
 }
 
-export function extract(seq: string, subseq: Subseq): string {
+export function extract(str: string, subseq: Subseq): string {
   let consumed = 0;
   let result = "";
   let flag = !!subseq[0];
   for (const length of subseq.slice(1)) {
     consumed += length;
     if (flag) {
-      result += seq.slice(consumed - length, consumed);
+      result += str.slice(consumed - length, consumed);
     }
     flag = !flag;
   }
@@ -372,14 +370,14 @@ export function overlapping(
   deleted: string,
   inserted: string,
 ): Subseq | undefined {
-  const subseq: Subseq = [];
+  const result: Subseq = [];
   let consumed = 0;
   let flag = false;
   let ii = 0;
   for (let di = 0; di < deleted.length; di++) {
     if (ii >= inserted.length) {
       if (di - consumed > 0) {
-        push(subseq, di - consumed, flag);
+        push(result, di - consumed, flag);
       }
       consumed = di;
       flag = !flag;
@@ -391,15 +389,15 @@ export function overlapping(
     }
     if (flag !== match) {
       if (di - consumed > 0) {
-        push(subseq, di - consumed, flag);
+        push(result, di - consumed, flag);
       }
       consumed = di;
       flag = !flag;
     }
   }
   if (ii >= inserted.length) {
-    push(subseq, deleted.length - consumed, flag);
-    return subseq;
+    push(result, deleted.length - consumed, flag);
+    return result;
   }
 }
 
@@ -487,6 +485,7 @@ export interface Message {
   clientId: string;
   priority: number;
   version: number;
+  localVersion: number;
   lastKnownVersion: number;
 }
 
@@ -498,18 +497,21 @@ export interface Revision {
   priority: number;
 }
 
-export class Document extends EventEmitter {
+export class Document {
   protected constructor(
+    public id: string,
     public client: Client,
     public snapshot: Snapshot,
     protected revisions: Revision[],
     protected lastKnownVersion = 0,
-  ) {
-    super();
-    // this.on("revision", console.log);
-  }
+    protected localVersion = 0,
+  ) {}
 
-  public static initialize(client: Client, initial: string = "") {
+  public static create(
+    id: string,
+    client: Client,
+    initial: string = "",
+  ): Document {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
@@ -522,7 +524,7 @@ export class Document extends EventEmitter {
       reviveSeq: initial.length ? [0, initial.length] : [],
       priority: 0,
     };
-    return new Document(client, snapshot, [revision]);
+    return new Document(id, client, snapshot, [revision]);
   }
 
   public hiddenSeqAt(version: number): Subseq {
@@ -543,21 +545,22 @@ export class Document extends EventEmitter {
     for (const revision of this.revisions.slice(version + 1)) {
       insertSeq = expand(insertSeq, revision.insertSeq, { union: true });
     }
-    let { visible, hidden, hiddenSeq: newHiddenSeq } = this.snapshot;
-    const expandedHiddenSeq = expand(hiddenSeq, insertSeq);
+    let { visible, hidden, hiddenSeq: hiddenSeq1 } = this.snapshot;
+    const hiddenSeq2 = expand(hiddenSeq, insertSeq);
     visible = apply(
       visible,
-      synthesize(hidden, newHiddenSeq, union(expandedHiddenSeq, insertSeq)),
+      synthesize(hidden, hiddenSeq1, union(hiddenSeq2, insertSeq)),
     );
     hidden = apply(
       hidden,
-      synthesize("", complement(newHiddenSeq), complement(expandedHiddenSeq)),
+      synthesize("", complement(hiddenSeq1), complement(hiddenSeq2)),
     );
     return { visible, hidden, hiddenSeq };
   }
 
   public patchAt(version: number): Patch {
-    const revision: Revision = this.revisions[version];
+    const revision: Revision =
+      this.revisions[version] || this.revisions[this.revisions.length - 1];
     const snapshot: Snapshot = this.snapshotAt(version);
     const insertSeq: Subseq = expand(revision.reviveSeq, revision.insertSeq, {
       union: true,
@@ -570,7 +573,12 @@ export class Document extends EventEmitter {
   }
 
   public clone(client: Client = this.client): Document {
-    return new Document(client, { ...this.snapshot }, this.revisions.slice());
+    return new Document(
+      this.id,
+      client,
+      { ...this.snapshot },
+      this.revisions.slice(),
+    );
   }
 
   public apply(
@@ -642,17 +650,13 @@ export class Document extends EventEmitter {
         priority !== revision.priority
           ? priority < revision.priority
           : this.client.id < revision.clientId;
-      if (revision.deleteSeq != null) {
-        deleteSeq = difference(deleteSeq, revision.deleteSeq);
+      deleteSeq = difference(deleteSeq, revision.deleteSeq);
+      if (before) {
+        [insertSeq] = interleave(insertSeq, revision.insertSeq);
+      } else {
+        [, insertSeq] = interleave(insertSeq, revision.insertSeq);
       }
-      if (revision.insertSeq != null) {
-        if (before) {
-          [insertSeq] = interleave(insertSeq, revision.insertSeq);
-        } else {
-          [, insertSeq] = interleave(insertSeq, revision.insertSeq);
-        }
-        deleteSeq = expand(deleteSeq, revision.insertSeq);
-      }
+      deleteSeq = expand(deleteSeq, revision.insertSeq);
     }
     let revision: Revision = {
       insertSeq,
@@ -700,6 +704,7 @@ export class Document extends EventEmitter {
     } else if (message.version <= this.lastKnownVersion) {
       return;
     } else if (message.clientId === this.client.id) {
+      this.localVersion = message.localVersion;
       this.lastKnownVersion = message.version;
       return;
     }
@@ -729,17 +734,13 @@ export class Document extends EventEmitter {
           message.priority !== revision.priority
             ? message.priority < revision.priority
             : message.clientId < revision.clientId;
-        if (revision.deleteSeq != null) {
-          deleteSeq = difference(deleteSeq, revision.deleteSeq);
+        deleteSeq = difference(deleteSeq, revision.deleteSeq);
+        if (before) {
+          [insertSeq] = interleave(insertSeq, revision.insertSeq);
+        } else {
+          [, insertSeq] = interleave(insertSeq, revision.insertSeq);
         }
-        if (revision.insertSeq != null) {
-          if (before) {
-            [insertSeq] = interleave(insertSeq, revision.insertSeq);
-          } else {
-            [, insertSeq] = interleave(insertSeq, revision.insertSeq);
-          }
-          deleteSeq = expand(deleteSeq, revision.insertSeq);
-        }
+        deleteSeq = expand(deleteSeq, revision.insertSeq);
       }
     }
     let revision: Revision = {
@@ -768,19 +769,15 @@ export class Document extends EventEmitter {
         message.priority !== revision1.priority
           ? message.priority < revision1.priority
           : message.clientId < revision1.clientId;
-      if (revision1.deleteSeq != null) {
-        deleteSeq = difference(deleteSeq, revision1.deleteSeq);
-        reviveSeq = difference(reviveSeq, revision1.deleteSeq);
+      deleteSeq = difference(deleteSeq, revision1.deleteSeq);
+      reviveSeq = difference(reviveSeq, revision1.deleteSeq);
+      if (before) {
+        [insertSeq] = interleave(insertSeq, revision1.insertSeq);
+      } else {
+        [, insertSeq] = interleave(insertSeq, revision1.insertSeq);
       }
-      if (revision1.insertSeq != null) {
-        if (before) {
-          [insertSeq] = interleave(insertSeq, revision1.insertSeq);
-        } else {
-          [, insertSeq] = interleave(insertSeq, revision1.insertSeq);
-        }
-        deleteSeq = expand(deleteSeq, revision1.insertSeq);
-        reviveSeq = expand(reviveSeq, revision1.insertSeq);
-      }
+      deleteSeq = expand(deleteSeq, revision1.insertSeq);
+      reviveSeq = expand(reviveSeq, revision1.insertSeq);
       revision1.insertSeq = expand(revision1.insertSeq, insertSeq);
       const insertSeq1 = shrink(insertSeq, revision1.insertSeq);
       revision1.deleteSeq = expand(revision1.deleteSeq, insertSeq1);
@@ -791,11 +788,25 @@ export class Document extends EventEmitter {
     this.snapshot = snapshot;
     this.lastKnownVersion = message.version;
   }
+
+  public createMessage(): Message | undefined {
+    if (this.lastKnownVersion > this.revisions.length) {
+      throw new Error("Incorrect last known version");
+    } else if (this.lastKnownVersion === this.revisions.length) {
+      return;
+    }
+    const revision: Revision = this.revisions[this.lastKnownVersion + 1];
+    return {
+      patch: this.patchAt(this.lastKnownVersion + 1),
+      clientId: revision.clientId,
+      priority: revision.priority,
+      localVersion: this.localVersion,
+      version: this.lastKnownVersion + 1,
+      lastKnownVersion: this.lastKnownVersion,
+    };
+  }
 }
 
-import uuidV4 from "uuid/v4";
-export class Client extends EventEmitter {
-  public constructor(public id: string = uuidV4()) {
-    super();
-  }
+export class Client {
+  public constructor(public id: string) {}
 }
