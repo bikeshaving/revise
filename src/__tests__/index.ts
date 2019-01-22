@@ -1,80 +1,78 @@
-/* eslint-env mocha */
-import { expect } from "chai";
 // import * as testcheck from "mocha-testcheck";
 // import { check, gen } from "mocha-testcheck";
 // testcheck.install();
 
-import * as shredder from "../src/index";
+import * as shredder from "../index";
 describe("subseq", () => {
   describe("count", () => {
     const s = [0, 10, 5, 8, 4, 4];
-    it("all", () => {
-      expect(shredder.count(s)).to.equal(31);
+    test("all", () => {
+      expect(shredder.count(s)).toEqual(31);
     });
-    it("false", () => {
-      expect(shredder.count(s, false)).to.equal(22);
+    test("false", () => {
+      expect(shredder.count(s, false)).toEqual(22);
     });
-    it("true", () => {
-      expect(shredder.count(s, true)).to.equal(9);
+    test("true", () => {
+      expect(shredder.count(s, true)).toEqual(9);
     });
   });
 
   describe("union", () => {
-    it("empty", () => {
+    test("empty", () => {
       const s = [1, 4, 4];
       const t = [0, 8];
-      expect(shredder.union(s, t)).to.deep.equal(s);
+      expect(shredder.union(s, t)).toEqual(s);
     });
 
-    it("complex", () => {
+    test("complex", () => {
       const s = [1, 2, 2, 2];
       const t = [0, 1, 2, 2, 1];
       const result = [1, 3, 1, 2];
-      expect(shredder.union(s, t)).to.deep.equal(result);
+      expect(shredder.union(s, t)).toEqual(result);
     });
   });
 
   describe("difference", () => {
-    it("empty", () => {
+    test("empty", () => {
       const s = [1, 8];
       const t = [1, 4, 4];
       const result = [0, 4, 4];
-      expect(shredder.difference(s, t)).to.deep.equal(result);
+      expect(shredder.difference(s, t)).toEqual(result);
     });
 
-    it("complex", () => {
+    test("complex", () => {
       const s = [1, 2, 2, 2];
       const t = [0, 1, 1, 1, 1, 1, 1];
       const result = [1, 1, 3, 1, 1];
-      expect(shredder.difference(s, t)).to.deep.equal(result);
+      expect(shredder.difference(s, t)).toEqual(result);
     });
   });
 
   describe("expand/shrink", () => {
-    it("complex", () => {
+    test("complex", () => {
       const s = [0, 4, 4, 6, 5, 3];
       const t = [0, 10, 5, 8, 4, 4];
       const expanded = shredder.expand(s, t);
       const result = [0, 4, 4, 11, 4, 4, 1, 3];
-      expect(expanded).to.deep.equal(result);
-      expect(shredder.shrink(expanded, t)).to.deep.equal(s);
+      expect(expanded).toEqual(result);
+      expect(shredder.shrink(expanded, t)).toEqual(s);
     });
   });
 
   describe("interleave", () => {
-    it("error when mismatched", () => {
+    test("error when mismatched", () => {
       expect(() => {
         shredder.interleave([0, 5, 1], [1, 1, 4]);
-      }).to.throw();
+      }).toThrow();
     });
 
-    it("empty transform", () => {
+    test("empty transform", () => {
       const s = [0, 1, 2, 7];
       const t = [0, 8];
-      expect(shredder.interleave(s, t)).to.deep.equal([s, s]);
+      expect(shredder.interleave(s, t)).toEqual([s, s]);
     });
 
-    it("smaller transform", () => {
+    test("smaller transform", () => {
       // +++====+
       const s = [1, 3, 4, 1];
       // ***====
@@ -83,10 +81,10 @@ describe("subseq", () => {
       const result = [1, 3, 7, 1];
       // ***+++====+
       const result1 = [0, 3, 3, 4, 1];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
+      expect(shredder.interleave(s, t)).toEqual([result, result1]);
     });
 
-    it("same position", () => {
+    test("same position", () => {
       // ==++  ====
       const s = [0, 2, 2, 4];
       // ==**  ====
@@ -95,10 +93,10 @@ describe("subseq", () => {
       const result = [0, 2, 2, 6];
       // ==**++====
       const result1 = [0, 4, 2, 4];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
+      expect(shredder.interleave(s, t)).toEqual([result, result1]);
     });
 
-    it("same position different lengths", () => {
+    test("same position different lengths", () => {
       // ==++++  ==
       const s = [0, 2, 4, 2];
       // ==**    ==
@@ -107,70 +105,70 @@ describe("subseq", () => {
       const result = [0, 2, 4, 4];
       // ==**++++==
       const result1 = [0, 4, 4, 2];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
+      expect(shredder.interleave(s, t)).toEqual([result, result1]);
     });
 
-    it("subseq before", () => {
+    test("subseq before", () => {
       // +=    ====
       const s = [1, 1, 5];
       //  =****====
       const t = [0, 1, 4, 4];
       // +=****====
       const result = [1, 1, 9];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
+      expect(shredder.interleave(s, t)).toEqual([result, result]);
     });
 
-    it("subseq before overlapping", () => {
+    test("subseq before overlapping", () => {
       // ++=    ===
       const s = [1, 2, 4];
       //   =****===
       const t = [0, 1, 4, 3];
       // ++=****===
       const result = [1, 2, 8];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
+      expect(shredder.interleave(s, t)).toEqual([result, result]);
     });
 
-    it("subseq after", () => {
+    test("subseq after", () => {
       //  =++++====
       const s = [0, 1, 4, 4];
       // *=    ====
       const t = [1, 1, 5];
       // *=++++====
       const result = [0, 2, 4, 4];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
+      expect(shredder.interleave(s, t)).toEqual([result, result]);
     });
 
-    it("subseq after overlapping 1", () => {
+    test("subseq after overlapping 1", () => {
       // ==    ==++
       const s = [0, 4, 2];
       // ==****==
       const t = [0, 2, 4, 2];
       // ==****==++
       const result = [0, 8, 2];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
+      expect(shredder.interleave(s, t)).toEqual([result, result]);
     });
 
-    it("subseq after overlapping 2", () => {
+    test("subseq after overlapping 2", () => {
       // =   =++===
       const s = [0, 2, 2, 3];
       // =***=  ===
       const t = [0, 1, 3, 4];
       // =***=++===
       const result = [0, 5, 2, 3];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
+      expect(shredder.interleave(s, t)).toEqual([result, result]);
     });
 
-    it("subseq after overlapping 3", () => {
+    test("subseq after overlapping 3", () => {
       //   =++++===
       const s = [0, 1, 4, 3];
       // **=    ===
       const t = [1, 2, 4];
       // **=++++===
       const result = [0, 3, 4, 3];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result]);
+      expect(shredder.interleave(s, t)).toEqual([result, result]);
     });
 
-    it("multiple segments", () => {
+    test("multiple segments", () => {
       // +=++ =+==
       const s = [1, 1, 1, 2, 1, 1, 2];
       //  =*  = ==*
@@ -179,10 +177,10 @@ describe("subseq", () => {
       const result = [1, 1, 1, 2, 2, 1, 3];
       // +=*++=+==*
       const result1 = [1, 1, 2, 2, 1, 1, 3];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
+      expect(shredder.interleave(s, t)).toEqual([result, result1]);
     });
 
-    it("complex", () => {
+    test("complex", () => {
       //     =====      ======++++
       const s = [0, 11, 4];
       // ****=====******======*
@@ -191,60 +189,60 @@ describe("subseq", () => {
       const result = [0, 21, 4, 1];
       // ****=====******======*++++
       const result1 = [0, 22, 4];
-      expect(shredder.interleave(s, t)).to.deep.equal([result, result1]);
+      expect(shredder.interleave(s, t)).toEqual([result, result1]);
     });
   });
 });
 
 describe("overlapping", () => {
-  it("overlapping 1", () => {
+  test("overlapping 1", () => {
     const result = [1, 6];
-    expect(shredder.overlapping("hello ", "hello ")).to.deep.equal(result);
+    expect(shredder.overlapping("hello ", "hello ")).toEqual(result);
   });
 
-  it("overlapping 2", () => {
+  test("overlapping 2", () => {
     const result = [0, 6, 5];
-    expect(shredder.overlapping("hello world", "world")).to.deep.equal(result);
+    expect(shredder.overlapping("hello world", "world")).toEqual(result);
   });
 
-  it("overlapping 3", () => {
+  test("overlapping 3", () => {
     const result = [0, 10, 1];
-    expect(shredder.overlapping("hello world", "d")).to.deep.equal(result);
+    expect(shredder.overlapping("hello world", "d")).toEqual(result);
   });
 
-  it("overlapping 4", () => {
+  test("overlapping 4", () => {
     const result = [0, 5, 1, 5];
-    expect(shredder.overlapping("hello world", " ")).to.deep.equal(result);
+    expect(shredder.overlapping("hello world", " ")).toEqual(result);
   });
 
-  it("overlapping 5", () => {
+  test("overlapping 5", () => {
     const result = [1, 2, 1, 4];
-    expect(shredder.overlapping(" Wworld", " World")).to.deep.equal(result);
+    expect(shredder.overlapping(" Wworld", " World")).toEqual(result);
   });
 
-  it("overlapping 6", () => {
+  test("overlapping 6", () => {
     const result = [1, 1, 1, 4];
-    expect(shredder.overlapping("Hhello", "Hello")).to.deep.equal(result);
+    expect(shredder.overlapping("Hhello", "Hello")).toEqual(result);
   });
 
-  it("no overlap 1", () => {
-    expect(shredder.overlapping("hello world", "xworld")).to.equal(undefined);
+  test("no overlap 1", () => {
+    expect(shredder.overlapping("hello world", "xworld")).toEqual(undefined);
   });
 
-  it("no overlap 2", () => {
-    expect(shredder.overlapping("Hhello", "Hex")).to.equal(undefined);
+  test("no overlap 2", () => {
+    expect(shredder.overlapping("Hhello", "Hex")).toEqual(undefined);
   });
 
-  it("no overlap 3", () => {
-    expect(shredder.overlapping("Hhello", "HelloXX")).to.equal(undefined);
+  test("no overlap 3", () => {
+    expect(shredder.overlapping("Hhello", "HelloXX")).toEqual(undefined);
   });
 
-  it("no overlap 4", () => {
-    expect(shredder.overlapping("hello world", "worlds")).to.equal(undefined);
+  test("no overlap 4", () => {
+    expect(shredder.overlapping("hello world", "worlds")).toEqual(undefined);
   });
 
-  it("no overlap 5", () => {
-    expect(shredder.overlapping("hello", "hexo")).to.equal(undefined);
+  test("no overlap 5", () => {
+    expect(shredder.overlapping("hello", "hexo")).toEqual(undefined);
   });
 });
 
@@ -255,54 +253,52 @@ describe("patch", () => {
   const p2: shredder.Patch = [0, 4, " ", 4, 5, "n Earth", 11];
   const p3: shredder.Patch = [0, 6, "buddy", 11];
 
-  it("apply", () => {
-    expect(shredder.apply(text, p0)).to.equal("herald");
-    expect(shredder.apply(text, p1)).to.equal("jello");
-    expect(shredder.apply(text, p2)).to.equal("hell on Earth");
-    expect(shredder.apply(text, p3)).to.equal("hello buddy");
+  test("apply", () => {
+    expect(shredder.apply(text, p0)).toEqual("herald");
+    expect(shredder.apply(text, p1)).toEqual("jello");
+    expect(shredder.apply(text, p2)).toEqual("hell on Earth");
+    expect(shredder.apply(text, p3)).toEqual("hello buddy");
   });
 
   describe("factor", () => {
-    it("factor 1", () => {
+    test("factor 1", () => {
       const [, insertSeq, deleteSeq] = shredder.factor(p0);
-      expect(insertSeq).to.deep.equal([0, 1, 3, 10]);
-      expect(deleteSeq).to.deep.equal([0, 1, 8, 2]);
+      expect(insertSeq).toEqual([0, 1, 3, 10]);
+      expect(deleteSeq).toEqual([0, 1, 8, 2]);
     });
 
-    it("factor 2", () => {
+    test("factor 2", () => {
       const [, insertSeq, deleteSeq] = shredder.factor(p1);
-      expect(insertSeq).to.deep.equal([1, 2, 11]);
-      expect(deleteSeq).to.deep.equal([1, 2, 3, 6]);
+      expect(insertSeq).toEqual([1, 2, 11]);
+      expect(deleteSeq).toEqual([1, 2, 3, 6]);
     });
 
-    it("factor 3", () => {
+    test("factor 3", () => {
       const [, insertSeq, deleteSeq] = shredder.factor(p2);
-      expect(insertSeq).to.deep.equal([0, 4, 1, 1, 7, 6]);
-      expect(deleteSeq).to.deep.equal([0, 5, 6]);
+      expect(insertSeq).toEqual([0, 4, 1, 1, 7, 6]);
+      expect(deleteSeq).toEqual([0, 5, 6]);
     });
 
-    it("factor 4", () => {
+    test("factor 4", () => {
       const [, insertSeq3, deleteSeq3] = shredder.factor(p3);
-      expect(insertSeq3).to.deep.equal([0, 6, 5, 5]);
-      expect(deleteSeq3).to.deep.equal([0, 6, 5]);
+      expect(insertSeq3).toEqual([0, 6, 5, 5]);
+      expect(deleteSeq3).toEqual([0, 6, 5]);
     });
   });
 
   describe("synthesize", () => {
-    it("empty", () => {
-      expect(shredder.synthesize("", [])).to.deep.equal([0]);
+    test("empty", () => {
+      expect(shredder.synthesize("", [])).toEqual([0]);
     });
 
-    it("simple", () => {
+    test("simple", () => {
       const insertSeq = [0, 3, 3, 7];
       const deleteSeq = [0, 6, 3, 3, 1];
       const result = [0, 3, "foo", 6, 9, 10];
-      expect(shredder.synthesize("foo", insertSeq, deleteSeq)).to.deep.equal(
-        result,
-      );
+      expect(shredder.synthesize("foo", insertSeq, deleteSeq)).toEqual(result);
     });
 
-    it("complex", () => {
+    test("complex", () => {
       const [inserted, insertSeq, deleteSeq] = shredder.factor(p0);
       const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
       const union = shredder.apply(
@@ -325,86 +321,84 @@ describe("patch", () => {
           shredder.complement(insertSeq),
         ),
       );
-      expect(
-        shredder.synthesize(tombstones, insertSeq, deleteSeq1),
-      ).to.deep.equal(p0);
-      const result = [0, 1, "ello wor", 4, 6];
-      expect(shredder.synthesize(text1, deleteSeq1, insertSeq)).to.deep.equal(
-        result,
+      expect(shredder.synthesize(tombstones, insertSeq, deleteSeq1)).toEqual(
+        p0,
       );
+      const result = [0, 1, "ello wor", 4, 6];
+      expect(shredder.synthesize(text1, deleteSeq1, insertSeq)).toEqual(result);
     });
   });
 });
 
-import { Client } from "../src/index";
+import { Client } from "../index";
 describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
-    it("concurrent revisions", () => {
+    test("concurrent revisions", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
-      expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
-      expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
-      expect(doc.hiddenSeqAt(2)).to.deep.equal([0, 1, 1, 11, 7]);
-      expect(doc.hiddenSeqAt(3)).to.deep.equal([0, 1, 1, 21, 7]);
-      expect(doc.hiddenSeqAt(3)).to.deep.equal(doc.snapshot.hiddenSeq);
+      expect(doc.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc.hiddenSeqAt(1)).toEqual([0, 1, 1, 6, 1, 4]);
+      expect(doc.hiddenSeqAt(2)).toEqual([0, 1, 1, 11, 7]);
+      expect(doc.hiddenSeqAt(3)).toEqual([0, 1, 1, 21, 7]);
+      expect(doc.hiddenSeqAt(3)).toEqual(doc.snapshot.hiddenSeq);
     });
 
-    it("revisions with revives", () => {
+    test("revisions with revives", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
-      expect(doc.hiddenSeqAt(0)).to.deep.equal([0, 11]);
-      expect(doc.hiddenSeqAt(1)).to.deep.equal([0, 1, 1, 6, 1, 4]);
-      expect(doc.hiddenSeqAt(2)).to.deep.equal([1, 1, 6, 1, 5]);
-      expect(doc.hiddenSeqAt(2)).to.deep.equal(doc.snapshot.hiddenSeq);
+      expect(doc.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc.hiddenSeqAt(1)).toEqual([0, 1, 1, 6, 1, 4]);
+      expect(doc.hiddenSeqAt(2)).toEqual([1, 1, 6, 1, 5]);
+      expect(doc.hiddenSeqAt(2)).toEqual(doc.snapshot.hiddenSeq);
     });
   });
 
   describe("Document.snapshotAt", () => {
-    it("concurrent revisions", () => {
+    test("concurrent revisions", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
-      expect(doc.snapshotAt(0)).to.deep.equal({
+      expect(doc.snapshotAt(0)).toEqual({
         visible: "hello world",
         hidden: "",
         hiddenSeq: [0, 11],
         version: 0,
       });
-      expect(doc.snapshotAt(1)).to.deep.equal({
+      expect(doc.snapshotAt(1)).toEqual({
         visible: "Hello World",
         hidden: "hw",
         hiddenSeq: [0, 1, 1, 6, 1, 4],
         version: 1,
       });
-      expect(doc.snapshotAt(2)).to.deep.equal({
+      expect(doc.snapshotAt(2)).toEqual({
         visible: "Hello, Brian",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 11, 7],
         version: 2,
       });
-      expect(doc.snapshotAt(3)).to.deep.equal({
+      expect(doc.snapshotAt(3)).toEqual({
         visible: "Hello, Brian, Dr. Evil",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 21, 7],
         version: 3,
       });
-      expect(doc.snapshotAt(3)).to.deep.equal(doc.snapshot);
+      expect(doc.snapshotAt(3)).toEqual(doc.snapshot);
     });
   });
 
   describe("Document.edit", () => {
-    it("simple", () => {
+    test("simple", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([0, 1, "era", 9, 11]);
-      expect(doc.snapshot).to.deep.equal({
+      expect(doc.snapshot).toEqual({
         visible: "herald",
         hidden: "ello wor",
         hiddenSeq: [0, 4, 8, 2],
@@ -412,55 +406,55 @@ describe("Document", () => {
       });
     });
 
-    it("sequential 1", () => {
+    test("sequential 1", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);
-      expect(doc.snapshot.visible).to.equal("heraldry");
+      expect(doc.snapshot.visible).toEqual("heraldry");
     });
 
-    it("sequential 2", () => {
+    test("sequential 2", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
-      expect(doc.snapshot.visible).to.equal("Hello, Brian");
+      expect(doc.snapshot.visible).toEqual("Hello, Brian");
     });
 
-    it("sequential 3", () => {
+    test("sequential 3", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
-      expect(doc.snapshot.visible).to.equal("goodbye hello world");
+      expect(doc.snapshot.visible).toEqual("goodbye hello world");
     });
 
-    it("concurrent 1", () => {
+    test("concurrent 1", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit(["Great H", 2, 5, 11], 1, 0);
-      expect(doc.snapshot.visible).to.equal("Great Hera");
+      expect(doc.snapshot.visible).toEqual("Great Hera");
     });
 
-    it("concurrent 2", () => {
+    test("concurrent 2", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
-      expect(doc.snapshot.visible).to.equal("Hello, Brian, Dr. Evil");
+      expect(doc.snapshot.visible).toEqual("Hello, Brian, Dr. Evil");
     });
 
-    it("concurrent 3", () => {
+    test("concurrent 3", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
-      expect(doc.snapshot).to.deep.equal({
+      expect(doc.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
         hiddenSeq: [0, 8, 6, 9],
@@ -468,13 +462,13 @@ describe("Document", () => {
       });
     });
 
-    it("concurrent 4", () => {
+    test("concurrent 4", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
-      expect(doc.snapshot).to.deep.equal({
+      expect(doc.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
         hiddenSeq: [1, 6, 17],
@@ -482,13 +476,13 @@ describe("Document", () => {
       });
     });
 
-    it("concurrent 5", () => {
+    test("concurrent 5", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
-      expect(doc.snapshot).to.deep.equal({
+      expect(doc.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
         hiddenSeq: [0, 8, 6, 9],
@@ -496,7 +490,7 @@ describe("Document", () => {
       });
     });
 
-    it("concurrent 6", () => {
+    test("concurrent 6", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       //"hello world"
@@ -507,15 +501,15 @@ describe("Document", () => {
       doc.edit([0, 11, "star", 11], 1, 0);
       // ======================++++
       //"why hello there worldsstar"
-      expect(doc.snapshot.visible).to.equal("why hello there worldsstar");
+      expect(doc.snapshot.visible).toEqual("why hello there worldsstar");
     });
 
-    it("revive 1", () => {
+    test("revive 1", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5, "s", 5]);
-      expect(doc.snapshot).to.deep.equal({
+      expect(doc.snapshot).toEqual({
         visible: "hello worlds",
         hidden: "",
         hiddenSeq: [0, 12],
@@ -523,148 +517,148 @@ describe("Document", () => {
       });
     });
 
-    it("revive 2", () => {
+    test("revive 2", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([11]);
       doc.edit(["hello ", 0]);
       doc.edit([0, 6, "worlds", 6]);
-      expect(doc.snapshot.visible).to.equal("hello worlds");
-      expect(doc.snapshot.hidden).to.equal("world");
+      expect(doc.snapshot.visible).toEqual("hello worlds");
+      expect(doc.snapshot.hidden).toEqual("world");
     });
 
-    it("revive 3", () => {
+    test("revive 3", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
       doc.edit(["hello ", 0, 5, "s", 5]);
-      expect(doc.snapshot.visible).to.equal("hello worlds");
-      expect(doc.snapshot.hidden).to.equal("");
+      expect(doc.snapshot.visible).toEqual("hello worlds");
+      expect(doc.snapshot.hidden).toEqual("");
     });
 
-    it("revive 4", () => {
+    test("revive 4", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 6, "waterw", 7, 11]);
-      expect(doc.snapshot.visible).to.equal("Hello waterworld");
+      expect(doc.snapshot.visible).toEqual("Hello waterworld");
       // TODO: hidden?
     });
 
-    it("revive 5", () => {
+    test("revive 5", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([0, 6, 11]);
       doc.edit([0, 3, "ium", 5, 6, "world", 6]);
-      expect(doc.snapshot.visible).to.equal("helium world");
+      expect(doc.snapshot.visible).toEqual("helium world");
       // TODO: snahidden?
     });
 
-    it("revive 6", () => {
+    test("revive 6", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
-      expect(doc.snapshot.visible).to.equal("world");
+      expect(doc.snapshot.visible).toEqual("world");
       doc.edit([0, 5, "hello", 5]);
-      expect(doc.snapshot.visible).to.equal("worldhello");
-      expect(doc.snapshot.hidden).to.equal("hello ");
+      expect(doc.snapshot.visible).toEqual("worldhello");
+      expect(doc.snapshot.hidden).toEqual("hello ");
     });
 
-    it("revive 7", () => {
+    test("revive 7", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([6, 11]);
       doc.edit(["Hello ", 0, 5]);
-      expect(doc.snapshot.visible).to.equal("Hello World");
-      expect(doc.snapshot.hidden).to.equal("hw");
+      expect(doc.snapshot.visible).toEqual("Hello World");
+      expect(doc.snapshot.hidden).toEqual("hw");
     });
 
-    it("revive 8", () => {
+    test("revive 8", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
       doc.edit([0, 5, " World", 5]);
-      expect(doc.snapshot.visible).to.equal("Hello World");
-      expect(doc.snapshot.hidden).to.equal("hw");
+      expect(doc.snapshot.visible).toEqual("Hello World");
+      expect(doc.snapshot.hidden).toEqual("hw");
     });
 
-    it("revive 10", () => {
+    test("revive 10", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
-      expect(doc.snapshot.visible).to.equal("hello world");
-      expect(doc.snapshot.hidden).to.equal("HW");
-      expect(doc.snapshot.hiddenSeq).to.deep.equal([1, 1, 6, 1, 5]);
+      expect(doc.snapshot.visible).toEqual("hello world");
+      expect(doc.snapshot.hidden).toEqual("HW");
+      expect(doc.snapshot.hiddenSeq).toEqual([1, 1, 6, 1, 5]);
     });
 
-    it("no revive 1", () => {
+    test("no revive 1", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["xxxxxx", 0, 5]);
-      expect(doc.snapshot.visible).to.equal("xxxxxxworld");
-      expect(doc.snapshot.hidden).to.equal("hello ");
+      expect(doc.snapshot.visible).toEqual("xxxxxxworld");
+      expect(doc.snapshot.hidden).toEqual("hello ");
     });
 
-    it("no revive 2", () => {
+    test("no revive 2", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
       doc.edit([0, 5, " Wacky World", 5]);
-      expect(doc.snapshot.visible).to.equal("Hello Wacky World");
-      expect(doc.snapshot.hidden).to.equal("h Wworld");
+      expect(doc.snapshot.visible).toEqual("Hello Wacky World");
+      expect(doc.snapshot.hidden).toEqual("h Wworld");
     });
 
-    it("revive concurrent 1", () => {
+    test("revive concurrent 1", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
       doc.edit([0, 6, "Brian", 11], 1, 1);
-      expect(doc.snapshot.visible).to.equal("hello Brianw");
-      expect(doc.snapshot.hidden).to.equal("HWorld");
+      expect(doc.snapshot.visible).toEqual("hello Brianw");
+      expect(doc.snapshot.hidden).toEqual("HWorld");
     });
 
-    it("revive concurrent 2", () => {
+    test("revive concurrent 2", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
       doc.edit(["goodbye ", 0, 5], 1, 1);
-      expect(doc.snapshot.visible).to.equal("hello goodbye world");
-      expect(doc.snapshot.hidden).to.equal("");
+      expect(doc.snapshot.visible).toEqual("hello goodbye world");
+      expect(doc.snapshot.hidden).toEqual("");
     });
 
-    it("revive concurrent 3", () => {
+    test("revive concurrent 3", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
-      expect(doc.snapshot.visible).to.equal("hello goodbye world");
-      expect(doc.snapshot.hidden).to.equal("");
+      expect(doc.snapshot.visible).toEqual("hello goodbye world");
+      expect(doc.snapshot.hidden).toEqual("");
     });
   });
 
   describe("Document.undo", () => {
-    it("simple", () => {
+    test("simple", () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
       doc.undo(1);
-      expect(doc.snapshot.visible).to.equal("hello worlds");
+      expect(doc.snapshot.visible).toEqual("hello worlds");
     });
   });
 
   describe("Document.ingest", () => {
-    it("simple", () => {
+    test("simple", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
       const doc1 = client1.createDocument("doc1", "hello world");
@@ -677,16 +671,16 @@ describe("Document", () => {
         ...doc2.createMessage()!,
         version: 1,
       });
-      expect(doc1.snapshot).to.deep.equal({
+      expect(doc1.snapshot).toEqual({
         visible: "goodbye_worlds",
         hidden: "hello ",
         hiddenSeq: [0, 7, 5, 1, 1, 6],
         version: 3,
       });
-      expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
+      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
 
-    it("revive", () => {
+    test("revive", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
       const doc1 = client1.createDocument("doc1", "hello world");
@@ -706,16 +700,16 @@ describe("Document", () => {
         version: 2,
       };
       doc1.ingest(message2);
-      expect(doc1.snapshot).to.deep.equal({
+      expect(doc1.snapshot).toEqual({
         visible: "goodbyehello worlds",
         hidden: "",
         hiddenSeq: [0, 19],
         version: 3,
       });
-      expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
+      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
 
-    it("idempotent", () => {
+    test("idempotent", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
       const doc1 = client1.createDocument("doc1", "hello world");
@@ -729,21 +723,21 @@ describe("Document", () => {
       doc2.ingest(message1);
       doc2.ingest(message1);
       doc2.ingest(message1);
-      expect(doc2.snapshot).to.deep.equal({
+      expect(doc2.snapshot).toEqual({
         visible: "goodbye world",
         hidden: "hello",
         hiddenSeq: [0, 7, 5, 6],
         version: 1,
       });
-      expect(doc2.snapshot).to.deep.equal(doc1.snapshot);
+      expect(doc2.snapshot).toEqual(doc1.snapshot);
     });
   });
 });
 
-import { InMemoryStorage } from "../src/index";
+import { InMemoryStorage } from "../index";
 describe("InMemoryStorage", () => {
   describe("sendMessage", () => {
-    it("send message", async () => {
+    test("send message", async () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       const storage = new InMemoryStorage();
@@ -752,10 +746,10 @@ describe("InMemoryStorage", () => {
       doc.edit([0, 11, "!", 11]);
       const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
       const messages = await storage.fetchMessages(doc.id);
-      expect(messages).to.deep.equal([message1, message2]);
+      expect(messages).toEqual([message1, message2]);
     });
 
-    it("send snapshot", async () => {
+    test("send snapshot", async () => {
       const client = new Client("id1");
       const doc = client.createDocument("doc1", "hello world");
       const storage = new InMemoryStorage();
@@ -768,10 +762,10 @@ describe("InMemoryStorage", () => {
       storage.sendSnapshot(doc.id, doc.snapshotAt(0));
       const snapshot0 = await storage.fetchSnapshot(doc.id, 0);
       const snapshot1 = await storage.fetchSnapshot(doc.id);
-      expect(snapshot0).to.deep.equal(doc.snapshotAt(0));
-      expect(snapshot1).to.deep.equal(doc.snapshotAt(1));
+      expect(snapshot0).toEqual(doc.snapshotAt(0));
+      expect(snapshot1).toEqual(doc.snapshotAt(1));
       const messages = await storage.fetchMessages(doc.id);
-      expect(messages).to.deep.equal([]);
+      expect(messages).toEqual([]);
     });
   });
 });
