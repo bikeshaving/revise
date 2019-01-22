@@ -478,11 +478,11 @@ export interface Snapshot {
   visible: string;
   hidden: string;
   hiddenSeq: Subseq;
+  version: number;
 }
 
 export interface Message {
   patch: Patch;
-  documentId: string;
   clientId: string;
   priority: number;
   version: number;
@@ -504,7 +504,7 @@ export class Document {
     public client: Client,
     public snapshot: Snapshot,
     protected revisions: Revision[],
-    protected lastKnownVersion = 0,
+    protected lastKnownVersion = -1,
     protected localVersion = 0,
   ) {}
 
@@ -517,12 +517,13 @@ export class Document {
       visible: initial,
       hidden: "",
       hiddenSeq: initial.length ? [0, initial.length] : [],
+      version: 0,
     };
     const revision: Revision = {
       clientId: client.id,
       insertSeq: initial.length ? [1, initial.length] : [],
-      deleteSeq: initial.length ? [0, initial.length] : [],
-      reviveSeq: initial.length ? [0, initial.length] : [],
+      deleteSeq: [],
+      reviveSeq: [],
       priority: 0,
     };
     return new Document(id, client, snapshot, [revision]);
@@ -556,7 +557,7 @@ export class Document {
       hidden,
       synthesize("", complement(hiddenSeq1), complement(hiddenSeq2)),
     );
-    return { visible, hidden, hiddenSeq };
+    return { visible, hidden, hiddenSeq, version };
   }
 
   public patchAt(version: number): Patch {
@@ -579,6 +580,7 @@ export class Document {
       client,
       { ...this.snapshot },
       this.revisions.slice(),
+      this.lastKnownVersion,
     );
   }
 
@@ -616,7 +618,7 @@ export class Document {
     }
 
     revision = { ...revision, insertSeq, deleteSeq, reviveSeq };
-    snapshot = { visible, hidden, hiddenSeq };
+    snapshot = { visible, hidden, hiddenSeq, version: snapshot.version + 1 };
     return [inserted, revision, snapshot];
   }
 
@@ -696,18 +698,16 @@ export class Document {
   }
 
   public ingest(message: Message): void {
-    if (this.id !== message.documentId) {
-      throw new Error("Incorrect document id");
-    } else if (
+    if (
       this.lastKnownVersion + 1 < message.version ||
       this.lastKnownVersion < message.lastKnownVersion
     ) {
       // TODO: attempt repair
-      throw new Error("Causality violation");
+      throw new Error("Missing message");
     } else if (message.version <= this.lastKnownVersion) {
       return;
     } else if (message.clientId === this.client.id) {
-      this.localVersion = Math.max(message.localVersion, this.localVersion);
+      // TODO: increment local version?
       this.lastKnownVersion = message.version;
       return;
     }
@@ -801,7 +801,6 @@ export class Document {
     const revision: Revision = this.revisions[this.lastKnownVersion + 1];
     return {
       patch: this.patchAt(this.lastKnownVersion + 1),
-      documentId: this.id,
       clientId: revision.clientId,
       priority: revision.priority,
       localVersion: this.localVersion,
@@ -811,13 +810,127 @@ export class Document {
   }
 }
 
+export interface Storage {
+  fetchSnapshot(id: string, min?: number): Promise<Snapshot>;
+  fetchMessages(id: string, from?: number, to?: number): Promise<Message[]>;
+  sendMessage(id: string, message: Message): Promise<Message>;
+  sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot>;
+}
+
+export interface Subscription {
+  subscribe(id: string, from?: number): Promise<AsyncIterator<Message>>;
+}
+
+export type Connection = Storage & Subscription;
+
 export class Client {
   private documents: Record<string, Document> = {};
-  public constructor(public id: string) {}
+  public constructor(public id: string, public connection?: Connection) {}
 
-  createDocument(id: string, initial?: string): Document {
+  public createDocument(id: string, initial?: string): Document {
     const doc = Document.create(id, this, initial);
     this.documents[id] = doc;
     return doc;
   }
+}
+
+export class InMemoryStorage implements Storage {
+  protected clientVersionsById: Record<string, Record<string, number>> = {};
+  protected snapshotsById: Record<string, Snapshot[]> = {};
+  protected messagesById: Record<string, Message[]> = {};
+
+  public async fetchMessages(
+    id: string,
+    from?: number,
+    to?: number,
+  ): Promise<Message[]> {
+    if (this.clientVersionsById[id] == null) {
+      throw new Error("Unknown document");
+    }
+    if (from == null) {
+      const snapshots = this.snapshotsById[id];
+      if (snapshots.length) {
+        from = snapshots[snapshots.length - 1].version + 1;
+      } else {
+        from = 0;
+      }
+    }
+    return this.messagesById[id].slice(from, to);
+  }
+
+  public async fetchSnapshot(id: string, min?: number): Promise<Snapshot> {
+    if (this.clientVersionsById[id] == null) {
+      throw new Error("Unknown document");
+    }
+    const snapshots = this.snapshotsById[id];
+    if (snapshots == null || !snapshots.length) {
+      return { visible: "", hidden: "", hiddenSeq: [], version: -1 };
+    } else if (min == null) {
+      return snapshots[snapshots.length - 1];
+    }
+    for (let i = snapshots.length - 1; i > 0; i--) {
+      const snapshot = snapshots[i];
+      if (snapshot.version <= min) {
+        return snapshot;
+      }
+    }
+    return snapshots[0];
+  }
+
+  public async sendMessage(id: string, message: Message): Promise<Message> {
+    const clientVersions: Record<string, number> = this.clientVersionsById[id];
+    if (clientVersions == null) {
+      if (message.version !== 0 || message.localVersion !== 0) {
+        throw new Error("Unknown document");
+      }
+      this.clientVersionsById[id] = {};
+      this.clientVersionsById[id][message.clientId] = message.localVersion;
+      this.messagesById[id] = [message];
+      this.snapshotsById[id] = [];
+      return message;
+    }
+    const expectedLocalVersion = (clientVersions[message.clientId] || -1) + 1;
+    // TODO: reject message if lastKnownVersion is too far off current version
+    // TODO: reject if we don’t have a recent-enough snapshot
+    if (message.localVersion > expectedLocalVersion) {
+      throw new Error("Missing message");
+    } else if (message.localVersion < expectedLocalVersion) {
+      if (message.version === 0) {
+        throw new Error("Document already exists");
+      }
+      return message;
+    }
+    message = { ...message, version: this.messagesById[id].length };
+    this.messagesById[id].push(message);
+    clientVersions[message.clientId] = message.localVersion;
+    return message;
+  }
+
+  public async sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot> {
+    if (this.clientVersionsById[id] == null) {
+      throw new Error("Unknown document");
+    }
+    const snapshots = this.snapshotsById[id];
+    if (!snapshots.length) {
+      snapshots.push(snapshot);
+      return snapshot;
+    }
+    for (let i = snapshots.length - 1; i > 0; i--) {
+      const snapshot1 = snapshots[i];
+      if (snapshot1.version === snapshot.version) {
+        return snapshot;
+      } else if (snapshot1.version < snapshot.version) {
+        snapshots.splice(i + 1, 0, snapshot);
+        return snapshot;
+      }
+    }
+    snapshots.unshift(snapshot);
+    return snapshot;
+  }
+}
+
+export interface PubSub {}
+
+export class Server {
+  public constructor(public storage: Storage, public pubsub: PubSub) {}
 }

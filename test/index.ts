@@ -5,8 +5,6 @@ import { expect } from "chai";
 // testcheck.install();
 
 import * as shredder from "../src/index";
-import { Client } from "../src/index";
-
 describe("subseq", () => {
   describe("count", () => {
     const s = [0, 10, 5, 8, 4, 4];
@@ -338,6 +336,7 @@ describe("patch", () => {
   });
 });
 
+import { Client } from "../src/index";
 describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
     it("concurrent revisions", () => {
@@ -376,21 +375,25 @@ describe("Document", () => {
         visible: "hello world",
         hidden: "",
         hiddenSeq: [0, 11],
+        version: 0,
       });
       expect(doc.snapshotAt(1)).to.deep.equal({
         visible: "Hello World",
         hidden: "hw",
         hiddenSeq: [0, 1, 1, 6, 1, 4],
+        version: 1,
       });
       expect(doc.snapshotAt(2)).to.deep.equal({
         visible: "Hello, Brian",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 11, 7],
+        version: 2,
       });
       expect(doc.snapshotAt(3)).to.deep.equal({
         visible: "Hello, Brian, Dr. Evil",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 21, 7],
+        version: 3,
       });
       expect(doc.snapshotAt(3)).to.deep.equal(doc.snapshot);
     });
@@ -405,6 +408,7 @@ describe("Document", () => {
         visible: "herald",
         hidden: "ello wor",
         hiddenSeq: [0, 4, 8, 2],
+        version: 1,
       });
     });
 
@@ -460,6 +464,7 @@ describe("Document", () => {
         visible: "goodbye hey world",
         hidden: "hello ",
         hiddenSeq: [0, 8, 6, 9],
+        version: 3,
       });
     });
 
@@ -473,6 +478,7 @@ describe("Document", () => {
         visible: "goodbye hey world",
         hidden: "hello ",
         hiddenSeq: [1, 6, 17],
+        version: 3,
       });
     });
 
@@ -486,6 +492,7 @@ describe("Document", () => {
         visible: "goodbye hey world",
         hidden: "hello ",
         hiddenSeq: [0, 8, 6, 9],
+        version: 3,
       });
     });
 
@@ -512,6 +519,7 @@ describe("Document", () => {
         visible: "hello worlds",
         hidden: "",
         hiddenSeq: [0, 12],
+        version: 2,
       });
     });
 
@@ -660,6 +668,7 @@ describe("Document", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
       const doc1 = client1.createDocument("doc1", "hello world");
+      doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
       doc1.edit([0, 13, "s", 13]);
@@ -672,6 +681,7 @@ describe("Document", () => {
         visible: "goodbye_worlds",
         hidden: "hello ",
         hiddenSeq: [0, 7, 5, 1, 1, 6],
+        version: 3,
       });
       expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
     });
@@ -680,6 +690,7 @@ describe("Document", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
       const doc1 = client1.createDocument("doc1", "hello world");
+      doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
       const message1 = {
@@ -699,6 +710,7 @@ describe("Document", () => {
         visible: "goodbyehello worlds",
         hidden: "",
         hiddenSeq: [0, 19],
+        version: 3,
       });
       expect(doc1.hiddenSeqAt(0)).to.deep.equal([0, 11]);
     });
@@ -707,6 +719,7 @@ describe("Document", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
       const doc1 = client1.createDocument("doc1", "hello world");
+      doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
       const message1 = {
@@ -720,8 +733,45 @@ describe("Document", () => {
         visible: "goodbye world",
         hidden: "hello",
         hiddenSeq: [0, 7, 5, 6],
+        version: 1,
       });
       expect(doc2.snapshot).to.deep.equal(doc1.snapshot);
+    });
+  });
+});
+
+import { InMemoryStorage } from "../src/index";
+describe("InMemoryStorage", () => {
+  describe("sendMessage", () => {
+    it("send message", async () => {
+      const client = new Client("id1");
+      const doc = client.createDocument("doc1", "hello world");
+      const storage = new InMemoryStorage();
+      const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      doc.ingest(message1);
+      doc.edit([0, 11, "!", 11]);
+      const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      const messages = await storage.fetchMessages(doc.id);
+      expect(messages).to.deep.equal([message1, message2]);
+    });
+
+    it("send snapshot", async () => {
+      const client = new Client("id1");
+      const doc = client.createDocument("doc1", "hello world");
+      const storage = new InMemoryStorage();
+      const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      doc.ingest(message1);
+      doc.edit([0, 11, "!", 11]);
+      const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      doc.ingest(message2);
+      storage.sendSnapshot(doc.id, doc.snapshotAt(1));
+      storage.sendSnapshot(doc.id, doc.snapshotAt(0));
+      const snapshot0 = await storage.fetchSnapshot(doc.id, 0);
+      const snapshot1 = await storage.fetchSnapshot(doc.id);
+      expect(snapshot0).to.deep.equal(doc.snapshotAt(0));
+      expect(snapshot1).to.deep.equal(doc.snapshotAt(1));
+      const messages = await storage.fetchMessages(doc.id);
+      expect(messages).to.deep.equal([]);
     });
   });
 });
