@@ -1,7 +1,3 @@
-// import * as testcheck from "mocha-testcheck";
-// import { check, gen } from "mocha-testcheck";
-// testcheck.install();
-
 import * as shredder from "../index";
 describe("subseq", () => {
   describe("count", () => {
