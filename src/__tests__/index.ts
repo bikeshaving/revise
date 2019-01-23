@@ -734,7 +734,7 @@ describe("Document", () => {
   });
 });
 
-import { InMemoryStorage } from "../index";
+import { Message, InMemoryStorage } from "../index";
 describe("InMemoryStorage", () => {
   describe("sendMessage", () => {
     test("send message", async () => {
@@ -766,6 +766,33 @@ describe("InMemoryStorage", () => {
       expect(snapshot1).toEqual(doc.snapshotAt(1));
       const messages = await storage.fetchMessages(doc.id);
       expect(messages).toEqual([]);
+    });
+  });
+
+  describe("subscribe", () => {
+    test("subscribe", async () => {
+      const client = new Client("id");
+      const doc = client.createDocument("doc1", "hello world");
+      const storage = new InMemoryStorage();
+      const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      doc.ingest(message1);
+      const subscription = await storage.subscribe(doc.id);
+      doc.edit([0, 11, "!", 11]);
+      const messages: Promise<Message[]> = (async () => {
+        let messages: Message[] = [];
+        for await (const message of subscription) {
+          messages.push(message);
+        }
+        return messages;
+      })();
+      const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      doc.ingest(message2);
+      doc.edit(["H", 1, 6, "W", 7, 12]);
+      const message3 = await storage.sendMessage(doc.id, doc.createMessage()!);
+      doc.ingest(message3);
+      subscription.close();
+      expect(storage["channelsById"][doc.id]).toEqual([]);
+      await expect(messages).resolves.toEqual([message2, message3]);
     });
   });
 });

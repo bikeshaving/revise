@@ -810,6 +810,8 @@ export class Document {
   }
 }
 
+import { Channel, FixedBuffer } from "./channel";
+
 export interface Storage {
   fetchSnapshot(id: string, min?: number): Promise<Snapshot>;
   fetchMessages(id: string, from?: number, to?: number): Promise<Message[]>;
@@ -818,10 +820,15 @@ export interface Storage {
 }
 
 export interface Subscription {
-  subscribe(id: string, from?: number): Promise<AsyncIterator<Message>>;
+  subscribe(id: string, from?: number): Promise<Channel<Message>>;
+}
+
+export interface Publication {
+  publish(id: string, message: Message): Promise<void>;
 }
 
 export type Connection = Storage & Subscription;
+export type PubSub = Publication & Subscription;
 
 export class Client {
   private documents: Record<string, Document> = {};
@@ -834,10 +841,11 @@ export class Client {
   }
 }
 
-export class InMemoryStorage implements Storage {
+export class InMemoryStorage implements Connection {
   protected clientVersionsById: Record<string, Record<string, number>> = {};
   protected snapshotsById: Record<string, Snapshot[]> = {};
   protected messagesById: Record<string, Message[]> = {};
+  protected channelsById: Record<string, Channel<Message>[]> = {};
 
   public async fetchMessages(
     id: string,
@@ -887,6 +895,7 @@ export class InMemoryStorage implements Storage {
       this.clientVersionsById[id][message.clientId] = message.localVersion;
       this.messagesById[id] = [message];
       this.snapshotsById[id] = [];
+      this.channelsById[id] = [];
       return message;
     }
     const expectedLocalVersion = (clientVersions[message.clientId] || -1) + 1;
@@ -903,6 +912,14 @@ export class InMemoryStorage implements Storage {
     message = { ...message, version: this.messagesById[id].length };
     this.messagesById[id].push(message);
     clientVersions[message.clientId] = message.localVersion;
+    this.channelsById[id].map(async (channel, i) => {
+      try {
+        await channel.put(message);
+      } catch (err) {
+        channel.close();
+        this.channelsById[id].splice(i, 1);
+      }
+    });
     return message;
   }
 
@@ -927,9 +944,33 @@ export class InMemoryStorage implements Storage {
     snapshots.unshift(snapshot);
     return snapshot;
   }
-}
 
-export interface PubSub {}
+  async subscribe(id: string, from?: number): Promise<Channel<Message>> {
+    if (this.clientVersionsById[id] == null) {
+      throw new Error("Unknown document");
+    }
+    let channels: Channel<Message>[] = this.channelsById[id];
+    const bufferLength = 1000;
+    const channel = new Channel(new FixedBuffer<Message>(bufferLength));
+    channels.push(channel);
+    channel.onclose = () => {
+      const i = channels.indexOf(channel);
+      if (i > -1) {
+        channels.splice(i, 1);
+      }
+    };
+    if (from != null) {
+      const messages = await this.fetchMessages(id, from);
+      if (messages.length > bufferLength) {
+        throw new Error("Too many messages to subscribe to");
+      }
+      while (messages.length) {
+        channel.put(messages.shift()!);
+      }
+    }
+    return channel;
+  }
+}
 
 export class Server {
   public constructor(public storage: Storage, public pubsub: PubSub) {}
