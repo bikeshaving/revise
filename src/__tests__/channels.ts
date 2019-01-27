@@ -35,23 +35,27 @@ describe("FixedBuffer", () => {
 });
 
 describe("SlidingBuffer", () => {
-  test("slides", () => {
+  test("slide", () => {
     const buffer = new SlidingBuffer<number>(2);
     buffer.put(1);
     buffer.put(2);
     buffer.put(3);
-    expect(buffer.take()).toEqual(2);
-    expect(buffer.take()).toEqual(3);
+    buffer.put(4);
+    buffer.put(5);
+    expect(buffer.take()).toEqual(4);
+    expect(buffer.take()).toEqual(5);
     expect(buffer.take()).toEqual(undefined);
   });
 });
 
 describe("DroppingBuffer", () => {
-  test("drops", () => {
+  test("drop", () => {
     const buffer = new DroppingBuffer<number>(2);
     buffer.put(1);
     buffer.put(2);
     buffer.put(3);
+    buffer.put(4);
+    buffer.put(5);
     expect(buffer.take()).toEqual(1);
     expect(buffer.take()).toEqual(2);
     expect(buffer.take()).toEqual(undefined);
