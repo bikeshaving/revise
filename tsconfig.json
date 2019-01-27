@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "outDir": "lib",
-    "lib": ["ESNext", "dom"],
+    "lib": ["esnext", "dom"],
     "declaration": true,
     "strict": true,
     "downlevelIteration": true,
