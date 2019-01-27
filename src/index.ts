@@ -834,7 +834,7 @@ export class Client {
   private documents: Record<string, Document> = {};
   public constructor(public id: string, public connection?: Connection) {}
 
-  public createDocument(id: string, initial?: string): Document {
+  public async createDocument(id: string, initial?: string): Promise<Document> {
     const doc = Document.create(id, this, initial);
     this.documents[id] = doc;
     return doc;

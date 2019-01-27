@@ -326,12 +326,13 @@ describe("patch", () => {
   });
 });
 
-import { Client } from "../index";
+import { Client, Document, Message, InMemoryStorage } from "../index";
+
 describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
     test("concurrent revisions", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
@@ -344,7 +345,7 @@ describe("Document", () => {
 
     test("revisions with revives", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
       expect(doc.hiddenSeqAt(0)).toEqual([0, 11]);
@@ -357,7 +358,7 @@ describe("Document", () => {
   describe("Document.snapshotAt", () => {
     test("concurrent revisions", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
@@ -392,7 +393,7 @@ describe("Document", () => {
   describe("Document.edit", () => {
     test("simple", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       expect(doc.snapshot).toEqual({
         visible: "herald",
@@ -404,7 +405,7 @@ describe("Document", () => {
 
     test("sequential 1", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);
       expect(doc.snapshot.visible).toEqual("heraldry");
@@ -412,7 +413,7 @@ describe("Document", () => {
 
     test("sequential 2", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       expect(doc.snapshot.visible).toEqual("Hello, Brian");
@@ -420,7 +421,7 @@ describe("Document", () => {
 
     test("sequential 3", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
@@ -429,7 +430,7 @@ describe("Document", () => {
 
     test("concurrent 1", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit(["Great H", 2, 5, 11], 1, 0);
       expect(doc.snapshot.visible).toEqual("Great Hera");
@@ -437,7 +438,7 @@ describe("Document", () => {
 
     test("concurrent 2", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
@@ -446,7 +447,7 @@ describe("Document", () => {
 
     test("concurrent 3", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
@@ -460,7 +461,7 @@ describe("Document", () => {
 
     test("concurrent 4", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
@@ -474,7 +475,7 @@ describe("Document", () => {
 
     test("concurrent 5", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
@@ -488,7 +489,7 @@ describe("Document", () => {
 
     test("concurrent 6", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       //"hello world"
       // ===========++++
       doc.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
@@ -502,7 +503,7 @@ describe("Document", () => {
 
     test("revive 1", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5, "s", 5]);
       expect(doc.snapshot).toEqual({
@@ -515,7 +516,7 @@ describe("Document", () => {
 
     test("revive 2", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([11]);
       doc.edit(["hello ", 0]);
       doc.edit([0, 6, "worlds", 6]);
@@ -525,7 +526,7 @@ describe("Document", () => {
 
     test("revive 3", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
       doc.edit(["hello ", 0, 5, "s", 5]);
@@ -535,7 +536,7 @@ describe("Document", () => {
 
     test("revive 4", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 6, "waterw", 7, 11]);
       expect(doc.snapshot.visible).toEqual("Hello waterworld");
@@ -544,7 +545,7 @@ describe("Document", () => {
 
     test("revive 5", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 6, 11]);
       doc.edit([0, 3, "ium", 5, 6, "world", 6]);
       expect(doc.snapshot.visible).toEqual("helium world");
@@ -553,7 +554,7 @@ describe("Document", () => {
 
     test("revive 6", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
       expect(doc.snapshot.visible).toEqual("world");
@@ -564,7 +565,7 @@ describe("Document", () => {
 
     test("revive 7", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([6, 11]);
       doc.edit(["Hello ", 0, 5]);
@@ -574,7 +575,7 @@ describe("Document", () => {
 
     test("revive 8", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
       doc.edit([0, 5, " World", 5]);
@@ -584,7 +585,7 @@ describe("Document", () => {
 
     test("revive 10", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
       expect(doc.snapshot.visible).toEqual("hello world");
@@ -594,7 +595,7 @@ describe("Document", () => {
 
     test("no revive 1", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["xxxxxx", 0, 5]);
       expect(doc.snapshot.visible).toEqual("xxxxxxworld");
@@ -603,7 +604,7 @@ describe("Document", () => {
 
     test("no revive 2", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
       doc.edit([0, 5, " Wacky World", 5]);
@@ -613,7 +614,7 @@ describe("Document", () => {
 
     test("revive concurrent 1", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
       doc.edit([0, 6, "Brian", 11], 1, 1);
@@ -623,7 +624,7 @@ describe("Document", () => {
 
     test("revive concurrent 2", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
       doc.edit(["goodbye ", 0, 5], 1, 1);
@@ -633,7 +634,7 @@ describe("Document", () => {
 
     test("revive concurrent 3", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
@@ -645,7 +646,7 @@ describe("Document", () => {
   describe("Document.undo", () => {
     test("simple", () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
       doc.undo(1);
@@ -657,7 +658,7 @@ describe("Document", () => {
     test("simple", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
-      const doc1 = client1.createDocument("doc1", "hello world");
+      const doc1 = Document.create("doc1", client1, "hello world");
       doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
@@ -679,7 +680,7 @@ describe("Document", () => {
     test("revive", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
-      const doc1 = client1.createDocument("doc1", "hello world");
+      const doc1 = Document.create("doc1", client1, "hello world");
       doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
@@ -708,7 +709,7 @@ describe("Document", () => {
     test("idempotent", () => {
       const client1 = new Client("id1");
       const client2 = new Client("id2");
-      const doc1 = client1.createDocument("doc1", "hello world");
+      const doc1 = Document.create("doc1", client1, "hello world");
       doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
@@ -729,13 +730,11 @@ describe("Document", () => {
     });
   });
 });
-
-import { Message, InMemoryStorage } from "../index";
 describe("InMemoryStorage", () => {
   describe("sendMessage", () => {
     test("send message", async () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
       const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
       doc.ingest(message1);
@@ -747,7 +746,7 @@ describe("InMemoryStorage", () => {
 
     test("send snapshot", async () => {
       const client = new Client("id1");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
       const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
       doc.ingest(message1);
@@ -768,7 +767,7 @@ describe("InMemoryStorage", () => {
   describe("subscribe", () => {
     test("subscribe", async () => {
       const client = new Client("id");
-      const doc = client.createDocument("doc1", "hello world");
+      const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
       const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
       doc.ingest(message1);
