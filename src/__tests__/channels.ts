@@ -185,11 +185,7 @@ describe("Channel", () => {
       await channel.put(1);
       await channel.put(2);
       await channel.put(3);
-      try {
-        await channel.throw(error);
-      } catch (err) {
-        expect(err).toEqual(error);
-      }
+      await channel.throw(error);
       return channel.put(4);
     })();
     let result: number[] = [];

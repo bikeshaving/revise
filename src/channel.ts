@@ -6,7 +6,7 @@ export interface Buffer<T> {
 export class FixedBuffer<T> implements Buffer<T> {
   protected resolve?: () => void;
   protected buffer: T[] = [];
-  constructor(protected length: number = 1) {}
+  constructor(protected length: number) {}
   async put(value: T): Promise<void> {
     if (this.buffer.length < this.length) {
       this.buffer.push(value);
@@ -31,13 +31,14 @@ export class FixedBuffer<T> implements Buffer<T> {
   }
 }
 
-export class DroppingBuffer<T> implements Buffer<T> {
+export class SlidingBuffer<T> implements Buffer<T> {
   protected buffer: T[] = [];
-  constructor(protected length: number = 1) {}
+  constructor(protected length: number) {}
   async put(value: T): Promise<void> {
-    if (this.buffer.length < this.length) {
-      this.buffer.push(value);
+    if (this.buffer.length >= this.length) {
+      this.buffer.shift();
     }
+    this.buffer.push(value);
   }
 
   take(): T | undefined {
@@ -45,14 +46,13 @@ export class DroppingBuffer<T> implements Buffer<T> {
   }
 }
 
-export class SlidingBuffer<T> implements Buffer<T> {
+export class DroppingBuffer<T> implements Buffer<T> {
   protected buffer: T[] = [];
-  constructor(protected length: number = 1) {}
+  constructor(protected length: number) {}
   async put(value: T): Promise<void> {
-    if (this.buffer.length >= this.length) {
-      this.buffer.shift();
+    if (this.buffer.length < this.length) {
+      this.buffer.push(value);
     }
-    this.buffer.push(value);
   }
 
   take(): T | undefined {
@@ -110,17 +110,19 @@ export class Channel<T> implements AsyncIterableIterator<T> {
     });
   }
 
-  return(): Promise<IteratorResult<T>> {
+  return(_any?: any): Promise<IteratorResult<T>> {
     this.close();
     return Promise.resolve({ ...this.done });
   }
 
-  throw(error: Error): Promise<IteratorResult<T>> {
+  throw(_any?: any): Promise<IteratorResult<T>> {
     this.close();
-    return Promise.reject(error);
+    return Promise.resolve({ ...this.done });
   }
 
   [Symbol.asyncIterator]() {
     return this;
   }
 }
+
+export default Channel;

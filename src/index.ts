@@ -70,9 +70,9 @@ class ZipIterator implements IterableIterator<ZipValue> {
   private consumed1: number = 0;
   private consumed2: number = 0;
   private consumed: number = 0;
-  public constructor(private subseq1: Subseq, private subseq2: Subseq) {}
+  constructor(private subseq1: Subseq, private subseq2: Subseq) {}
 
-  public next(): IteratorResult<ZipValue> {
+  next(): IteratorResult<ZipValue> {
     const length1 = this.subseq1[this.i1];
     const length2 = this.subseq2[this.i2];
     const flag1 = !this.subseq1[0] === (this.i1 % 2 === 0);
@@ -106,11 +106,11 @@ class ZipIterator implements IterableIterator<ZipValue> {
     };
   }
 
-  public [Symbol.iterator]() {
+  [Symbol.iterator]() {
     return this;
   }
 
-  public join(fn: (flag1: boolean, flag2: boolean) => boolean): Subseq {
+  join(fn: (flag1: boolean, flag2: boolean) => boolean): Subseq {
     const subseq: Subseq = [];
     for (const [length, flag1, flag2] of this) {
       push(subseq, length, fn(flag1, flag2));
@@ -492,13 +492,15 @@ export interface Message {
 
 export interface Revision {
   clientId: string;
+  priority: number;
+  localVersion: number;
   insertSeq: Subseq;
   deleteSeq: Subseq;
   reviveSeq: Subseq;
-  priority: number;
 }
 
 export class Document {
+  public connected = false;
   protected constructor(
     public id: string,
     public client: Client,
@@ -508,11 +510,7 @@ export class Document {
     protected localVersion = 0,
   ) {}
 
-  public static create(
-    id: string,
-    client: Client,
-    initial: string = "",
-  ): Document {
+  static create(id: string, client: Client, initial: string = ""): Document {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
@@ -521,15 +519,29 @@ export class Document {
     };
     const revision: Revision = {
       clientId: client.id,
+      priority: 0,
+      localVersion: 0,
       insertSeq: initial.length ? [1, initial.length] : [],
       deleteSeq: [],
       reviveSeq: [],
-      priority: 0,
     };
-    return new Document(id, client, snapshot, [revision]);
+    return new Document(id, client, snapshot, [revision], -1, 1);
   }
 
-  public hiddenSeqAt(version: number): Subseq {
+  static from(
+    id: string,
+    client: Client,
+    snapshot: Snapshot,
+    messages: Message[],
+  ): Document {
+    const doc = new Document(id, client, snapshot, [], snapshot.version);
+    for (const message of messages) {
+      doc.ingest(message);
+    }
+    return doc;
+  }
+
+  hiddenSeqAt(version: number): Subseq {
     let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
     const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
@@ -541,7 +553,7 @@ export class Document {
     return hiddenSeq;
   }
 
-  public snapshotAt(version: number): Snapshot {
+  snapshotAt(version: number): Snapshot {
     const hiddenSeq: Subseq = this.hiddenSeqAt(version);
     let insertSeq: Subseq = [0, count(hiddenSeq)];
     for (const revision of this.revisions.slice(version + 1)) {
@@ -560,21 +572,23 @@ export class Document {
     return { visible, hidden, hiddenSeq, version };
   }
 
-  public patchAt(version: number): Patch {
+  patchAt(version: number): Patch {
     const revision: Revision =
       this.revisions[version] || this.revisions[this.revisions.length - 1];
     const snapshot: Snapshot = this.snapshotAt(version);
-    const insertSeq: Subseq = expand(revision.reviveSeq, revision.insertSeq, {
+    let insertSeq: Subseq = expand(revision.reviveSeq, revision.insertSeq, {
       union: true,
     });
-    return synthesize(
-      extract(snapshot.visible, insertSeq),
-      insertSeq,
-      expand(revision.deleteSeq, revision.insertSeq),
-    );
+    let deleteSeq = expand(revision.deleteSeq, revision.insertSeq);
+    const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
+    insertSeq = shrink(insertSeq, hiddenSeq);
+    deleteSeq = shrink(deleteSeq, hiddenSeq);
+    const inserted = extract(snapshot.visible, shrink(insertSeq, deleteSeq));
+    const patch = synthesize(inserted, insertSeq, deleteSeq);
+    return patch;
   }
 
-  public clone(client: Client = this.client): Document {
+  clone(client: Client = this.client): Document {
     return new Document(
       this.id,
       client,
@@ -584,7 +598,7 @@ export class Document {
     );
   }
 
-  public apply(
+  apply(
     inserted: string,
     revision: Revision,
     snapshot: Snapshot = this.snapshot,
@@ -622,7 +636,7 @@ export class Document {
     return [inserted, revision, snapshot];
   }
 
-  public edit(
+  edit(
     patch: Patch,
     priority: number = 0,
     version: number = this.revisions.length - 1,
@@ -662,19 +676,22 @@ export class Document {
       deleteSeq = expand(deleteSeq, revision.insertSeq);
     }
     let revision: Revision = {
+      clientId: this.client.id,
+      priority,
+      localVersion: this.localVersion,
       insertSeq,
       deleteSeq,
       reviveSeq: [0, count(deleteSeq)],
-      priority,
-      clientId: this.client.id,
     };
     let snapshot: Snapshot;
     [, revision, snapshot] = this.apply(inserted, revision);
     this.revisions.push(revision);
+    this.localVersion += 1;
     this.snapshot = snapshot;
+    this.client.save(this.id);
   }
 
-  public undo(i: number): void {
+  undo(i: number): void {
     const [revision, ...revisions] = this.revisions.slice(i);
     let reviveSeq = expand(revision.deleteSeq, revision.insertSeq);
     let deleteSeq = expand(revision.reviveSeq, revision.insertSeq, {
@@ -689,15 +706,18 @@ export class Document {
     }
     const [, revision1, snapshot] = this.apply("", {
       ...revision,
+      localVersion: this.localVersion,
       insertSeq: [0, count(deleteSeq)],
       deleteSeq,
       reviveSeq,
     });
     this.snapshot = snapshot;
     this.revisions.push(revision1);
+    this.localVersion += 1;
+    this.client.save(this.id);
   }
 
-  public ingest(message: Message): void {
+  ingest(message: Message): void {
     if (
       this.lastKnownVersion + 1 < message.version ||
       this.lastKnownVersion < message.lastKnownVersion
@@ -747,11 +767,12 @@ export class Document {
       }
     }
     let revision: Revision = {
+      clientId: message.clientId,
+      priority: message.priority,
+      localVersion: message.localVersion,
       insertSeq,
       deleteSeq,
       reviveSeq: [0, count(deleteSeq)],
-      clientId: message.clientId,
-      priority: message.priority,
     };
     let snapshot: Snapshot = this.snapshotAt(this.lastKnownVersion);
     [inserted, revision] = this.apply(inserted, revision, snapshot);
@@ -792,7 +813,8 @@ export class Document {
     this.lastKnownVersion = message.version;
   }
 
-  public createMessage(): Message | undefined {
+  // TODO: delete this
+  createMessage(): Message | undefined {
     if (this.lastKnownVersion > this.revisions.length) {
       throw new Error("Incorrect last known version");
     } else if (this.lastKnownVersion === this.revisions.length) {
@@ -808,35 +830,141 @@ export class Document {
       lastKnownVersion: this.lastKnownVersion,
     };
   }
+
+  createMessages(
+    from: number = this.lastKnownVersion + 1,
+    to?: number,
+  ): Message[] {
+    if (from > this.revisions.length) {
+      throw new Error("From greater than this.revisions.length");
+    }
+    const revisions = this.revisions.slice(from, to);
+    return revisions.map((revision, i) => {
+      return {
+        patch: this.patchAt(from + i),
+        clientId: revision.clientId,
+        priority: revision.priority,
+        localVersion: revision.localVersion,
+        version: from + i,
+        lastKnownVersion: this.lastKnownVersion,
+      };
+    });
+  }
 }
 
 import { Channel, FixedBuffer } from "./channel";
 
-export interface Storage {
+export interface Connection {
   fetchSnapshot(id: string, min?: number): Promise<Snapshot>;
   fetchMessages(id: string, from?: number, to?: number): Promise<Message[]>;
-  sendMessage(id: string, message: Message): Promise<Message>;
+  sendMessages(id: string, messages: Message[]): Promise<Message[]>;
   sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot>;
+  messagesChannel(id: string, from?: number): Promise<Channel<Message[]>>;
 }
 
-export interface Subscription {
-  subscribe(id: string, from?: number): Promise<Channel<Message>>;
+interface ClientSaveOptions {
+  force?: boolean;
 }
-
-export interface Publication {
-  publish(id: string, message: Message): Promise<void>;
-}
-
-export type Connection = Storage & Subscription;
-export type PubSub = Publication & Subscription;
 
 export class Client {
-  private documents: Record<string, Document> = {};
-  public constructor(public id: string, public connection?: Connection) {}
+  protected documents: Record<string, Document> = {};
+  protected pending: Set<string> = new Set();
+  protected pollTimeout: any;
+  protected saveResolves: (() => void)[] = [];
+  constructor(public id: string, public connection: Connection) {
+    this.poll();
+  }
 
-  public async createDocument(id: string, initial?: string): Promise<Document> {
+  save(id: string, options: ClientSaveOptions = {}): Promise<void> {
+    this.pending.add(id);
+    if (options.force) {
+      return this.sync();
+    }
+    return this.whenSynced();
+  }
+
+  async sync(): Promise<void> {
+    if (this.pending.size) {
+      await Promise.all(
+        Array.from(this.pending).map(async (id) => {
+          const doc = this.documents[id];
+          if (doc) {
+            // TODO: error recovery
+            const messages = await this.connection.sendMessages(
+              id,
+              doc.createMessages(),
+            );
+            for (const message of messages) {
+              doc.ingest(message);
+            }
+          }
+          this.pending.delete(id);
+        }),
+      );
+      this.saveResolves.forEach((resolve) => resolve());
+      this.saveResolves = [];
+    }
+  }
+
+  whenSynced(): Promise<void> {
+    if (this.pending.size) {
+      return new Promise((resolve) => {
+        this.saveResolves.push(resolve);
+      });
+    }
+    return Promise.resolve();
+  }
+
+  hasPending(): boolean {
+    return !!this.pending.size;
+  }
+
+  protected pollInternal = async () => {
+    await this.sync();
+    this.pollTimeout = setTimeout(this.pollInternal, 4000);
+  };
+
+  poll(): void {
+    if (this.pollTimeout) {
+      return;
+    }
+    this.pollInternal();
+  }
+
+  async connect(id: string): Promise<void> {
+    const doc = this.documents[id];
+    if (doc == null) {
+      throw new Error("Unknown document");
+    }
+    await this.sync();
+    const messagesChannel = await this.connection.messagesChannel(
+      id,
+      doc.snapshot.version,
+    );
+    for await (const messages of messagesChannel) {
+      for (const message of messages) {
+        doc.ingest(message);
+      }
+    }
+  }
+
+  async createDocument(id: string, initial?: string): Promise<Document> {
     const doc = Document.create(id, this, initial);
     this.documents[id] = doc;
+    this.save(doc.id, { force: true });
+    this.connect(doc.id);
+    return doc;
+  }
+
+  async getDocument(id: string): Promise<Document> {
+    if (this.documents[id]) {
+      return this.documents[id];
+    }
+    const snapshot = await this.connection.fetchSnapshot(id);
+    const messages = await this.connection.fetchMessages(id, snapshot.version);
+    const doc = Document.from(id, this, snapshot, messages);
+    this.documents[id] = doc;
+    this.connect(doc.id);
     return doc;
   }
 }
@@ -845,9 +973,9 @@ export class InMemoryStorage implements Connection {
   protected clientVersionsById: Record<string, Record<string, number>> = {};
   protected snapshotsById: Record<string, Snapshot[]> = {};
   protected messagesById: Record<string, Message[]> = {};
-  protected channelsById: Record<string, Channel<Message>[]> = {};
+  protected channelsById: Record<string, Channel<Message[]>[]> = {};
 
-  public async fetchMessages(
+  async fetchMessages(
     id: string,
     from?: number,
     to?: number,
@@ -866,7 +994,7 @@ export class InMemoryStorage implements Connection {
     return this.messagesById[id].slice(from, to);
   }
 
-  public async fetchSnapshot(id: string, min?: number): Promise<Snapshot> {
+  async fetchSnapshot(id: string, min?: number): Promise<Snapshot> {
     if (this.clientVersionsById[id] == null) {
       throw new Error("Unknown document");
     }
@@ -885,7 +1013,7 @@ export class InMemoryStorage implements Connection {
     return snapshots[0];
   }
 
-  public async sendMessage(id: string, message: Message): Promise<Message> {
+  saveMessage(id: string, message: Message): Message {
     const clientVersions: Record<string, number> = this.clientVersionsById[id];
     if (clientVersions == null) {
       if (message.version !== 0 || message.localVersion !== 0) {
@@ -898,13 +1026,19 @@ export class InMemoryStorage implements Connection {
       this.channelsById[id] = [];
       return message;
     }
-    const expectedLocalVersion = (clientVersions[message.clientId] || -1) + 1;
+    const expectedLocalVersion =
+      clientVersions[message.clientId] == null
+        ? 0
+        : clientVersions[message.clientId] + 1;
     // TODO: reject message if lastKnownVersion is too far off current version
     // TODO: reject if we don’t have a recent-enough snapshot
     if (message.localVersion > expectedLocalVersion) {
       throw new Error("Missing message");
     } else if (message.localVersion < expectedLocalVersion) {
-      if (message.version === 0) {
+      if (
+        message.version === 0 &&
+        message.clientId !== this.messagesById[id][0].clientId
+      ) {
         throw new Error("Document already exists");
       }
       return message;
@@ -912,18 +1046,24 @@ export class InMemoryStorage implements Connection {
     message = { ...message, version: this.messagesById[id].length };
     this.messagesById[id].push(message);
     clientVersions[message.clientId] = message.localVersion;
+    return message;
+  }
+
+  async sendMessages(id: string, messages: Message[]): Promise<Message[]> {
+    // TODO run this in a transaction
+    messages = messages.map((message) => this.saveMessage(id, message));
     this.channelsById[id].map(async (channel, i) => {
       try {
-        await channel.put(message);
+        await channel.put(messages);
       } catch (err) {
         channel.close();
         this.channelsById[id].splice(i, 1);
       }
     });
-    return message;
+    return messages;
   }
 
-  public async sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot> {
+  async sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot> {
     if (this.clientVersionsById[id] == null) {
       throw new Error("Unknown document");
     }
@@ -945,13 +1085,15 @@ export class InMemoryStorage implements Connection {
     return snapshot;
   }
 
-  async subscribe(id: string, from?: number): Promise<Channel<Message>> {
+  async messagesChannel(
+    id: string,
+    from?: number,
+  ): Promise<Channel<Message[]>> {
     if (this.clientVersionsById[id] == null) {
       throw new Error("Unknown document");
     }
-    let channels: Channel<Message>[] = this.channelsById[id];
-    const bufferLength = 1000;
-    const channel = new Channel(new FixedBuffer<Message>(bufferLength));
+    let channels: Channel<Message[]>[] = this.channelsById[id];
+    const channel = new Channel(new FixedBuffer<Message[]>(1000));
     channels.push(channel);
     channel.onclose = () => {
       const i = channels.indexOf(channel);
@@ -961,17 +1103,8 @@ export class InMemoryStorage implements Connection {
     };
     if (from != null) {
       const messages = await this.fetchMessages(id, from);
-      if (messages.length > bufferLength) {
-        throw new Error("Too many messages to subscribe to");
-      }
-      while (messages.length) {
-        channel.put(messages.shift()!);
-      }
+      channel.put(messages);
     }
     return channel;
   }
-}
-
-export class Server {
-  public constructor(public storage: Storage, public pubsub: PubSub) {}
 }

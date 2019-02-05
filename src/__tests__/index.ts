@@ -331,7 +331,7 @@ import { Client, Document, Message, InMemoryStorage } from "../index";
 describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
     test("concurrent revisions", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -344,7 +344,7 @@ describe("Document", () => {
     });
 
     test("revisions with revives", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
@@ -357,7 +357,7 @@ describe("Document", () => {
 
   describe("Document.snapshotAt", () => {
     test("concurrent revisions", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -392,7 +392,7 @@ describe("Document", () => {
 
   describe("Document.edit", () => {
     test("simple", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       expect(doc.snapshot).toEqual({
@@ -404,7 +404,7 @@ describe("Document", () => {
     });
 
     test("sequential 1", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);
@@ -412,7 +412,7 @@ describe("Document", () => {
     });
 
     test("sequential 2", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -420,7 +420,7 @@ describe("Document", () => {
     });
 
     test("sequential 3", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
@@ -429,7 +429,7 @@ describe("Document", () => {
     });
 
     test("concurrent 1", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit(["Great H", 2, 5, 11], 1, 0);
@@ -437,7 +437,7 @@ describe("Document", () => {
     });
 
     test("concurrent 2", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
@@ -446,7 +446,7 @@ describe("Document", () => {
     });
 
     test("concurrent 3", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
@@ -460,7 +460,7 @@ describe("Document", () => {
     });
 
     test("concurrent 4", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5], 1);
@@ -474,7 +474,7 @@ describe("Document", () => {
     });
 
     test("concurrent 5", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
@@ -488,7 +488,7 @@ describe("Document", () => {
     });
 
     test("concurrent 6", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       //"hello world"
       // ===========++++
@@ -502,7 +502,7 @@ describe("Document", () => {
     });
 
     test("revive 1", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5, "s", 5]);
@@ -515,7 +515,7 @@ describe("Document", () => {
     });
 
     test("revive 2", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([11]);
       doc.edit(["hello ", 0]);
@@ -525,7 +525,7 @@ describe("Document", () => {
     });
 
     test("revive 3", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
@@ -535,7 +535,7 @@ describe("Document", () => {
     });
 
     test("revive 4", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 6, "waterw", 7, 11]);
@@ -544,7 +544,7 @@ describe("Document", () => {
     });
 
     test("revive 5", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 6, 11]);
       doc.edit([0, 3, "ium", 5, 6, "world", 6]);
@@ -553,7 +553,7 @@ describe("Document", () => {
     });
 
     test("revive 6", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([11]);
       doc.edit(["world", 0]);
@@ -564,7 +564,7 @@ describe("Document", () => {
     });
 
     test("revive 7", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([6, 11]);
@@ -574,7 +574,7 @@ describe("Document", () => {
     });
 
     test("revive 8", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
@@ -584,7 +584,7 @@ describe("Document", () => {
     });
 
     test("revive 10", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
@@ -594,7 +594,7 @@ describe("Document", () => {
     });
 
     test("no revive 1", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["xxxxxx", 0, 5]);
@@ -603,7 +603,7 @@ describe("Document", () => {
     });
 
     test("no revive 2", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, 11]);
@@ -613,7 +613,7 @@ describe("Document", () => {
     });
 
     test("revive concurrent 1", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit(["h", 1, 6, "w", 7, 11]);
@@ -623,7 +623,7 @@ describe("Document", () => {
     });
 
     test("revive concurrent 2", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
@@ -633,7 +633,7 @@ describe("Document", () => {
     });
 
     test("revive concurrent 3", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5], 1);
@@ -645,7 +645,7 @@ describe("Document", () => {
 
   describe("Document.undo", () => {
     test("simple", () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
@@ -656,8 +656,8 @@ describe("Document", () => {
 
   describe("Document.ingest", () => {
     test("simple", () => {
-      const client1 = new Client("id1");
-      const client2 = new Client("id2");
+      const client1 = new Client("id1", new InMemoryStorage());
+      const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
@@ -678,8 +678,8 @@ describe("Document", () => {
     });
 
     test("revive", () => {
-      const client1 = new Client("id1");
-      const client2 = new Client("id2");
+      const client1 = new Client("id1", new InMemoryStorage());
+      const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
@@ -707,8 +707,8 @@ describe("Document", () => {
     });
 
     test("idempotent", () => {
-      const client1 = new Client("id1");
-      const client2 = new Client("id2");
+      const client1 = new Client("id1", new InMemoryStorage());
+      const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       doc1.ingest(doc1.createMessage()!);
       const doc2 = doc1.clone(client2);
@@ -729,30 +729,41 @@ describe("Document", () => {
       expect(doc2.snapshot).toEqual(doc1.snapshot);
     });
   });
+
+  describe("patchAt", () => {
+    test("failing", () => {
+      const client = new Client("id1", new InMemoryStorage());
+      const doc = Document.create("doc1", client, "hello world");
+      doc.edit([0, 11, "!", 11]);
+      doc.edit([0, 5, "_", 6, 12]);
+      doc.edit([0, 11, 12]);
+      expect(doc.patchAt(0)).toEqual(["hello world", 0]);
+      expect(doc.patchAt(1)).toEqual([0, 11, "!", 11]);
+      expect(doc.patchAt(2)).toEqual([0, 5, "_", 6, 12]);
+      expect(doc.patchAt(3)).toEqual([0, 11, 12]);
+    });
+  });
 });
+
 describe("InMemoryStorage", () => {
-  describe("sendMessage", () => {
+  describe("sendMessages", () => {
     test("send message", async () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
-      const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      doc.ingest(message1);
       doc.edit([0, 11, "!", 11]);
-      const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      const messages = await storage.fetchMessages(doc.id);
-      expect(messages).toEqual([message1, message2]);
+      doc.edit(["goodbye", 5, 12]);
+      const messages = await storage.sendMessages(doc.id, doc.createMessages());
+      const messages1 = await storage.fetchMessages(doc.id);
+      expect(messages).toEqual(messages1);
     });
 
     test("send snapshot", async () => {
-      const client = new Client("id1");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
-      const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      doc.ingest(message1);
       doc.edit([0, 11, "!", 11]);
-      const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      doc.ingest(message2);
+      await storage.sendMessages(doc.id, doc.createMessages());
       storage.sendSnapshot(doc.id, doc.snapshotAt(1));
       storage.sendSnapshot(doc.id, doc.snapshotAt(0));
       const snapshot0 = await storage.fetchSnapshot(doc.id, 0);
@@ -764,30 +775,77 @@ describe("InMemoryStorage", () => {
     });
   });
 
-  describe("subscribe", () => {
+  describe("messagesChannel", () => {
     test("subscribe", async () => {
-      const client = new Client("id");
+      const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
-      const message1 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      doc.ingest(message1);
-      const subscription = await storage.subscribe(doc.id);
-      doc.edit([0, 11, "!", 11]);
-      const messages: Promise<Message[]> = (async () => {
+      const messages = await storage.sendMessages(doc.id, doc.createMessages());
+      for (const message of messages) {
+        doc.ingest(message);
+      }
+      const messageChan = await storage.messagesChannel(doc.id);
+      const messagesPromise: Promise<Message[]> = (async () => {
         let messages: Message[] = [];
-        for await (const message of subscription) {
-          messages.push(message);
+        for await (const messages1 of messageChan) {
+          messages = messages.concat(messages1);
         }
         return messages;
       })();
-      const message2 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      doc.ingest(message2);
+      doc.edit([0, 11, "!", 11]);
       doc.edit(["H", 1, 6, "W", 7, 12]);
-      const message3 = await storage.sendMessage(doc.id, doc.createMessage()!);
-      doc.ingest(message3);
-      subscription.close();
+      const messages1 = await storage.sendMessages(
+        doc.id,
+        doc.createMessages(),
+      );
+      for (const message of messages1) {
+        doc.ingest(message);
+      }
+      messageChan.close();
       expect(storage["channelsById"][doc.id]).toEqual([]);
-      await expect(messages).resolves.toEqual([message2, message3]);
+      await expect(messagesPromise).resolves.toEqual(messages1);
+    });
+  });
+
+  describe("multiple clients", () => {
+    test("initialize", async () => {
+      const connection = new InMemoryStorage();
+      const client1 = new Client("id1", connection);
+      const client2 = new Client("id2", connection);
+      const doc1 = await client1.createDocument("doc1", "hello world");
+      await client1.sync();
+      const doc2 = await client2.getDocument("doc1");
+      expect(doc1.snapshot).toEqual(doc2.snapshot);
+    });
+
+    test("message", async () => {
+      const connection = new InMemoryStorage();
+      const client1 = new Client("id1", connection);
+      const client2 = new Client("id2", connection);
+      const doc1 = await client1.createDocument("doc1", "hello world");
+      await client1.sync();
+      const doc2 = await client2.getDocument("doc1");
+      doc2.edit([0, 5, "_", 6, 11, "!", 11]);
+      await client2.sync();
+      doc2.edit([0, 11, 12]);
+      await client2.sync();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(doc1.snapshot).toEqual(doc2.snapshot);
+    });
+  });
+});
+
+describe("Client", () => {
+  describe("saves", () => {
+    test("save", async () => {
+      const storage = new InMemoryStorage();
+      const client = new Client("id1", storage);
+      const doc = await client.createDocument("doc1", "hello world");
+      doc.edit([0, 11, "!", 11]);
+      doc.edit([0, 11, 12]);
+      const messages = doc.createMessages();
+      await client.save(doc.id, { force: true });
+      await expect(storage.fetchMessages(doc.id, 1)).resolves.toEqual(messages);
     });
   });
 });
