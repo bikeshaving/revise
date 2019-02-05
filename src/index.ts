@@ -813,24 +813,6 @@ export class Document {
     this.lastKnownVersion = message.version;
   }
 
-  // TODO: delete this
-  createMessage(): Message | undefined {
-    if (this.lastKnownVersion > this.revisions.length) {
-      throw new Error("Incorrect last known version");
-    } else if (this.lastKnownVersion === this.revisions.length) {
-      return;
-    }
-    const revision: Revision = this.revisions[this.lastKnownVersion + 1];
-    return {
-      patch: this.patchAt(this.lastKnownVersion + 1),
-      clientId: revision.clientId,
-      priority: revision.priority,
-      localVersion: this.localVersion,
-      version: this.lastKnownVersion + 1,
-      lastKnownVersion: this.lastKnownVersion,
-    };
-  }
-
   createMessages(
     from: number = this.lastKnownVersion + 1,
     to?: number,

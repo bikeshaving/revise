@@ -659,15 +659,14 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      doc1.ingest(doc1.createMessage()!);
+      const [message1] = doc1.createMessages();
+      doc1.ingest(message1);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
       doc1.edit([0, 13, "s", 13]);
       doc2.edit([0, 5, "_", 6, 11]);
-      doc1.ingest({
-        ...doc2.createMessage()!,
-        version: 1,
-      });
+      const [message2] = doc2.createMessages();
+      doc1.ingest(message2);
       expect(doc1.snapshot).toEqual({
         visible: "goodbye_worlds",
         hidden: "hello ",
@@ -681,22 +680,17 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      doc1.ingest(doc1.createMessage()!);
+      const [message1] = doc1.createMessages();
+      doc1.ingest(message1);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const message1 = {
-        ...doc1.createMessage()!,
-        version: 1,
-      };
-      doc1.ingest(message1);
-      doc2.ingest(message1);
+      const [message2] = doc1.createMessages();
+      doc1.ingest(message2);
+      doc2.ingest(message2);
       doc2.edit([0, 7, "hello", 7, 13]);
       doc1.edit([0, 13, "s", 13]);
-      const message2 = {
-        ...doc2.createMessage()!,
-        version: 2,
-      };
-      doc1.ingest(message2);
+      const [message3] = doc2.createMessages();
+      doc1.ingest(message3);
       expect(doc1.snapshot).toEqual({
         visible: "goodbyehello worlds",
         hidden: "",
@@ -710,16 +704,14 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      doc1.ingest(doc1.createMessage()!);
+      const [message1] = doc1.createMessages();
+      doc1.ingest(message1);
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const message1 = {
-        ...doc1.createMessage()!,
-        version: 1,
-      };
-      doc2.ingest(message1);
-      doc2.ingest(message1);
-      doc2.ingest(message1);
+      const [message2] = doc1.createMessages();
+      doc2.ingest(message2);
+      doc2.ingest(message2);
+      doc2.ingest(message2);
       expect(doc2.snapshot).toEqual({
         visible: "goodbye world",
         hidden: "hello",
