@@ -1,7 +1,7 @@
 // [flag, ...lengths]
 export type Subseq = number[];
 
-export function print(subseq: Subseq): string {
+export function printSubseq(subseq: Subseq): string {
   let flag = !!subseq[0];
   let result = "";
   for (const length of subseq.slice(1)) {
@@ -45,6 +45,15 @@ export function count(subseq: Subseq, test?: boolean): number {
       result += length;
     }
     flag = !flag;
+  }
+  return result;
+}
+
+export function empty(subseq: Subseq): Subseq {
+  const length = count(subseq);
+  const result: Subseq = [];
+  if (length) {
+    push(result, length, false);
   }
   return result;
 }
@@ -328,7 +337,7 @@ export function factor(patch: Patch): [string, Subseq, Subseq] {
 export function synthesize(
   inserted: string,
   insertSeq: Subseq,
-  deleteSeq: Subseq = [0, count(insertSeq)],
+  deleteSeq: Subseq = empty(insertSeq),
 ): Patch {
   const patch: Patch = [];
   let ii = 0; // insert index
@@ -481,11 +490,29 @@ export interface Snapshot {
   version: number;
 }
 
+export function printSnapshot(snapshot: Snapshot): string {
+  let result = "";
+  let flag = !!snapshot.hiddenSeq[0];
+  let v = 0;
+  let h = 0;
+  for (const length of snapshot.hiddenSeq.slice(1)) {
+    if (flag) {
+      result += snapshot.hidden.slice(h, h + length);
+      h += length;
+    } else {
+      result += snapshot.visible.slice(v, v + length);
+      v += length;
+    }
+    flag = !flag;
+  }
+  return result;
+}
+
 export interface Message {
   patch: Patch;
   clientId: string;
   priority: number;
-  version: number;
+  version?: number;
   localVersion: number;
   lastKnownVersion: number;
 }
@@ -502,7 +529,9 @@ export interface Revision {
 export class Document {
   public connected = false;
   protected constructor(
+    // TODO: does a document need to know its own id
     public id: string,
+    // TODO: does a document need to know its own client
     public client: Client,
     public snapshot: Snapshot,
     protected revisions: Revision[],
@@ -545,7 +574,6 @@ export class Document {
     let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
     const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
-      // TODO: does the ordering between reviveSeq and deleteSeq matter?
       hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
       hiddenSeq = union(hiddenSeq, revision.reviveSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
@@ -555,7 +583,7 @@ export class Document {
 
   snapshotAt(version: number): Snapshot {
     const hiddenSeq: Subseq = this.hiddenSeqAt(version);
-    let insertSeq: Subseq = [0, count(hiddenSeq)];
+    let insertSeq: Subseq = empty(hiddenSeq);
     for (const revision of this.revisions.slice(version + 1)) {
       insertSeq = expand(insertSeq, revision.insertSeq, { union: true });
     }
@@ -606,7 +634,8 @@ export class Document {
     let { insertSeq, deleteSeq, reviveSeq } = revision;
     let { visible, hidden, hiddenSeq } = snapshot;
     if (count(deleteSeq, true) > 0) {
-      const hiddenSeq1 = union(hiddenSeq, deleteSeq);
+      let hiddenSeq1: Subseq;
+      hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
@@ -681,7 +710,7 @@ export class Document {
       localVersion: this.localVersion,
       insertSeq,
       deleteSeq,
-      reviveSeq: [0, count(deleteSeq)],
+      reviveSeq: empty(deleteSeq),
     };
     let snapshot: Snapshot;
     [, revision, snapshot] = this.apply(inserted, revision);
@@ -707,7 +736,7 @@ export class Document {
     const [, revision1, snapshot] = this.apply("", {
       ...revision,
       localVersion: this.localVersion,
-      insertSeq: [0, count(deleteSeq)],
+      insertSeq: empty(deleteSeq),
       deleteSeq,
       reviveSeq,
     });
@@ -718,7 +747,9 @@ export class Document {
   }
 
   ingest(message: Message): void {
-    if (
+    if (message.version == null) {
+      throw new Error("Message is missing version");
+    } else if (
       this.lastKnownVersion + 1 < message.version ||
       this.lastKnownVersion < message.lastKnownVersion
     ) {
@@ -727,7 +758,6 @@ export class Document {
     } else if (message.version <= this.lastKnownVersion) {
       return;
     } else if (message.clientId === this.client.id) {
-      // TODO: increment local version?
       this.lastKnownVersion = message.version;
       return;
     }
@@ -740,17 +770,18 @@ export class Document {
       [, insertSeq] = interleave(insertSeq, oldHiddenSeq);
       deleteSeq = expand(deleteSeq, oldHiddenSeq);
     }
-    for (const revision of this.revisions.slice(
-      message.lastKnownVersion,
-      this.lastKnownVersion,
-    )) {
+    const revisions = this.revisions.slice(
+      message.lastKnownVersion + 1,
+      this.lastKnownVersion + 1,
+    );
+    for (const revision of revisions) {
       if (
         message.priority === revision.priority &&
         message.clientId === revision.clientId
       ) {
-        throw new Error(
-          "Cannot have concurrent edits with the same client and priority",
-        );
+        [, insertSeq] = interleave(insertSeq, revision.insertSeq);
+        deleteSeq = expand(deleteSeq, revision.insertSeq);
+        continue;
       }
       if (message.clientId !== revision.clientId) {
         const before =
@@ -772,7 +803,7 @@ export class Document {
       localVersion: message.localVersion,
       insertSeq,
       deleteSeq,
-      reviveSeq: [0, count(deleteSeq)],
+      reviveSeq: empty(deleteSeq),
     };
     let snapshot: Snapshot = this.snapshotAt(this.lastKnownVersion);
     [inserted, revision] = this.apply(inserted, revision, snapshot);
@@ -785,9 +816,7 @@ export class Document {
         message.priority === revision1.priority &&
         message.clientId === revision1.clientId
       ) {
-        throw new Error(
-          "Cannot have concurrent edits with the same client and priority",
-        );
+        continue;
       }
       const before =
         message.priority !== revision1.priority
@@ -827,7 +856,7 @@ export class Document {
         clientId: revision.clientId,
         priority: revision.priority,
         localVersion: revision.localVersion,
-        version: from + i,
+        // TODO: is this correct?
         lastKnownVersion: this.lastKnownVersion,
       };
     });
@@ -872,13 +901,7 @@ export class Client {
           const doc = this.documents[id];
           if (doc) {
             // TODO: error recovery
-            const messages = await this.connection.sendMessages(
-              id,
-              doc.createMessages(),
-            );
-            for (const message of messages) {
-              doc.ingest(message);
-            }
+            await this.connection.sendMessages(id, doc.createMessages());
           }
           this.pending.delete(id);
         }),
@@ -918,7 +941,6 @@ export class Client {
     if (doc == null) {
       throw new Error("Unknown document");
     }
-    await this.sync();
     const messagesChannel = await this.connection.messagesChannel(
       id,
       doc.snapshot.version,
@@ -998,11 +1020,12 @@ export class InMemoryStorage implements Connection {
   saveMessage(id: string, message: Message): Message {
     const clientVersions: Record<string, number> = this.clientVersionsById[id];
     if (clientVersions == null) {
-      if (message.version !== 0 || message.localVersion !== 0) {
+      if (message.localVersion !== 0) {
         throw new Error("Unknown document");
       }
       this.clientVersionsById[id] = {};
       this.clientVersionsById[id][message.clientId] = message.localVersion;
+      message = { ...message, version: 0 };
       this.messagesById[id] = [message];
       this.snapshotsById[id] = [];
       this.channelsById[id] = [];
@@ -1031,8 +1054,8 @@ export class InMemoryStorage implements Connection {
     return message;
   }
 
+  // TODO: run this in a transaction
   async sendMessages(id: string, messages: Message[]): Promise<Message[]> {
-    // TODO run this in a transaction
     messages = messages.map((message) => this.saveMessage(id, message));
     this.channelsById[id].map(async (channel, i) => {
       try {
