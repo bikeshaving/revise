@@ -191,58 +191,6 @@ describe("subseq", () => {
   });
 });
 
-describe("overlapping", () => {
-  test("overlapping 1", () => {
-    const result = [1, 6];
-    expect(shredder.overlapping("hello ", "hello ")).toEqual(result);
-  });
-
-  test("overlapping 2", () => {
-    const result = [0, 6, 5];
-    expect(shredder.overlapping("hello world", "world")).toEqual(result);
-  });
-
-  test("overlapping 3", () => {
-    const result = [0, 10, 1];
-    expect(shredder.overlapping("hello world", "d")).toEqual(result);
-  });
-
-  test("overlapping 4", () => {
-    const result = [0, 5, 1, 5];
-    expect(shredder.overlapping("hello world", " ")).toEqual(result);
-  });
-
-  test("overlapping 5", () => {
-    const result = [1, 2, 1, 4];
-    expect(shredder.overlapping(" Wworld", " World")).toEqual(result);
-  });
-
-  test("overlapping 6", () => {
-    const result = [1, 1, 1, 4];
-    expect(shredder.overlapping("Hhello", "Hello")).toEqual(result);
-  });
-
-  test("no overlap 1", () => {
-    expect(shredder.overlapping("hello world", "xworld")).toEqual(undefined);
-  });
-
-  test("no overlap 2", () => {
-    expect(shredder.overlapping("Hhello", "Hex")).toEqual(undefined);
-  });
-
-  test("no overlap 3", () => {
-    expect(shredder.overlapping("Hhello", "HelloXX")).toEqual(undefined);
-  });
-
-  test("no overlap 4", () => {
-    expect(shredder.overlapping("hello world", "worlds")).toEqual(undefined);
-  });
-
-  test("no overlap 5", () => {
-    expect(shredder.overlapping("hello", "hexo")).toEqual(undefined);
-  });
-});
-
 describe("patch", () => {
   const text = "hello world";
   const p0: shredder.Patch = [0, 1, "era", 9, 11];
@@ -342,17 +290,6 @@ describe("Document", () => {
       expect(doc.hiddenSeqAt(2)).toEqual([0, 1, 1, 11, 7]);
       expect(doc.hiddenSeqAt(3)).toEqual([0, 1, 1, 21, 7]);
       expect(doc.hiddenSeqAt(3)).toEqual(doc.snapshot.hiddenSeq);
-    });
-
-    test("revisions with revives", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit(["h", 1, 6, "w", 7, 11]);
-      expect(doc.hiddenSeqAt(0)).toEqual([0, 11]);
-      expect(doc.hiddenSeqAt(1)).toEqual([0, 1, 1, 6, 1, 4]);
-      expect(doc.hiddenSeqAt(2)).toEqual([1, 1, 6, 1, 5]);
-      expect(doc.hiddenSeqAt(2)).toEqual(doc.snapshot.hiddenSeq);
     });
   });
 
@@ -501,151 +438,11 @@ describe("Document", () => {
       //"why hello there worldsstar"
       expect(doc.snapshot.visible).toEqual("why hello there worldsstar");
     });
-
-    test("revive 1", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([6, 11]);
-      doc.edit(["hello ", 0, 5, "s", 5]);
-      expect(doc.snapshot).toEqual({
-        visible: "hello worlds",
-        hidden: "",
-        hiddenSeq: [0, 12],
-        version: 2,
-      });
-    });
-
-    test("revive 2", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([11]);
-      doc.edit(["hello ", 0]);
-      doc.edit([0, 6, "worlds", 6]);
-      expect(doc.snapshot.visible).toEqual("hello worlds");
-      expect(doc.snapshot.hidden).toEqual("world");
-    });
-
-    test("revive 3", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([11]);
-      doc.edit(["world", 0]);
-      doc.edit(["hello ", 0, 5, "s", 5]);
-      expect(doc.snapshot.visible).toEqual("hello worlds");
-      expect(doc.snapshot.hidden).toEqual("");
-    });
-
-    test("revive 4", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit([0, 6, "waterw", 7, 11]);
-      expect(doc.snapshot.visible).toEqual("Hello waterworld");
-      // TODO: hidden?
-    });
-
-    test("revive 5", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([0, 6, 11]);
-      doc.edit([0, 3, "ium", 5, 6, "world", 6]);
-      expect(doc.snapshot.visible).toEqual("helium world");
-      // TODO: snahidden?
-    });
-
-    test("revive 6", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([11]);
-      doc.edit(["world", 0]);
-      expect(doc.snapshot.visible).toEqual("world");
-      doc.edit([0, 5, "hello", 5]);
-      expect(doc.snapshot.visible).toEqual("worldhello");
-      expect(doc.snapshot.hidden).toEqual("hello ");
-    });
-
-    test("revive 7", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit([6, 11]);
-      doc.edit(["Hello ", 0, 5]);
-      expect(doc.snapshot.visible).toEqual("Hello World");
-      expect(doc.snapshot.hidden).toEqual("hw");
-    });
-
-    test("revive 8", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit([0, 5, 11]);
-      doc.edit([0, 5, " World", 5]);
-      expect(doc.snapshot.visible).toEqual("Hello World");
-      expect(doc.snapshot.hidden).toEqual("hw");
-    });
-
-    test("revive 10", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit(["h", 1, 6, "w", 7, 11]);
-      expect(doc.snapshot.visible).toEqual("hello world");
-      expect(doc.snapshot.hidden).toEqual("HW");
-      expect(doc.snapshot.hiddenSeq).toEqual([1, 1, 6, 1, 5]);
-    });
-
-    test("no revive 1", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([6, 11]);
-      doc.edit(["xxxxxx", 0, 5]);
-      expect(doc.snapshot.visible).toEqual("xxxxxxworld");
-      expect(doc.snapshot.hidden).toEqual("hello ");
-    });
-
-    test("no revive 2", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit([0, 5, 11]);
-      doc.edit([0, 5, " Wacky World", 5]);
-      expect(doc.snapshot.visible).toEqual("Hello Wacky World");
-      expect(doc.snapshot.hidden).toEqual("h Wworld");
-    });
-
-    test("revive concurrent 1", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit(["h", 1, 6, "w", 7, 11]);
-      doc.edit([0, 6, "Brian", 11], 1, 1);
-      expect(doc.snapshot.visible).toEqual("hello Brianw");
-      expect(doc.snapshot.hidden).toEqual("HWorld");
-    });
-
-    test("revive concurrent 2", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([6, 11]);
-      doc.edit(["hello ", 0, 5]);
-      doc.edit(["goodbye ", 0, 5], 1, 1);
-      expect(doc.snapshot.visible).toEqual("hello goodbye world");
-      expect(doc.snapshot.hidden).toEqual("");
-    });
-
-    test("revive concurrent 3", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([6, 11]);
-      doc.edit(["hello ", 0, 5], 1);
-      doc.edit(["goodbye ", 0, 5], undefined, 1);
-      expect(doc.snapshot.visible).toEqual("hello goodbye world");
-      expect(doc.snapshot.hidden).toEqual("");
-    });
   });
 
+  // TODO: fix this
   describe("Document.undo", () => {
-    test("simple", () => {
+    test("selective", () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["goodbye", 5, 11]);
@@ -677,7 +474,7 @@ describe("Document", () => {
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
 
-    test("revive", () => {
+    test("simple 2", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
@@ -694,8 +491,8 @@ describe("Document", () => {
       doc1.ingest({ ...message3, version: 2 });
       expect(doc1.snapshot).toEqual({
         visible: "goodbyehello worlds",
-        hidden: "",
-        hiddenSeq: [0, 19],
+        hidden: "hello",
+        hiddenSeq: [0, 7, 5, 12],
         version: 3,
       });
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
@@ -750,7 +547,7 @@ describe("Document", () => {
   });
 
   describe("patchAt", () => {
-    test("failing", () => {
+    test("full", () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 11, "!", 11]);
@@ -829,7 +626,7 @@ describe("InMemoryStorage", () => {
     });
   });
 
-  describe("multiple clients", () => {
+  describe.skip("multiple clients", () => {
     test("initialize", async () => {
       const connection = new InMemoryStorage();
       const client1 = new Client("id1", connection);
@@ -840,7 +637,7 @@ describe("InMemoryStorage", () => {
       expect(doc1.snapshot).toEqual(doc2.snapshot);
     });
 
-    test.skip("message", async () => {
+    test("message", async () => {
       const connection = new InMemoryStorage();
       const client1 = new Client("id1", connection);
       const client2 = new Client("id2", connection);
@@ -855,7 +652,7 @@ describe("InMemoryStorage", () => {
   });
 });
 
-describe("Client", () => {
+describe.skip("Client", () => {
   describe("saves", () => {
     test("save", async () => {
       const storage = new InMemoryStorage();

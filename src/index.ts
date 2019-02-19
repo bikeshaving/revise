@@ -375,137 +375,11 @@ export function shuffle(
   ];
 }
 
-export function overlapping(
-  deleted: string,
-  inserted: string,
-): Subseq | undefined {
-  const result: Subseq = [];
-  let consumed = 0;
-  let flag = false;
-  let ii = 0;
-  for (let di = 0; di < deleted.length; di++) {
-    if (ii >= inserted.length) {
-      if (di - consumed > 0) {
-        push(result, di - consumed, flag);
-      }
-      consumed = di;
-      flag = !flag;
-      break;
-    }
-    const match = deleted[di] === inserted[ii];
-    if (match) {
-      ii++;
-    }
-    if (flag !== match) {
-      if (di - consumed > 0) {
-        push(result, di - consumed, flag);
-      }
-      consumed = di;
-      flag = !flag;
-    }
-  }
-  if (ii >= inserted.length) {
-    push(result, deleted.length - consumed, flag);
-    return result;
-  }
-}
-
-export function revive(
-  hidden: string,
-  inserted: string,
-  hiddenSeq: Subseq,
-  insertSeq: Subseq,
-): [string, Subseq, Subseq] {
-  let revivedHiddenSeq: Subseq = [];
-  const revivedInsertSeq: Subseq = [];
-  let inserted1 = "";
-  // TODO: use indexes rather than slicing deleted and inserted
-  let hid: string | undefined;
-  let ins: string | undefined;
-  hiddenSeq = expand(hiddenSeq, insertSeq);
-  for (const [length, hiddenFlag, insertFlag] of zip(hiddenSeq, insertSeq)) {
-    if (hiddenFlag && insertFlag) {
-      throw new Error("Deletes and inserts overlap");
-    } else if (hiddenFlag) {
-      hid = hidden.slice(0, length);
-      if (ins != null) {
-        const overlap = overlapping(hid, ins);
-        if (overlap != null) {
-          revivedHiddenSeq = concat(revivedHiddenSeq, overlap);
-          push(revivedInsertSeq, ins.length, true);
-          hid = undefined;
-        } else {
-          push(revivedInsertSeq, ins.length, false);
-          inserted1 += ins;
-        }
-      }
-      push(revivedInsertSeq, length, false);
-      ins = undefined;
-      hidden = hidden.slice(length);
-    } else if (insertFlag) {
-      ins = inserted.slice(0, length);
-      if (hid != null) {
-        const overlap = overlapping(hid, ins);
-        if (overlap != null) {
-          revivedHiddenSeq = concat(revivedHiddenSeq, overlap);
-          push(revivedInsertSeq, ins.length, true);
-          ins = undefined;
-        } else {
-          push(revivedHiddenSeq, hid.length, false);
-        }
-      }
-      push(revivedHiddenSeq, length, false);
-      hid = undefined;
-      inserted = inserted.slice(length);
-    } else {
-      if (hid != null) {
-        push(revivedHiddenSeq, hid.length, false);
-      }
-      if (ins != null) {
-        push(revivedInsertSeq, ins.length, false);
-        inserted1 += ins;
-      }
-      push(revivedHiddenSeq, length, false);
-      push(revivedInsertSeq, length, false);
-      hid = undefined;
-      ins = undefined;
-    }
-  }
-  if (hid != null) {
-    push(revivedHiddenSeq, hid.length, false);
-  }
-  if (ins != null) {
-    push(revivedInsertSeq, ins.length, false);
-    inserted1 += ins;
-  }
-  const reviveSeq = shrink(revivedHiddenSeq, insertSeq);
-  insertSeq = shrink(insertSeq, revivedInsertSeq);
-  return [inserted1, insertSeq, reviveSeq];
-}
-
 export interface Snapshot {
   visible: string;
   hidden: string;
   hiddenSeq: Subseq;
   version: number;
-}
-
-export function printSnapshot(snapshot: Snapshot): string {
-  let result = "";
-  let flag = !!snapshot.hiddenSeq[0];
-  let v = 0;
-  let h = 0;
-  for (const length of snapshot.hiddenSeq.slice(1)) {
-    if (flag) {
-      result += snapshot.hidden.slice(h, h + length);
-      h += length;
-    } else {
-      result += snapshot.visible.slice(v, v + length);
-      v += length;
-    }
-    flag = !flag;
-  }
-  return result;
 }
 
 export interface Message {
@@ -523,7 +397,6 @@ export interface Revision {
   localVersion: number;
   insertSeq: Subseq;
   deleteSeq: Subseq;
-  reviveSeq: Subseq;
 }
 
 export class Document {
@@ -552,7 +425,6 @@ export class Document {
       localVersion: 0,
       insertSeq: initial.length ? [1, initial.length] : [],
       deleteSeq: [],
-      reviveSeq: [],
     };
     return new Document(id, client, snapshot, [revision], -1, 1);
   }
@@ -570,12 +442,14 @@ export class Document {
     return doc;
   }
 
-  hiddenSeqAt(version: number): Subseq {
+  hiddenSeqAt(version: number, clientId?: string): Subseq {
     let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
     const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
+      if (clientId === revision.clientId) {
+        // TODO: figure out what to do here
+      }
       hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
-      hiddenSeq = union(hiddenSeq, revision.reviveSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
     }
     return hiddenSeq;
@@ -604,9 +478,7 @@ export class Document {
     const revision: Revision =
       this.revisions[version] || this.revisions[this.revisions.length - 1];
     const snapshot: Snapshot = this.snapshotAt(version);
-    let insertSeq: Subseq = expand(revision.reviveSeq, revision.insertSeq, {
-      union: true,
-    });
+    let insertSeq = revision.insertSeq;
     let deleteSeq = expand(revision.deleteSeq, revision.insertSeq);
     const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
     insertSeq = shrink(insertSeq, hiddenSeq);
@@ -631,8 +503,9 @@ export class Document {
     revision: Revision,
     snapshot: Snapshot = this.snapshot,
   ): [string, Revision, Snapshot] {
-    let { insertSeq, deleteSeq, reviveSeq } = revision;
+    let { insertSeq, deleteSeq } = revision;
     let { visible, hidden, hiddenSeq } = snapshot;
+
     if (count(deleteSeq, true) > 0) {
       let hiddenSeq1: Subseq;
       hiddenSeq1 = union(hiddenSeq, deleteSeq);
@@ -641,26 +514,11 @@ export class Document {
     }
 
     if (inserted.length) {
-      let reviveSeq1: Subseq;
-      [inserted, insertSeq, reviveSeq1] = revive(
-        hidden,
-        inserted,
-        hiddenSeq,
-        insertSeq,
-      );
-      reviveSeq = union(reviveSeq, reviveSeq1);
       hiddenSeq = expand(hiddenSeq, insertSeq);
       const insertSeq1 = shrink(insertSeq, hiddenSeq);
       visible = apply(visible, synthesize(inserted, insertSeq1));
     }
 
-    if (count(reviveSeq, true) > 0) {
-      const hiddenSeq1 = difference(hiddenSeq, expand(reviveSeq, insertSeq));
-      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
-      hiddenSeq = hiddenSeq1;
-    }
-
-    revision = { ...revision, insertSeq, deleteSeq, reviveSeq };
     snapshot = { visible, hidden, hiddenSeq, version: snapshot.version + 1 };
     return [inserted, revision, snapshot];
   }
@@ -671,16 +529,13 @@ export class Document {
     version: number = this.revisions.length - 1,
   ): void {
     if (version < 0 || version > this.revisions.length - 1) {
-      throw new Error("Index out of range of revisions");
+      throw new Error("Version out of range");
     }
-    let inserted: string;
-    let insertSeq: Subseq;
-    let deleteSeq: Subseq;
+    let [inserted, insertSeq, deleteSeq] = factor(patch);
     {
-      const oldHiddenSeq = this.hiddenSeqAt(version);
-      [inserted, insertSeq, deleteSeq] = factor(patch);
-      [, insertSeq] = interleave(insertSeq, oldHiddenSeq);
-      deleteSeq = expand(deleteSeq, oldHiddenSeq);
+      const hiddenSeq = this.hiddenSeqAt(version);
+      [, insertSeq] = interleave(insertSeq, hiddenSeq);
+      deleteSeq = expand(deleteSeq, hiddenSeq);
     }
 
     for (const revision of this.revisions.slice(version + 1)) {
@@ -710,7 +565,6 @@ export class Document {
       localVersion: this.localVersion,
       insertSeq,
       deleteSeq,
-      reviveSeq: empty(deleteSeq),
     };
     let snapshot: Snapshot;
     [, revision, snapshot] = this.apply(inserted, revision);
@@ -720,35 +574,37 @@ export class Document {
     this.client.save(this.id);
   }
 
-  undo(i: number): void {
-    const [revision, ...revisions] = this.revisions.slice(i);
-    let reviveSeq = expand(revision.deleteSeq, revision.insertSeq);
-    let deleteSeq = expand(revision.reviveSeq, revision.insertSeq, {
-      union: true,
-    });
+  undo(version: number): void {
+    const [revision, ...revisions] = this.revisions.slice(version);
+    let deleteSeq = revision.insertSeq;
+    let insertSeq = expand(revision.deleteSeq, revision.insertSeq);
     for (const revision of revisions) {
-      const deleteOrReviveSeq = union(revision.reviveSeq, revision.deleteSeq);
-      reviveSeq = difference(reviveSeq, deleteOrReviveSeq);
-      deleteSeq = difference(deleteSeq, deleteOrReviveSeq);
-      reviveSeq = expand(reviveSeq, revision.insertSeq);
       deleteSeq = expand(deleteSeq, revision.insertSeq);
+      insertSeq = expand(insertSeq, revision.insertSeq);
     }
-    const [, revision1, snapshot] = this.apply("", {
-      ...revision,
+    let snapshot = this.snapshot;
+    const inserted = extract(
+      apply(snapshot.visible, synthesize(snapshot.hidden, snapshot.hiddenSeq)),
+      insertSeq,
+    );
+    [, insertSeq] = interleave(insertSeq, insertSeq);
+    const revision1: Revision = {
+      clientId: this.client.id,
+      priority: 0,
       localVersion: this.localVersion,
-      insertSeq: empty(deleteSeq),
+      insertSeq,
       deleteSeq,
-      reviveSeq,
-    });
-    this.snapshot = snapshot;
-    this.revisions.push(revision1);
+    };
+    [, , snapshot] = this.apply(inserted, revision1);
+    this.revisions.push(revision);
     this.localVersion += 1;
+    this.snapshot = snapshot;
     this.client.save(this.id);
   }
 
   ingest(message: Message): void {
     if (message.version == null) {
-      throw new Error("Message is missing version");
+      throw new Error("Missing message version");
     } else if (
       this.lastKnownVersion + 1 < message.version ||
       this.lastKnownVersion < message.lastKnownVersion
@@ -761,83 +617,62 @@ export class Document {
       this.lastKnownVersion = message.version;
       return;
     }
-    let inserted: string;
-    let insertSeq: Subseq;
-    let deleteSeq: Subseq;
+    let [inserted, insertSeq, deleteSeq] = factor(message.patch);
     {
-      const oldHiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
-      [inserted, insertSeq, deleteSeq] = factor(message.patch);
-      [, insertSeq] = interleave(insertSeq, oldHiddenSeq);
-      deleteSeq = expand(deleteSeq, oldHiddenSeq);
+      const hiddenSeq = this.hiddenSeqAt(
+        message.lastKnownVersion,
+        message.clientId,
+      );
+      [, insertSeq] = interleave(insertSeq, hiddenSeq);
+      deleteSeq = expand(deleteSeq, hiddenSeq);
     }
-    const revisions = this.revisions.slice(
+    for (const revision of this.revisions.slice(
       message.lastKnownVersion + 1,
       this.lastKnownVersion + 1,
-    );
-    for (const revision of revisions) {
-      if (
-        message.priority === revision.priority &&
-        message.clientId === revision.clientId
-      ) {
+    )) {
+      if (message.clientId === revision.clientId) {
         [, insertSeq] = interleave(insertSeq, revision.insertSeq);
         deleteSeq = expand(deleteSeq, revision.insertSeq);
-        continue;
-      }
-      if (message.clientId !== revision.clientId) {
+      } else {
         const before =
           message.priority !== revision.priority
             ? message.priority < revision.priority
             : message.clientId < revision.clientId;
-        deleteSeq = difference(deleteSeq, revision.deleteSeq);
         if (before) {
           [insertSeq] = interleave(insertSeq, revision.insertSeq);
         } else {
           [, insertSeq] = interleave(insertSeq, revision.insertSeq);
         }
+        deleteSeq = difference(deleteSeq, revision.deleteSeq);
         deleteSeq = expand(deleteSeq, revision.insertSeq);
       }
     }
-    let revision: Revision = {
+    const revision: Revision = {
       clientId: message.clientId,
       priority: message.priority,
       localVersion: message.localVersion,
       insertSeq,
       deleteSeq,
-      reviveSeq: empty(deleteSeq),
     };
-    let snapshot: Snapshot = this.snapshotAt(this.lastKnownVersion);
-    [inserted, revision] = this.apply(inserted, revision, snapshot);
     this.revisions.splice(this.lastKnownVersion + 1, 0, revision);
-    insertSeq = revision.insertSeq;
-    deleteSeq = revision.deleteSeq;
-    let reviveSeq: Subseq = revision.reviveSeq;
     for (const revision1 of this.revisions.slice(this.lastKnownVersion + 2)) {
-      if (
-        message.priority === revision1.priority &&
-        message.clientId === revision1.clientId
-      ) {
-        continue;
-      }
       const before =
         message.priority !== revision1.priority
           ? message.priority < revision1.priority
           : message.clientId < revision1.clientId;
-      deleteSeq = difference(deleteSeq, revision1.deleteSeq);
-      reviveSeq = difference(reviveSeq, revision1.deleteSeq);
       if (before) {
         [insertSeq] = interleave(insertSeq, revision1.insertSeq);
       } else {
         [, insertSeq] = interleave(insertSeq, revision1.insertSeq);
       }
+      deleteSeq = difference(deleteSeq, revision1.deleteSeq);
       deleteSeq = expand(deleteSeq, revision1.insertSeq);
-      reviveSeq = expand(reviveSeq, revision1.insertSeq);
       revision1.insertSeq = expand(revision1.insertSeq, insertSeq);
       const insertSeq1 = shrink(insertSeq, revision1.insertSeq);
       revision1.deleteSeq = expand(revision1.deleteSeq, insertSeq1);
-      revision1.reviveSeq = expand(revision1.reviveSeq, insertSeq1);
     }
-    revision = { ...revision, insertSeq, deleteSeq, reviveSeq };
-    [, , snapshot] = this.apply(inserted, revision);
+    const revision1: Revision = { ...revision, insertSeq, deleteSeq };
+    const [, , snapshot] = this.apply(inserted, revision1);
     this.snapshot = snapshot;
     this.lastKnownVersion = message.version;
   }
@@ -956,7 +791,6 @@ export class Client {
     const doc = Document.create(id, this, initial);
     this.documents[id] = doc;
     this.save(doc.id, { force: true });
-    this.connect(doc.id);
     return doc;
   }
 
@@ -968,7 +802,6 @@ export class Client {
     const messages = await this.connection.fetchMessages(id, snapshot.version);
     const doc = Document.from(id, this, snapshot, messages);
     this.documents[id] = doc;
-    this.connect(doc.id);
     return doc;
   }
 }
