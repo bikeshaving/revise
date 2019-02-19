@@ -1,87 +1,39 @@
 // [flag, ...lengths]
 export type Subseq = number[];
 
-export function printSubseq(subseq: Subseq): string {
-  let flag = !!subseq[0];
-  let result = "";
-  for (const length of subseq.slice(1)) {
-    result += flag ? "+".repeat(length) : "=".repeat(length);
-    flag = !flag;
-  }
-  return result;
-}
+type SubseqIteratorValue = [number, boolean];
 
-export function push(subseq: Subseq, length: number, flag: boolean): number {
-  if (length <= 0) {
-    throw new Error("Cannot push empty segment");
-  } else if (!subseq.length) {
-    subseq.push(flag ? 1 : 0, length);
-  } else {
-    const flag1: boolean = !subseq[0] === (subseq.length % 2 === 1);
-    if (flag === flag1) {
-      subseq[subseq.length - 1] += length;
-    } else {
-      subseq.push(length);
+export class SubseqIterator implements IterableIterator<SubseqIteratorValue> {
+  private i: number = 1;
+
+  constructor(private subseq: Subseq) {}
+
+  next(): IteratorResult<SubseqIteratorValue> {
+    const length = this.subseq[this.i];
+    const flag = !this.subseq[0] === (this.i % 2 === 0);
+    if (length == null) {
+      return { done: true } as IteratorResult<SubseqIteratorValue>;
     }
+    this.i++;
+    return { done: false, value: [length, flag] };
   }
-  return subseq.length;
+
+  [Symbol.iterator]() {
+    return this;
+  }
 }
 
-export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
-  const result = subseq1.slice();
-  const [flag, length, ...rest] = subseq2;
-  if (length == null) {
-    return result;
-  }
-  push(result, length, !!flag);
-  return result.concat(rest);
-}
+type ZipIteratorValue = [number, boolean, boolean];
 
-export function count(subseq: Subseq, test?: boolean): number {
-  let flag: boolean = !!subseq[0];
-  let result: number = 0;
-  for (const length of subseq.slice(1)) {
-    if (test == null || test === flag) {
-      result += length;
-    }
-    flag = !flag;
-  }
-  return result;
-}
-
-export function empty(subseq: Subseq): Subseq {
-  const length = count(subseq);
-  const result: Subseq = [];
-  if (length) {
-    push(result, length, false);
-  }
-  return result;
-}
-
-export function extract(str: string, subseq: Subseq): string {
-  let consumed = 0;
-  let result = "";
-  let flag = !!subseq[0];
-  for (const length of subseq.slice(1)) {
-    consumed += length;
-    if (flag) {
-      result += str.slice(consumed - length, consumed);
-    }
-    flag = !flag;
-  }
-  return result;
-}
-
-type ZipValue = [number, boolean, boolean];
-class ZipIterator implements IterableIterator<ZipValue> {
+export class ZipIterator implements IterableIterator<ZipIteratorValue> {
   private i1: number = 1;
   private i2: number = 1;
+  private consumed: number = 0;
   private consumed1: number = 0;
   private consumed2: number = 0;
-  private consumed: number = 0;
   constructor(private subseq1: Subseq, private subseq2: Subseq) {}
 
-  next(): IteratorResult<ZipValue> {
+  next(): IteratorResult<ZipIteratorValue> {
     const length1 = this.subseq1[this.i1];
     const length2 = this.subseq2[this.i2];
     const flag1 = !this.subseq1[0] === (this.i1 % 2 === 0);
@@ -90,7 +42,7 @@ class ZipIterator implements IterableIterator<ZipValue> {
       if (length1 || length2) {
         throw new Error("Length mismatch");
       }
-      return { done: true } as IteratorResult<ZipValue>;
+      return { done: true } as IteratorResult<ZipIteratorValue>;
     }
     let length: number;
     if (length1 + this.consumed1 === length2 + this.consumed2) {
@@ -128,8 +80,69 @@ class ZipIterator implements IterableIterator<ZipValue> {
   }
 }
 
-export function zip(a: Subseq, b: Subseq): ZipIterator {
-  return new ZipIterator(a, b);
+export function print(subseq: Subseq): string {
+  let result = "";
+  for (const [length, flag] of new SubseqIterator(subseq)) {
+    result += flag ? "+".repeat(length) : "=".repeat(length);
+  }
+  return result;
+}
+
+export function push(subseq: Subseq, length: number, flag: boolean): number {
+  if (length <= 0) {
+    throw new Error("Cannot push empty segment");
+  } else if (!subseq.length) {
+    subseq.push(flag ? 1 : 0, length);
+  } else {
+    const flag1: boolean = !subseq[0] === (subseq.length % 2 === 1);
+    if (flag === flag1) {
+      subseq[subseq.length - 1] += length;
+    } else {
+      subseq.push(length);
+    }
+  }
+  return subseq.length;
+}
+
+export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
+  const result = subseq1.slice();
+  const [flag, length, ...rest] = subseq2;
+  if (length == null) {
+    return result;
+  }
+  push(result, length, !!flag);
+  return result.concat(rest);
+}
+
+export function count(subseq: Subseq, test?: boolean): number {
+  let result = 0;
+  for (const [length, flag] of new SubseqIterator(subseq)) {
+    if (test == null || test === flag) {
+      result += length;
+    }
+  }
+  return result;
+}
+
+export function empty(subseq: Subseq): Subseq {
+  const length = count(subseq);
+  const result: Subseq = [];
+  if (length) {
+    push(result, length, false);
+  }
+  return result;
+}
+
+export function extract(str: string, subseq: Subseq): string {
+  let consumed = 0;
+  let result = "";
+  for (const [length, flag] of new SubseqIterator(subseq)) {
+    consumed += length;
+    if (flag) {
+      result += str.slice(consumed - length, consumed);
+    }
+  }
+  return result;
 }
 
 export function complement(subseq: Subseq): Subseq {
@@ -140,11 +153,15 @@ export function complement(subseq: Subseq): Subseq {
 }
 
 export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
-  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 || flag2);
+  return new ZipIterator(subseq1, subseq2).join(
+    (flag1, flag2) => flag1 || flag2,
+  );
 }
 
 export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
-  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
+  return new ZipIterator(subseq1, subseq2).join(
+    (flag1, flag2) => flag1 && !flag2,
+  );
 }
 
 export function expand(
@@ -186,7 +203,7 @@ export function expand(
 
 export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
   const result: Subseq = [];
-  for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
+  for (const [length, flag1, flag2] of new ZipIterator(subseq1, subseq2)) {
     if (!flag2) {
       push(result, length, flag1);
     }
@@ -340,17 +357,17 @@ export function synthesize(
   deleteSeq: Subseq = empty(insertSeq),
 ): Patch {
   const patch: Patch = [];
-  let ii = 0; // insert index
+  let i = 0; // insert index
   let consumed = 0;
-  for (const [length, insertFlag, deleteFlag] of zip(insertSeq, deleteSeq)) {
-    if (insertFlag) {
-      ii += length;
-      if (!deleteFlag) {
-        patch.push(inserted.slice(ii - length, ii));
+  for (const [length, iFlag, dFlag] of new ZipIterator(insertSeq, deleteSeq)) {
+    if (iFlag) {
+      i += length;
+      if (!dFlag) {
+        patch.push(inserted.slice(i - length, i));
       }
     } else {
       consumed += length;
-      if (!deleteFlag) {
+      if (!dFlag) {
         patch.push(consumed - length, consumed);
       }
     }
