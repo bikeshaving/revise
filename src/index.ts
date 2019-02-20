@@ -24,7 +24,7 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
 type SubseqIteratorValue = [number, boolean];
 
 export class SubseqIterator implements IterableIterator<SubseqIteratorValue> {
-  private i: number = 1;
+  private i = 1;
 
   constructor(private subseq: Subseq) {}
 
@@ -92,11 +92,11 @@ export function complement(subseq: Subseq): Subseq {
 type ZipIteratorValue = [number, boolean, boolean];
 
 export class ZipIterator implements IterableIterator<ZipIteratorValue> {
-  private i1: number = 1;
-  private i2: number = 1;
-  private consumed: number = 0;
-  private consumed1: number = 0;
-  private consumed2: number = 0;
+  private consumed = 0;
+  private consumed1 = 0;
+  private consumed2 = 0;
+  private i1 = 1;
+  private i2 = 1;
   constructor(private subseq1: Subseq, private subseq2: Subseq) {}
 
   next(): IteratorResult<ZipIteratorValue> {
@@ -309,7 +309,7 @@ export function factor(patch: Patch): [string, Subseq, Subseq] {
     throw new Error("Malformed patch");
   }
   // TODO: maybe use type of string[]
-  let inserted: string = "";
+  let inserted = "";
   let consumed = 0;
   let start: number | undefined;
   for (const p of patch) {
@@ -408,7 +408,6 @@ export interface Revision {
 }
 
 export class Document {
-  public connected = false;
   protected constructor(
     // TODO: does a document need to know its own id
     public id: string,
@@ -450,13 +449,10 @@ export class Document {
     return doc;
   }
 
-  hiddenSeqAt(version: number, clientId?: string): Subseq {
-    let hiddenSeq: Subseq = this.snapshot.hiddenSeq;
+  hiddenSeqAt(version: number): Subseq {
+    let hiddenSeq = this.snapshot.hiddenSeq;
     const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
-      if (clientId === revision.clientId) {
-        // TODO: figure out what to do here
-      }
       hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
       hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
     }
@@ -627,10 +623,7 @@ export class Document {
     }
     let [inserted, insertSeq, deleteSeq] = factor(message.patch);
     {
-      const hiddenSeq = this.hiddenSeqAt(
-        message.lastKnownVersion,
-        message.clientId,
-      );
+      const hiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
       [, insertSeq] = interleave(insertSeq, hiddenSeq);
       deleteSeq = expand(deleteSeq, hiddenSeq);
     }

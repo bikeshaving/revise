@@ -523,6 +523,7 @@ describe("Document", () => {
         version: 1,
       });
       expect(doc2.snapshot).toEqual(doc1.snapshot);
+      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
 
     test.skip("concurrent", () => {
@@ -545,10 +546,11 @@ describe("Document", () => {
         .map((message, i) => ({ ...message, version: i + 1 }));
       for (const message of messages) {
         doc1.ingest({ ...message, version });
-        doc1.ingest({ ...message, version });
+        doc2.ingest({ ...message, version });
         version += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
+      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
   });
 
