@@ -63,6 +63,12 @@ describe("subseq", () => {
       }).toThrow();
     });
 
+    test("error when mismatched 2", () => {
+      expect(() => {
+        shredder.interleave([0, 12], [0, 11]);
+      }).toThrow();
+    });
+
     test("empty transform", () => {
       const s = [0, 1, 2, 7];
       const t = [0, 8];

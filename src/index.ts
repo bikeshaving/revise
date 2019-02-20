@@ -167,14 +167,14 @@ export function expand(
   const result: Subseq = [];
   let length1: number | undefined;
   let flag1: boolean;
-  const iter1 = new SubseqIterator(subseq1);
+  const iter = new SubseqIterator(subseq1);
   for (let [length2, flag2] of new SubseqIterator(subseq2)) {
     if (flag2) {
       push(result, length2, union);
     } else {
       while (length2 > 0) {
         if (length1 == null || length1 === 0) {
-          const it = iter1.next();
+          const it = iter.next();
           if (it.done) {
             throw new Error("Length mismatch");
           }
@@ -187,7 +187,7 @@ export function expand(
       }
     }
   }
-  if (!iter1.next().done || (length1 != null && length1 > 0)) {
+  if (!iter.next().done || (length1 != null && length1 > 0)) {
     throw new Error("Length mismatch");
   }
   return result;
@@ -248,20 +248,20 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
 
   if (!it1.done) {
     const [length1, flag1] = it1.value;
-    push(resultBefore, length1, flag1);
-    push(resultAfter, length1, flag1);
-    if (!iter1.next().done) {
+    if (!flag1 || !iter1.next().done) {
       throw new Error("Length mismatch");
     }
+    push(resultBefore, length1, flag1);
+    push(resultAfter, length1, flag1);
   }
 
   if (!it2.done) {
-    const [length2] = it2.value;
-    push(resultBefore, length2, false);
-    push(resultAfter, length2, false);
-    if (!iter2.next().done) {
+    const [length2, flag2] = it2.value;
+    if (!flag2 || !iter2.next().done) {
       throw new Error("Length mismatch");
     }
+    push(resultBefore, length2, false);
+    push(resultAfter, length2, false);
   }
 
   return [resultBefore, resultAfter];
