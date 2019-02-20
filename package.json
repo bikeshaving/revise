@@ -8,7 +8,7 @@
     "build": "tsc",
     "prebench": "yarn build",
     "bench": "NODE_ENV=production node ./bench",
-    "develop": "yarn test --watch",
+    "develop": "yarn test --watchAll",
     "test": "jest",
     "lint": "eslint --ext js,ts src bench",
     "publish-lib": "yarn clean && yarn lint && yarn test && shx grep -v \"\\\"private\\\": true,\" package.json > lib/package.json && shx cp yarn.lock README.md ./lib && cd ./lib && npm publish"
