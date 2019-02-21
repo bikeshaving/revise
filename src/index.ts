@@ -302,14 +302,13 @@ export function apply(text: string, patch: Patch): string {
 }
 
 export function factor(patch: Patch): [string, Subseq, Subseq] {
-  const insertSeq: Subseq = [];
-  const deleteSeq: Subseq = [];
   const length = patch[patch.length - 1];
   if (typeof length !== "number") {
     throw new Error("Malformed patch");
   }
-  // TODO: maybe use type of string[]
   let inserted = "";
+  const insertSeq: Subseq = [];
+  const deleteSeq: Subseq = [];
   let consumed = 0;
   let start: number | undefined;
   for (const p of patch) {
@@ -371,6 +370,7 @@ export function synthesize(
   return patch;
 }
 
+// TODO: name these arguments better
 export function shuffle(
   text1: string,
   text2: string,
