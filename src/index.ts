@@ -506,7 +506,7 @@ export class Document {
     inserted: string,
     revision: Revision,
     snapshot: Snapshot = this.snapshot,
-  ): [string, Revision, Snapshot] {
+  ): Snapshot {
     let { insertSeq, deleteSeq } = revision;
     let { visible, hidden, hiddenSeq } = snapshot;
 
@@ -523,8 +523,7 @@ export class Document {
       visible = apply(visible, synthesize(inserted, insertSeq1));
     }
 
-    snapshot = { visible, hidden, hiddenSeq, version: snapshot.version + 1 };
-    return [inserted, revision, snapshot];
+    return { visible, hidden, hiddenSeq, version: snapshot.version + 1 };
   }
 
   edit(
@@ -570,11 +569,9 @@ export class Document {
       insertSeq,
       deleteSeq,
     };
-    let snapshot: Snapshot;
-    [, revision, snapshot] = this.apply(inserted, revision);
     this.revisions.push(revision);
     this.localVersion += 1;
-    this.snapshot = snapshot;
+    this.snapshot = this.apply(inserted, revision);
     this.client.save(this.id);
   }
 
@@ -599,10 +596,9 @@ export class Document {
       insertSeq,
       deleteSeq,
     };
-    [, , snapshot] = this.apply(inserted, revision1);
-    this.revisions.push(revision);
+    this.revisions.push(revision1);
     this.localVersion += 1;
-    this.snapshot = snapshot;
+    this.snapshot = this.apply(inserted, revision1);
     this.client.save(this.id);
   }
 
@@ -675,8 +671,7 @@ export class Document {
       );
     }
     const revision1: Revision = { ...revision, insertSeq, deleteSeq };
-    const [, , snapshot] = this.apply(inserted, revision1);
-    this.snapshot = snapshot;
+    this.snapshot = this.apply(inserted, revision1);
     this.lastKnownVersion = message.version;
   }
 
