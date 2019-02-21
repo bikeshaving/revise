@@ -407,6 +407,28 @@ export interface Revision {
   deleteSeq: Subseq;
 }
 
+// TODO: transform revisions too
+function rebase(revision: Revision, revisions: Revision[]): [Revision] {
+  let { insertSeq, deleteSeq } = revision;
+  for (const revision1 of revisions) {
+    if (
+      revision.priority === revision1.priority &&
+      revision.clientId === revision1.clientId
+    ) {
+      throw new Error("Concurrent edits with the same client and priority");
+    }
+    const before =
+      revision.priority === revision1.priority
+        ? revision.clientId < revision1.clientId
+        : revision.priority < revision1.priority;
+    insertSeq = interleave(insertSeq, revision1.insertSeq)[before ? 0 : 1];
+    deleteSeq = difference(deleteSeq, revision1.deleteSeq);
+    deleteSeq = expand(deleteSeq, revision1.insertSeq);
+  }
+  revision = { ...revision, insertSeq, deleteSeq };
+  return [revision];
+}
+
 export class Document {
   protected constructor(
     // TODO: does a document need to know its own id
@@ -537,30 +559,8 @@ export class Document {
     let [inserted, insertSeq, deleteSeq] = factor(patch);
     {
       const hiddenSeq = this.hiddenSeqAt(version);
-      [, insertSeq] = interleave(insertSeq, hiddenSeq);
+      insertSeq = interleave(insertSeq, hiddenSeq)[1];
       deleteSeq = expand(deleteSeq, hiddenSeq);
-    }
-
-    for (const revision of this.revisions.slice(version + 1)) {
-      if (
-        priority === revision.priority &&
-        this.client.id === revision.clientId
-      ) {
-        throw new Error(
-          "Cannot have concurrent edits with the same client and priority",
-        );
-      }
-      const before =
-        priority !== revision.priority
-          ? priority < revision.priority
-          : this.client.id < revision.clientId;
-      deleteSeq = difference(deleteSeq, revision.deleteSeq);
-      if (before) {
-        [insertSeq] = interleave(insertSeq, revision.insertSeq);
-      } else {
-        [, insertSeq] = interleave(insertSeq, revision.insertSeq);
-      }
-      deleteSeq = expand(deleteSeq, revision.insertSeq);
     }
     let revision: Revision = {
       clientId: this.client.id,
@@ -569,6 +569,7 @@ export class Document {
       insertSeq,
       deleteSeq,
     };
+    [revision] = rebase(revision, this.revisions.slice(version + 1));
     this.revisions.push(revision);
     this.localVersion += 1;
     this.snapshot = this.apply(inserted, revision);
@@ -588,7 +589,7 @@ export class Document {
       apply(snapshot.visible, synthesize(snapshot.hidden, snapshot.hiddenSeq)),
       insertSeq,
     );
-    [, insertSeq] = interleave(insertSeq, insertSeq);
+    insertSeq = interleave(insertSeq, insertSeq)[1];
     const revision1: Revision = {
       clientId: this.client.id,
       priority: 0,
@@ -620,48 +621,36 @@ export class Document {
     let [inserted, insertSeq, deleteSeq] = factor(message.patch);
     {
       const hiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
-      [, insertSeq] = interleave(insertSeq, hiddenSeq);
+      insertSeq = interleave(insertSeq, hiddenSeq)[1];
       deleteSeq = expand(deleteSeq, hiddenSeq);
     }
-    for (const revision of this.revisions.slice(
-      message.lastKnownVersion + 1,
-      this.lastKnownVersion + 1,
-    )) {
-      if (message.clientId === revision.clientId) {
-        [, insertSeq] = interleave(insertSeq, revision.insertSeq);
-        deleteSeq = expand(deleteSeq, revision.insertSeq);
-      } else {
-        const before =
-          message.priority !== revision.priority
-            ? message.priority < revision.priority
-            : message.clientId < revision.clientId;
-        if (before) {
-          [insertSeq] = interleave(insertSeq, revision.insertSeq);
-        } else {
-          [, insertSeq] = interleave(insertSeq, revision.insertSeq);
-        }
-        deleteSeq = difference(deleteSeq, revision.deleteSeq);
-        deleteSeq = expand(deleteSeq, revision.insertSeq);
-      }
-    }
-    const revision: Revision = {
+    let revision: Revision = {
       clientId: message.clientId,
       priority: message.priority,
       localVersion: message.localVersion,
       insertSeq,
       deleteSeq,
     };
+    let revisions = this.revisions.slice(
+      message.lastKnownVersion + 1,
+      this.lastKnownVersion + 1,
+    );
+    [revision] = rebase(revision, revisions);
+    revisions = this.revisions.slice(this.lastKnownVersion + 1);
     this.revisions.splice(this.lastKnownVersion + 1, 0, revision);
-    for (const revision1 of this.revisions.slice(this.lastKnownVersion + 2)) {
-      const before =
-        message.priority !== revision1.priority
-          ? message.priority < revision1.priority
-          : message.clientId < revision1.clientId;
-      if (before) {
-        [insertSeq] = interleave(insertSeq, revision1.insertSeq);
-      } else {
-        [, insertSeq] = interleave(insertSeq, revision1.insertSeq);
+    // TODO: use rebase?????
+    for (const revision1 of revisions) {
+      if (
+        revision.priority === revision1.priority &&
+        revision.clientId === revision1.clientId
+      ) {
+        throw new Error("Concurrent edits with the same client and priority");
       }
+      const before =
+        revision.priority === revision1.priority
+          ? revision.clientId < revision1.clientId
+          : revision.priority < revision1.priority;
+      insertSeq = interleave(insertSeq, revision1.insertSeq)[before ? 0 : 1];
       deleteSeq = difference(deleteSeq, revision1.deleteSeq);
       deleteSeq = expand(deleteSeq, revision1.insertSeq);
       revision1.insertSeq = expand(revision1.insertSeq, insertSeq);
@@ -670,8 +659,8 @@ export class Document {
         shrink(insertSeq, revision1.insertSeq),
       );
     }
-    const revision1: Revision = { ...revision, insertSeq, deleteSeq };
-    this.snapshot = this.apply(inserted, revision1);
+    revision = { ...revision, insertSeq, deleteSeq };
+    this.snapshot = this.apply(inserted, revision);
     this.lastKnownVersion = message.version;
   }
 
