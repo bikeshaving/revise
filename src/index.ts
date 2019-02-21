@@ -501,17 +501,16 @@ export class Document {
   }
 
   patchAt(version: number): Patch {
-    const revision: Revision =
+    const snapshot = this.snapshotAt(version);
+    const revision =
       this.revisions[version] || this.revisions[this.revisions.length - 1];
-    const snapshot: Snapshot = this.snapshotAt(version);
     let insertSeq = revision.insertSeq;
     let deleteSeq = expand(revision.deleteSeq, revision.insertSeq);
     const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
     insertSeq = shrink(insertSeq, hiddenSeq);
     deleteSeq = shrink(deleteSeq, hiddenSeq);
     const inserted = extract(snapshot.visible, shrink(insertSeq, deleteSeq));
-    const patch = synthesize(inserted, insertSeq, deleteSeq);
-    return patch;
+    return synthesize(inserted, insertSeq, deleteSeq);
   }
 
   clone(client: Client = this.client): Document {
@@ -618,9 +617,20 @@ export class Document {
       this.lastKnownVersion = message.version;
       return;
     }
+    let lastKnownVersion = message.lastKnownVersion;
+    for (let v = this.lastKnownVersion; v >= lastKnownVersion; v--) {
+      if (message.clientId === this.revisions[v].clientId) {
+        lastKnownVersion = v;
+        break;
+      }
+    }
+    let revisions = this.revisions.slice(
+      lastKnownVersion + 1,
+      this.lastKnownVersion + 1,
+    );
     let [inserted, insertSeq, deleteSeq] = factor(message.patch);
     {
-      const hiddenSeq = this.hiddenSeqAt(message.lastKnownVersion);
+      const hiddenSeq = this.hiddenSeqAt(lastKnownVersion);
       insertSeq = interleave(insertSeq, hiddenSeq)[1];
       deleteSeq = expand(deleteSeq, hiddenSeq);
     }
@@ -631,11 +641,8 @@ export class Document {
       insertSeq,
       deleteSeq,
     };
-    let revisions = this.revisions.slice(
-      message.lastKnownVersion + 1,
-      this.lastKnownVersion + 1,
-    );
     [revision] = rebase(revision, revisions);
+    ({ insertSeq, deleteSeq } = revision);
     revisions = this.revisions.slice(this.lastKnownVersion + 1);
     this.revisions.splice(this.lastKnownVersion + 1, 0, revision);
     // TODO: use rebase?????

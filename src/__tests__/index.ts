@@ -526,7 +526,7 @@ describe("Document", () => {
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
 
-    test.skip("concurrent", () => {
+    test("concurrent", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
