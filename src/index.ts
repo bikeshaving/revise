@@ -392,9 +392,11 @@ export interface Revision {
   localVersion: number;
   insertSeq: Subseq;
   deleteSeq: Subseq;
+  baseInsertSeq?: Subseq;
+  baseDeleteSeq?: Subseq;
 }
 
-// TODO: rename to operation?
+// TODO: combine Revision and Message by using patch in Revision
 export interface Message {
   patch: Patch;
   clientId: string;
@@ -422,13 +424,10 @@ function rebase(
         ? revision.clientId < revision1.clientId
         : revision.priority < revision1.priority;
     insertSeq = interleave(insertSeq, revision1.insertSeq)[before ? 0 : 1];
-    deleteSeq = difference(deleteSeq, revision1.deleteSeq);
+    let deleteSeq1 = difference(revision1.deleteSeq, deleteSeq);
     deleteSeq = expand(deleteSeq, revision1.insertSeq);
     const insertSeq1 = expand(revision1.insertSeq, insertSeq);
-    const deleteSeq1 = expand(
-      revision1.deleteSeq,
-      shrink(insertSeq, insertSeq1),
-    );
+    deleteSeq1 = expand(deleteSeq1, shrink(insertSeq, insertSeq1));
     revisions1.push({
       ...revision1,
       insertSeq: insertSeq1,
@@ -446,9 +445,9 @@ export class Document {
     // TODO: does a document need to know its own client besides clientId
     public client: Client,
     public snapshot: Snapshot,
-    protected revisions: Revision[],
-    protected lastKnownVersion = -1,
-    protected localVersion = 0,
+    public revisions: Revision[],
+    public lastKnownVersion = -1,
+    public localVersion = 0,
   ) {}
 
   static create(id: string, client: Client, initial: string = ""): Document {
@@ -575,6 +574,10 @@ export class Document {
       deleteSeq: expand(deleteSeq, hiddenSeq),
     };
     [revision] = rebase(revision, this.revisions.slice(version + 1));
+    revision = {
+      ...revision,
+      deleteSeq: difference(revision.deleteSeq, this.snapshot.hiddenSeq),
+    };
     this.snapshot = this.apply(inserted, revision);
     this.revisions.push(revision);
     this.localVersion++;
@@ -602,7 +605,7 @@ export class Document {
       priority: 0,
       localVersion: this.localVersion,
       insertSeq,
-      deleteSeq,
+      deleteSeq: difference(deleteSeq, this.snapshot.hiddenSeq),
     };
     this.snapshot = this.apply(inserted, revision1);
     this.revisions.push(revision1);
@@ -632,12 +635,18 @@ export class Document {
         break;
       }
     }
-    let revisions = this.revisions.slice(
-      lastKnownVersion + 1,
+    let [{ baseInsertSeq, baseDeleteSeq }, ...revisions] = this.revisions.slice(
+      lastKnownVersion,
       this.lastKnownVersion + 1,
     );
     let [inserted, insertSeq, deleteSeq] = factor(message.patch);
-    const hiddenSeq = this.hiddenSeqAt(lastKnownVersion);
+    let hiddenSeq = this.hiddenSeqAt(lastKnownVersion);
+    if (baseDeleteSeq != null) {
+      hiddenSeq = difference(hiddenSeq, baseDeleteSeq);
+    }
+    if (baseInsertSeq != null) {
+      hiddenSeq = shrink(hiddenSeq, baseInsertSeq);
+    }
     let revision: Revision = {
       clientId: message.clientId,
       priority: message.priority,
@@ -645,7 +654,34 @@ export class Document {
       insertSeq: interleave(insertSeq, hiddenSeq)[1],
       deleteSeq: expand(deleteSeq, hiddenSeq),
     };
+    if (baseInsertSeq != null) {
+      revision.insertSeq = expand(revision.insertSeq, baseInsertSeq);
+      revision.deleteSeq = expand(revision.deleteSeq, baseInsertSeq);
+    }
     [revision] = rebase(revision, revisions);
+    for (const revision of revisions) {
+      if (baseInsertSeq == null) {
+        baseInsertSeq = revision.insertSeq;
+      } else {
+        baseInsertSeq = expand(baseInsertSeq, revision.insertSeq, {
+          union: true,
+        });
+      }
+      if (baseDeleteSeq == null) {
+        baseDeleteSeq = revision.deleteSeq;
+      } else {
+        baseDeleteSeq = union(baseDeleteSeq, revision.deleteSeq);
+      }
+      baseDeleteSeq = expand(baseDeleteSeq, revision.insertSeq);
+    }
+    if (baseInsertSeq) {
+      baseInsertSeq = expand(baseInsertSeq, revision.insertSeq);
+    }
+    if (baseDeleteSeq) {
+      baseDeleteSeq = difference(baseDeleteSeq, revision.deleteSeq);
+      baseDeleteSeq = expand(baseDeleteSeq, revision.insertSeq);
+    }
+    revision = { ...revision, baseInsertSeq, baseDeleteSeq };
     revisions = this.revisions.slice(this.lastKnownVersion + 1);
     this.revisions.splice(
       this.lastKnownVersion + 1,

@@ -69,9 +69,15 @@ describe("subseq", () => {
       }).toThrow();
     });
 
-    test("empty transform", () => {
+    test("empty transform 1", () => {
       const s = [0, 1, 2, 7];
       const t = [0, 8];
+      expect(shredder.interleave(s, t)).toEqual([s, s]);
+    });
+
+    test("empty transform 2", () => {
+      const s = [0, 5, 1, 6, 1];
+      const t = [0, 11];
       expect(shredder.interleave(s, t)).toEqual([s, s]);
     });
 
@@ -334,6 +340,20 @@ describe("Document", () => {
     });
   });
 
+  describe("patchAt", () => {
+    test("full", () => {
+      const client = new Client("id1", new InMemoryStorage());
+      const doc = Document.create("doc1", client, "hello world");
+      doc.edit([0, 11, "!", 11]);
+      doc.edit([0, 5, "_", 6, 12]);
+      doc.edit([0, 11, 12]);
+      expect(doc.patchAt(0)).toEqual(["hello world", 0]);
+      expect(doc.patchAt(1)).toEqual([0, 11, "!", 11]);
+      expect(doc.patchAt(2)).toEqual([0, 5, "_", 6, 12]);
+      expect(doc.patchAt(3)).toEqual([0, 11, 12]);
+    });
+  });
+
   describe("Document.edit", () => {
     test("simple", () => {
       const client = new Client("id1", new InMemoryStorage());
@@ -526,7 +546,7 @@ describe("Document", () => {
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
 
-    test("concurrent", () => {
+    test("concurrent 1", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
@@ -540,10 +560,7 @@ describe("Document", () => {
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
-      const messages = doc1
-        .createMessages()
-        .concat(doc2.createMessages())
-        .map((message, i) => ({ ...message, version: i + 1 }));
+      const messages = doc1.createMessages().concat(doc2.createMessages());
       for (const message of messages) {
         doc1.ingest({ ...message, version });
         doc2.ingest({ ...message, version });
@@ -552,19 +569,29 @@ describe("Document", () => {
       expect(doc1.snapshot).toEqual(doc2.snapshot);
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
-  });
 
-  describe("patchAt", () => {
-    test("full", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
-      doc.edit([0, 11, "!", 11]);
-      doc.edit([0, 5, "_", 6, 12]);
-      doc.edit([0, 11, 12]);
-      expect(doc.patchAt(0)).toEqual(["hello world", 0]);
-      expect(doc.patchAt(1)).toEqual([0, 11, "!", 11]);
-      expect(doc.patchAt(2)).toEqual([0, 5, "_", 6, 12]);
-      expect(doc.patchAt(3)).toEqual([0, 11, 12]);
+    test("concurrent 2", () => {
+      const client1 = new Client("id1", new InMemoryStorage());
+      const client2 = new Client("id2", new InMemoryStorage());
+      const doc1 = Document.create("doc1", client1, "hello world");
+      let version = 0;
+      for (const message of doc1.createMessages()) {
+        doc1.ingest({ ...message, version });
+        version += 1;
+      }
+      const doc2 = doc1.clone(client2);
+      doc1.edit(["H", 1, 6, "W", 7, 11]);
+      doc1.edit([0, 5, 6, 11]);
+      doc2.edit([0, 5, "_", 6, 11, "!", 11]);
+      doc2.edit([0, 11, 12]);
+      const messages = doc2.createMessages().concat(doc1.createMessages());
+      for (const message of messages) {
+        doc1.ingest({ ...message, version });
+        doc2.ingest({ ...message, version });
+        version += 1;
+      }
+      expect(doc1.snapshot).toEqual(doc2.snapshot);
+      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
     });
   });
 });
