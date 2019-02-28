@@ -263,7 +263,13 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
   return [resultBefore, resultAfter];
 }
 
-// TODO: explain patch format
+// Patches are arrays of strings and numbers which represent changes to text.
+// Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result.
+// Deletions are represented via omission.
+// Strings within a patch represent insertions at the latest index.
+// The last element of a patch will always be a number which represent the length of the text being modified.
+// TODO: allow for move operations to be defined as three consecutive numbers, the first being a number less than the latest index which indicates a position to move a range of text, and the next two representing the range to be moved.
+// TODO: allow for revive operations to be defined as three consecutive numbers, where the first and the second are the same number.
 export type Patch = (string | number)[];
 
 export function apply(text: string, patch: Patch): string {
@@ -273,28 +279,28 @@ export function apply(text: string, patch: Patch): string {
   } else if (length !== text.length) {
     throw new Error("Length mismatch");
   }
-  let text1 = "";
-  let consumed = 0;
+  let result = "";
+  let index = 0;
   let start: number | undefined;
   for (const p of patch) {
     if (start != null) {
-      if (typeof p !== "number" || p < consumed) {
+      if (typeof p !== "number" || p < index) {
         throw new Error("Malformed patch");
       }
-      text1 += text.slice(start, p);
-      consumed = p;
+      result += text.slice(start, p);
+      index = p;
       start = undefined;
     } else if (typeof p === "number") {
-      if (p < consumed) {
+      if (p < index) {
         throw new Error("Malformed patch");
       }
-      consumed = p;
+      index = p;
       start = p;
     } else {
-      text1 += p;
+      result += p;
     }
   }
-  return text1;
+  return result;
 }
 
 export function factor(patch: Patch): [string, Subseq, Subseq] {
@@ -366,7 +372,6 @@ export function synthesize(
   return patch;
 }
 
-// TODO: name these arguments better
 export function shuffle(
   text1: string,
   text2: string,
