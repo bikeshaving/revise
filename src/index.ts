@@ -315,7 +315,8 @@ export function factor(patch: Patch): [string, Subseq, Subseq] {
   let start: number | undefined;
   for (const p of patch) {
     if (start != null) {
-      if (typeof p !== "number" || p < consumed || p > length) {
+      // TODO: repeated number means we’re reviving a segment
+      if (typeof p !== "number" || p <= consumed || p > length) {
         throw new Error("Malformed patch");
       }
       push(insertSeq, p - start, false);
@@ -323,6 +324,7 @@ export function factor(patch: Patch): [string, Subseq, Subseq] {
       consumed = p;
       start = undefined;
     } else if (typeof p === "number") {
+      // TODO: number less than consumed means we’re moving the segment
       if (p < consumed) {
         throw new Error("Malformed patch");
       } else if (p > consumed) {
@@ -349,13 +351,13 @@ export function synthesize(
   deleteSeq: Subseq = clear(insertSeq),
 ): Patch {
   const patch: Patch = [];
-  let i = 0; // insert index
+  let index = 0;
   let consumed = 0;
   for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
-      i += length;
+      index += length;
       if (!dFlag) {
-        patch.push(inserted.slice(i - length, i));
+        patch.push(inserted.slice(index - length, index));
       }
     } else {
       consumed += length;
@@ -363,6 +365,9 @@ export function synthesize(
         patch.push(consumed - length, consumed);
       }
     }
+  }
+  if (index !== inserted.length) {
+    //     throw new Error("THIS IS WRONG MAN");
   }
   const last = patch[patch.length - 1];
   const length = count(insertSeq, false);
@@ -392,11 +397,11 @@ export interface Snapshot {
 }
 
 export interface Revision {
+  insertSeq: Subseq;
+  deleteSeq: Subseq;
   clientId: string;
   priority: number;
   localVersion: number;
-  insertSeq: Subseq;
-  deleteSeq: Subseq;
 }
 
 // TODO: combine Revision and Message by using patch in Revision
@@ -441,7 +446,7 @@ function rebase(
   return [revision, revisions1];
 }
 
-function summarize(revisions: Revision[], clientId: string): [Subseq, Subseq] {
+function summarize(revisions: Revision[], clientId?: string): [Subseq, Subseq] {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
@@ -515,17 +520,18 @@ export class Document {
   }
 
   snapshotAt(version: number): Snapshot {
-    const hiddenSeq: Subseq = this.hiddenSeqAt(version);
-    let insertSeq: Subseq = clear(hiddenSeq);
-    for (const revision of this.revisions.slice(version + 1)) {
-      insertSeq = expand(insertSeq, revision.insertSeq, { union: true });
+    if (version >= this.revisions.length - 1) {
+      return this.snapshot;
     }
+    const hiddenSeq: Subseq = this.hiddenSeqAt(version);
+    const [insertSeq] = summarize(this.revisions.slice(version + 1));
     let { visible, hidden, hiddenSeq: hiddenSeq1 } = this.snapshot;
     const hiddenSeq2 = expand(hiddenSeq, insertSeq);
     visible = apply(
       visible,
       synthesize(hidden, hiddenSeq1, union(hiddenSeq2, insertSeq)),
     );
+    // TODO: empty string passed to synthesize is wrong here
     hidden = apply(
       hidden,
       synthesize("", complement(hiddenSeq1), complement(hiddenSeq2)),
@@ -661,12 +667,12 @@ export class Document {
     }
     let hiddenSeq = this.hiddenSeqAt(lastKnownVersion);
     let baseInsertSeq: Subseq | undefined;
-    let baseDeleteSeq: Subseq | undefined;
     if (message.lastKnownVersion < lastKnownVersion) {
       const revisions = this.revisions.slice(
         message.lastKnownVersion + 1,
         lastKnownVersion + 1,
       );
+      let baseDeleteSeq: Subseq | undefined;
       [baseInsertSeq, baseDeleteSeq] = summarize(revisions, message.clientId);
       hiddenSeq = difference(hiddenSeq, baseDeleteSeq);
       hiddenSeq = shrink(hiddenSeq, baseInsertSeq);
