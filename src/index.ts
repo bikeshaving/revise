@@ -729,14 +729,12 @@ export class Document {
   }
 }
 
-import { Channel, FixedBuffer } from "./channel";
-
 export interface Connection {
   fetchSnapshot(id: string, min?: number): Promise<Snapshot>;
   fetchMessages(id: string, from?: number, to?: number): Promise<Message[]>;
   sendMessages(id: string, messages: Message[]): Promise<Message[]>;
   sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot>;
-  messagesChannel(id: string, from?: number): Promise<Channel<Message[]>>;
+  messagesChannel(id: string, from?: number): Promise<AsyncIterable<Message[]>>;
 }
 
 interface ClientSaveOptions {
@@ -836,6 +834,8 @@ export class Client {
     return doc;
   }
 }
+
+import { Channel, FixedBuffer } from "./channel";
 
 export class InMemoryStorage implements Connection {
   protected clientVersionsById: Record<string, Record<string, number>> = {};
