@@ -21,17 +21,18 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
   return subseq.length;
 }
 
-export type SubseqIteratorValue = [number, boolean];
+// [length, flag]
+export type Segment = [number, boolean];
 
-export class SubseqIterator implements IterableIterator<SubseqIteratorValue> {
+export class SegmentIterator implements IterableIterator<Segment> {
   private i = 1;
 
   constructor(private subseq: Subseq) {}
 
-  next(): IteratorResult<SubseqIteratorValue> {
+  next(): IteratorResult<Segment> {
     const length = this.subseq[this.i];
     if (length == null) {
-      return { done: true } as IteratorResult<SubseqIteratorValue>;
+      return { done: true } as any;
     }
     const flag = flagAt(this.subseq, this.i);
     this.i++;
@@ -45,7 +46,7 @@ export class SubseqIterator implements IterableIterator<SubseqIteratorValue> {
 
 export function print(subseq: Subseq): string {
   let result = "";
-  for (const [length, flag] of new SubseqIterator(subseq)) {
+  for (const [length, flag] of new SegmentIterator(subseq)) {
     result += flag ? "+".repeat(length) : "=".repeat(length);
   }
   return result;
@@ -53,7 +54,7 @@ export function print(subseq: Subseq): string {
 
 export function count(subseq: Subseq, test?: boolean): number {
   let result = 0;
-  for (const [length, flag] of new SubseqIterator(subseq)) {
+  for (const [length, flag] of new SegmentIterator(subseq)) {
     if (test == null || test === flag) {
       result += length;
     }
@@ -73,7 +74,7 @@ export function clear(subseq: Subseq): Subseq {
 export function extract(str: string, subseq: Subseq): string {
   let consumed = 0;
   let result = "";
-  for (const [length, flag] of new SubseqIterator(subseq)) {
+  for (const [length, flag] of new SegmentIterator(subseq)) {
     consumed += length;
     if (flag) {
       result += str.slice(consumed - length, consumed);
@@ -89,26 +90,27 @@ export function complement(subseq: Subseq): Subseq {
   return [subseq[0] ? 0 : 1].concat(subseq.slice(1));
 }
 
-export type ZipIteratorValue = [number, boolean, boolean];
+// [length, flag1, flag2]
+export type ZippedSegment = [number, boolean, boolean];
 
-export class ZipIterator implements IterableIterator<ZipIteratorValue> {
-  private iter1: SubseqIterator;
-  private iter2: SubseqIterator;
-  private it1: IteratorResult<SubseqIteratorValue>;
-  private it2: IteratorResult<SubseqIteratorValue>;
+export class ZippedSegmentIterator implements IterableIterator<ZippedSegment> {
+  private iter1: SegmentIterator;
+  private iter2: SegmentIterator;
+  private it1: IteratorResult<Segment>;
+  private it2: IteratorResult<Segment>;
   constructor(subseq1: Subseq, subseq2: Subseq) {
-    this.iter1 = new SubseqIterator(subseq1);
-    this.iter2 = new SubseqIterator(subseq2);
+    this.iter1 = new SegmentIterator(subseq1);
+    this.iter2 = new SegmentIterator(subseq2);
     this.it1 = this.iter1.next();
     this.it2 = this.iter2.next();
   }
 
-  next(): IteratorResult<ZipIteratorValue> {
+  next(): IteratorResult<ZippedSegment> {
     if (this.it1.done || this.it2.done) {
       if (!this.it1.done || !this.it2.done) {
         throw new Error("Length mismatch");
       }
-      return { done: true } as IteratorResult<ZipIteratorValue>;
+      return { done: true } as any;
     }
     const [length1, flag1] = this.it1.value;
     const [length2, flag2] = this.it2.value;
@@ -142,8 +144,8 @@ export class ZipIterator implements IterableIterator<ZipIteratorValue> {
   }
 }
 
-export function zip(subseq1: Subseq, subseq2: Subseq): ZipIterator {
-  return new ZipIterator(subseq1, subseq2);
+export function zip(subseq1: Subseq, subseq2: Subseq): ZippedSegmentIterator {
+  return new ZippedSegmentIterator(subseq1, subseq2);
 }
 
 export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
@@ -163,8 +165,8 @@ export function expand(
   const result: Subseq = [];
   let length1: number | undefined;
   let flag1: boolean;
-  const iter = new SubseqIterator(subseq1);
-  for (let [length2, flag2] of new SubseqIterator(subseq2)) {
+  const iter = new SegmentIterator(subseq1);
+  for (let [length2, flag2] of new SegmentIterator(subseq2)) {
     if (flag2) {
       push(result, length2, union);
     } else {
@@ -200,8 +202,8 @@ export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
 }
 
 export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
-  const iter1 = new SubseqIterator(subseq1);
-  const iter2 = new SubseqIterator(subseq2);
+  const iter1 = new SegmentIterator(subseq1);
+  const iter2 = new SegmentIterator(subseq2);
   let it1 = iter1.next();
   let it2 = iter2.next();
   const resultBefore: Subseq = [];
