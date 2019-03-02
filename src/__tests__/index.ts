@@ -219,27 +219,27 @@ describe("patch", () => {
 
   describe("factor", () => {
     test("factor 1", () => {
-      const [, insertSeq, deleteSeq] = shredder.factor(p0);
+      const { insertSeq, deleteSeq } = shredder.factor(p0);
       expect(insertSeq).toEqual([0, 1, 3, 10]);
       expect(deleteSeq).toEqual([0, 1, 8, 2]);
     });
 
     test("factor 2", () => {
-      const [, insertSeq, deleteSeq] = shredder.factor(p1);
+      const { insertSeq, deleteSeq } = shredder.factor(p1);
       expect(insertSeq).toEqual([1, 2, 11]);
       expect(deleteSeq).toEqual([1, 2, 3, 6]);
     });
 
     test("factor 3", () => {
-      const [, insertSeq, deleteSeq] = shredder.factor(p2);
+      const { insertSeq, deleteSeq } = shredder.factor(p2);
       expect(insertSeq).toEqual([0, 4, 1, 1, 7, 6]);
       expect(deleteSeq).toEqual([0, 5, 6]);
     });
 
     test("factor 4", () => {
-      const [, insertSeq3, deleteSeq3] = shredder.factor(p3);
-      expect(insertSeq3).toEqual([0, 6, 5, 5]);
-      expect(deleteSeq3).toEqual([0, 6, 5]);
+      const { insertSeq, deleteSeq } = shredder.factor(p3);
+      expect(insertSeq).toEqual([0, 6, 5, 5]);
+      expect(deleteSeq).toEqual([0, 6, 5]);
     });
   });
 
@@ -256,7 +256,7 @@ describe("patch", () => {
     });
 
     test("complex", () => {
-      const [inserted, insertSeq, deleteSeq] = shredder.factor(p0);
+      const { inserted, insertSeq, deleteSeq } = shredder.factor(p0);
       const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
       const union = shredder.apply(
         text,

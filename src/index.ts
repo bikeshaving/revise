@@ -305,7 +305,13 @@ export function apply(text: string, patch: Patch): string {
   return result;
 }
 
-export function factor(patch: Patch): [string, Subseq, Subseq] {
+interface FactorResult {
+  inserted: string;
+  insertSeq: Subseq;
+  deleteSeq: Subseq;
+}
+
+export function factor(patch: Patch): FactorResult {
   const length = patch[patch.length - 1];
   if (typeof length !== "number") {
     throw new Error("Malformed patch");
@@ -344,7 +350,7 @@ export function factor(patch: Patch): [string, Subseq, Subseq] {
     push(insertSeq, length - consumed, false);
     push(deleteSeq, length - consumed, true);
   }
-  return [inserted, insertSeq, deleteSeq];
+  return { inserted, insertSeq, deleteSeq };
 }
 
 export function synthesize(
@@ -368,8 +374,9 @@ export function synthesize(
       }
     }
   }
+  // TODO: throw error if index !== inserted.length
   if (index !== inserted.length) {
-    //     throw new Error("THIS IS WRONG MAN");
+    // throw new Error("THIS IS WRONG MAN");
   }
   const last = patch[patch.length - 1];
   const length = count(insertSeq, false);
@@ -596,7 +603,7 @@ export class Document {
     if (version < 0 || version > this.revisions.length - 1) {
       throw new Error("Version out of range");
     }
-    let [inserted, insertSeq, deleteSeq] = factor(patch);
+    let { inserted, insertSeq, deleteSeq } = factor(patch);
     const hiddenSeq = this.hiddenSeqAt(version);
     let revision: Revision = {
       clientId: this.client.id,
@@ -679,7 +686,7 @@ export class Document {
       hiddenSeq = difference(hiddenSeq, baseDeleteSeq);
       hiddenSeq = shrink(hiddenSeq, baseInsertSeq);
     }
-    let [inserted, insertSeq, deleteSeq] = factor(message.patch);
+    let { inserted, insertSeq, deleteSeq } = factor(message.patch);
     let revision: Revision = {
       clientId: message.clientId,
       priority: message.priority,
