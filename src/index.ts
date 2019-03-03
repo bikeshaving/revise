@@ -152,6 +152,10 @@ export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 || flag2);
 }
 
+export function intersection(subseq1: Subseq, subseq2: Subseq): Subseq {
+  return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && flag2);
+}
+
 export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
   return zip(subseq1, subseq2).join((flag1, flag2) => flag1 && !flag2);
 }
