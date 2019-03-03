@@ -62,13 +62,28 @@ export function count(subseq: Subseq, test?: boolean): number {
   return result;
 }
 
-export function clear(subseq: Subseq): Subseq {
-  const length = count(subseq);
+export function empty(length: number): Subseq {
   const result: Subseq = [];
   if (length) {
     push(result, length, false);
   }
   return result;
+}
+
+export function clear(subseq: Subseq): Subseq {
+  return empty(count(subseq));
+}
+
+export function full(length: number): Subseq {
+  const result: Subseq = [];
+  if (length) {
+    push(result, length, true);
+  }
+  return result;
+}
+
+export function fill(subseq: Subseq): Subseq {
+  return full(count(subseq));
 }
 
 export function extract(str: string, subseq: Subseq): string {
@@ -496,14 +511,14 @@ export class Document {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
-      hiddenSeq: initial.length ? [0, initial.length] : [],
+      hiddenSeq: empty(initial.length),
       version: 0,
     };
     const revision: Revision = {
       clientId: client.id,
       priority: 0,
       localVersion: 0,
-      insertSeq: initial.length ? [1, initial.length] : [],
+      insertSeq: full(initial.length),
       deleteSeq: [],
     };
     return new Document(id, client, snapshot, [revision], -1, 1);
