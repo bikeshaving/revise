@@ -1,4 +1,5 @@
-// [flag, ...lengths]
+// [flag, ...lengths[]]
+// TODO: make subseq [boolean, ...number[]]?
 export type Subseq = number[];
 
 export function flagAt(subseq: Subseq, index: number): boolean {
@@ -35,7 +36,7 @@ export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
   return subseq1.concat(subseq2.slice(2));
 }
 
-// [length, ...flags]
+// [length, ...flags[]]
 export type Segment = [number, ...boolean[]];
 
 export class SegmentIterator implements IterableIterator<Segment> {
@@ -328,39 +329,31 @@ export function shuffle(
 // Deletions are represented via omission.
 // Strings within a patch represent insertions at the latest index.
 // The last element of a patch will always be a number which represent the length of the text being modified.
-// TODO: allow for move operations to be defined as three consecutive numbers, the first being a number less than the latest index which indicates a position to move a range of text, and the next two representing the range to be moved.
 // TODO: allow for revive operations to be defined as three consecutive numbers, where the first and the second are the same number.
+// [
+//   // revive 0, 5
+//   0, 0, 5,
+//   // delete 5, 7
+//   // revive 7, 8
+//   7, 7, 8,
+//   // retain 8, 11
+//   8, 11
+// ]
+// TODO: allow for move operations to be defined as three consecutive numbers, the first being a number less than the latest index which indicates a position to move a range of text, and the next two representing the range to be moved.
+// [
+//   // retain 0, 5
+//   0, 5,
+//   // move 5, 8 to 2
+//   2, 5, 8,
+//   // move 8, 11 to 3
+//   3, 8, 11
+// ]
 export type Patch = (string | number)[];
 
 export function apply(text: string, patch: Patch): string {
-  const length = patch[patch.length - 1];
-  if (typeof length !== "number") {
-    throw new Error("Malformed patch");
-  } else if (length !== text.length) {
-    throw new Error("Length mismatch");
-  }
-  let result = "";
-  let index = 0;
-  let start: number | undefined;
-  for (const p of patch) {
-    if (start != null) {
-      if (typeof p !== "number" || p < index) {
-        throw new Error("Malformed patch");
-      }
-      result += text.slice(start, p);
-      index = p;
-      start = undefined;
-    } else if (typeof p === "number") {
-      if (p < index) {
-        throw new Error("Malformed patch");
-      }
-      index = p;
-      start = p;
-    } else {
-      result += p;
-    }
-  }
-  return result;
+  const { inserted, insertSeq, deleteSeq } = factor(patch);
+  [, text] = split(text, deleteSeq);
+  return merge(inserted, text, insertSeq);
 }
 
 // TODO
@@ -466,7 +459,7 @@ export interface Revision {
   lastKnownVersion: number;
 }
 
-function rebase(
+export function rebase(
   revision: Revision,
   revisions: Revision[],
   hiddenSeq: Subseq,
@@ -489,14 +482,13 @@ function rebase(
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
     } = factor(revision1.patch);
-    deleteSeq1 = difference(deleteSeq1, deleteSeq);
+    deleteSeq1 = expand(difference(deleteSeq1, deleteSeq), insertSeq);
     deleteSeq = expand(deleteSeq, insertSeq1);
     if (before) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
     } else {
       [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
     }
-    deleteSeq1 = expand(deleteSeq1, shrink(insertSeq, insertSeq1));
     revisions1.push({
       ...revision1,
       patch: synthesize(inserted1, insertSeq1, deleteSeq1),
@@ -508,7 +500,10 @@ function rebase(
 }
 
 // TODO: remove deleteSeq from result
-function summarize(revisions: Revision[], clientId?: string): [Subseq, Subseq] {
+export function summarize(
+  revisions: Revision[],
+  clientId?: string,
+): [Subseq, Subseq] {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
