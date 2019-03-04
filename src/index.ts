@@ -86,18 +86,6 @@ export function fill(subseq: Subseq): Subseq {
   return full(count(subseq));
 }
 
-export function extract(str: string, subseq: Subseq): string {
-  let consumed = 0;
-  let result = "";
-  for (const [length, flag] of new SegmentIterator(subseq)) {
-    consumed += length;
-    if (flag) {
-      result += str.slice(consumed - length, consumed);
-    }
-  }
-  return result;
-}
-
 export function complement(subseq: Subseq): Subseq {
   if (!subseq.length) {
     return subseq;
@@ -284,6 +272,46 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
   return [resultBefore, resultAfter];
 }
 
+export function split(text: string, subseq: Subseq): [string, string] {
+  let consumed = 0;
+  let result1 = "";
+  let result2 = "";
+  for (const [length, flag] of new SegmentIterator(subseq)) {
+    if (flag) {
+      result1 += text.slice(consumed, consumed + length);
+    } else {
+      result2 += text.slice(consumed, consumed + length);
+    }
+    consumed += length;
+  }
+  return [result1, result2];
+}
+
+export function merge(text1: string, text2: string, subseq: Subseq): string {
+  let result = "";
+  let consumed1 = 0;
+  let consumed2 = 0;
+  for (const [length, flag] of new SegmentIterator(subseq)) {
+    if (flag) {
+      result += text1.slice(consumed1, consumed1 + length);
+      consumed1 += length;
+    } else {
+      result += text2.slice(consumed2, consumed2 + length);
+      consumed2 += length;
+    }
+  }
+  return result;
+}
+
+export function shuffle(
+  text1: string,
+  text2: string,
+  subseq1: Subseq,
+  subseq2: Subseq,
+): [string, string] {
+  return split(merge(text1, text2, subseq1), subseq2);
+}
+
 // Patches are arrays of strings and numbers which represent changes to text.
 // Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result.
 // Deletions are represented via omission.
@@ -403,18 +431,6 @@ export function synthesize(
     patch.push(length);
   }
   return patch;
-}
-
-export function shuffle(
-  text1: string,
-  text2: string,
-  subseq1: Subseq,
-  subseq2: Subseq,
-): [string, string] {
-  return [
-    apply(text1, synthesize(text2, subseq1, subseq2)),
-    apply(text2, synthesize(text1, complement(subseq1), complement(subseq2))),
-  ];
 }
 
 export interface Snapshot {
@@ -576,7 +592,7 @@ export class Document {
     const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
     insertSeq = shrink(insertSeq, hiddenSeq);
     deleteSeq = shrink(deleteSeq, hiddenSeq);
-    const inserted = extract(snapshot.visible, shrink(insertSeq, deleteSeq));
+    const [inserted] = split(snapshot.visible, shrink(insertSeq, deleteSeq));
     return synthesize(inserted, insertSeq, deleteSeq);
   }
 
@@ -601,7 +617,7 @@ export class Document {
     if (count(deleteSeq, true) > 0) {
       let hiddenSeq1: Subseq;
       hiddenSeq1 = union(hiddenSeq, deleteSeq);
-      [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
+      [hidden, visible] = shuffle(hidden, visible, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
 
@@ -650,7 +666,7 @@ export class Document {
       deleteSeq = expand(deleteSeq, revision.insertSeq);
       insertSeq = expand(insertSeq, revision.insertSeq);
     }
-    const inserted = extract(
+    const [inserted] = split(
       apply(
         this.snapshot.visible,
         synthesize(this.snapshot.hidden, this.snapshot.hiddenSeq),
