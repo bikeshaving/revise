@@ -517,14 +517,13 @@ describe("Document", () => {
     });
   });
 
-  // TODO: fix this
-  describe("Document.undo", () => {
+  describe("Document.revert", () => {
     test("selective", () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
-      doc.undo(1);
+      doc.revert(1);
       expect(doc.snapshot.visible).toEqual("hello worlds");
     });
   });

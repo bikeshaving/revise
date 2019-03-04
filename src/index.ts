@@ -672,7 +672,7 @@ export class Document {
     this.client.save(this.id);
   }
 
-  undo(version: number): void {
+  revert(version: number): void {
     const [revision, ...revisions] = this.revisions.slice(version);
     let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(revision.patch);
     insertSeq = expand(insertSeq, deleteSeq);
