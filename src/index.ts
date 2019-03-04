@@ -440,15 +440,6 @@ export interface Snapshot {
 }
 
 export interface Revision {
-  insertSeq: Subseq;
-  deleteSeq: Subseq;
-  clientId: string;
-  priority: number;
-  localVersion: number;
-}
-
-// TODO: combine Revision and Message by using patch in Revision
-export interface Message {
   patch: Patch;
   clientId: string;
   priority: number;
@@ -460,8 +451,9 @@ export interface Message {
 function rebase(
   revision: Revision,
   revisions: Revision[],
+  hiddenSeq: Subseq,
 ): [Revision, Revision[]] {
-  let { insertSeq, deleteSeq } = revision;
+  let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
   const revisions1: Revision[] = [];
   for (const revision1 of revisions) {
     if (
@@ -474,26 +466,32 @@ function rebase(
       revision.priority === revision1.priority
         ? revision.clientId < revision1.clientId
         : revision.priority < revision1.priority;
-    insertSeq = interleave(insertSeq, revision1.insertSeq)[before ? 0 : 1];
-    let deleteSeq1 = difference(revision1.deleteSeq, deleteSeq);
-    deleteSeq = expand(deleteSeq, revision1.insertSeq);
-    const insertSeq1 = expand(revision1.insertSeq, insertSeq);
+    let {
+      inserted: inserted1,
+      insertSeq: insertSeq1,
+      deleteSeq: deleteSeq1,
+    } = factor(revision1.patch);
+    insertSeq = interleave(insertSeq, insertSeq1)[before ? 0 : 1];
+    deleteSeq1 = difference(deleteSeq1, deleteSeq);
+    deleteSeq = expand(deleteSeq, insertSeq1);
+    insertSeq1 = expand(insertSeq1, insertSeq);
     deleteSeq1 = expand(deleteSeq1, shrink(insertSeq, insertSeq1));
     revisions1.push({
       ...revision1,
-      insertSeq: insertSeq1,
-      deleteSeq: deleteSeq1,
+      patch: synthesize(inserted1, insertSeq1, deleteSeq1),
     });
   }
-  revision = { ...revision, insertSeq, deleteSeq };
+  deleteSeq = difference(deleteSeq, hiddenSeq);
+  revision = { ...revision, patch: synthesize(inserted, insertSeq, deleteSeq) };
   return [revision, revisions1];
 }
 
+// TODO: remove deleteSeq from result
 function summarize(revisions: Revision[], clientId?: string): [Subseq, Subseq] {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
-  let { insertSeq, deleteSeq } = revisions[0];
+  let { insertSeq, deleteSeq } = factor(revisions[0].patch);
   deleteSeq = expand(deleteSeq, insertSeq);
   if (revisions[0].clientId === clientId) {
     insertSeq = clear(insertSeq);
@@ -501,11 +499,14 @@ function summarize(revisions: Revision[], clientId?: string): [Subseq, Subseq] {
   }
   for (const revision of revisions.slice(1)) {
     const own = clientId === revision.clientId;
-    insertSeq = expand(insertSeq, revision.insertSeq, { union: !own });
+    const { insertSeq: insertSeq1, deleteSeq: deleteSeq1 } = factor(
+      revision.patch,
+    );
+    insertSeq = expand(insertSeq, insertSeq1, { union: !own });
     deleteSeq = own
-      ? difference(deleteSeq, revision.deleteSeq)
-      : union(deleteSeq, revision.deleteSeq);
-    deleteSeq = expand(deleteSeq, revision.insertSeq);
+      ? difference(deleteSeq, deleteSeq1)
+      : union(deleteSeq, deleteSeq1);
+    deleteSeq = expand(deleteSeq, insertSeq1);
   }
   return [insertSeq, deleteSeq];
 }
@@ -530,11 +531,11 @@ export class Document {
       version: 0,
     };
     const revision: Revision = {
+      patch: synthesize(initial, full(initial.length)),
       clientId: client.id,
       priority: 0,
       localVersion: 0,
-      insertSeq: full(initial.length),
-      deleteSeq: [],
+      lastKnownVersion: -1,
     };
     return new Document(id, client, snapshot, [revision], -1, 1);
   }
@@ -543,11 +544,11 @@ export class Document {
     id: string,
     client: Client,
     snapshot: Snapshot,
-    messages: Message[],
+    revisions: Revision[],
   ): Document {
     const doc = new Document(id, client, snapshot, [], snapshot.version);
-    for (const message of messages) {
-      doc.ingest(message);
+    for (const revision of revisions) {
+      doc.ingest(revision);
     }
     return doc;
   }
@@ -556,8 +557,9 @@ export class Document {
     let hiddenSeq = this.snapshot.hiddenSeq;
     const revisions = this.revisions.slice(version + 1).reverse();
     for (const revision of revisions) {
-      hiddenSeq = shrink(hiddenSeq, revision.insertSeq);
-      hiddenSeq = difference(hiddenSeq, revision.deleteSeq);
+      const { insertSeq, deleteSeq } = factor(revision.patch);
+      hiddenSeq = shrink(hiddenSeq, insertSeq);
+      hiddenSeq = difference(hiddenSeq, deleteSeq);
     }
     return hiddenSeq;
   }
@@ -579,12 +581,11 @@ export class Document {
     const snapshot = this.snapshotAt(version);
     const revision =
       this.revisions[version] || this.revisions[this.revisions.length - 1];
-    let insertSeq = revision.insertSeq;
-    let deleteSeq = expand(revision.deleteSeq, revision.insertSeq);
+    let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
+    deleteSeq = expand(deleteSeq, insertSeq);
     const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
     insertSeq = shrink(insertSeq, hiddenSeq);
     deleteSeq = shrink(deleteSeq, hiddenSeq);
-    const [inserted] = split(snapshot.visible, shrink(insertSeq, deleteSeq));
     return synthesize(inserted, insertSeq, shrink(deleteSeq, insertSeq));
   }
 
@@ -598,12 +599,8 @@ export class Document {
     );
   }
 
-  apply(
-    inserted: string,
-    revision: Revision,
-    snapshot: Snapshot = this.snapshot,
-  ): Snapshot {
-    let { insertSeq, deleteSeq } = revision;
+  apply(revision: Revision, snapshot: Snapshot = this.snapshot): Snapshot {
+    let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
     let { visible, hidden, hiddenSeq } = snapshot;
 
     if (count(deleteSeq, true) > 0) {
@@ -632,19 +629,21 @@ export class Document {
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     const hiddenSeq = this.hiddenSeqAt(version);
+    [, insertSeq] = interleave(insertSeq, hiddenSeq);
+    deleteSeq = expand(deleteSeq, hiddenSeq);
     let revision: Revision = {
+      patch: synthesize(inserted, insertSeq, deleteSeq),
       clientId: this.client.id,
       priority,
       localVersion: this.localVersion,
-      insertSeq: interleave(insertSeq, hiddenSeq)[1],
-      deleteSeq: expand(deleteSeq, hiddenSeq),
+      lastKnownVersion: this.lastKnownVersion,
     };
-    [revision] = rebase(revision, this.revisions.slice(version + 1));
-    revision = {
-      ...revision,
-      deleteSeq: difference(revision.deleteSeq, this.snapshot.hiddenSeq),
-    };
-    this.snapshot = this.apply(inserted, revision);
+    [revision] = rebase(
+      revision,
+      this.revisions.slice(version + 1),
+      this.snapshot.hiddenSeq,
+    );
+    this.snapshot = this.apply(revision);
     this.revisions.push(revision);
     this.localVersion++;
     this.client.save(this.id);
@@ -652,118 +651,100 @@ export class Document {
 
   undo(version: number): void {
     const [revision, ...revisions] = this.revisions.slice(version);
-    let deleteSeq = revision.insertSeq;
-    let insertSeq = expand(revision.deleteSeq, revision.insertSeq);
-    for (const revision of revisions) {
-      deleteSeq = expand(deleteSeq, revision.insertSeq);
-      insertSeq = expand(insertSeq, revision.insertSeq);
-    }
+    let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(revision.patch);
+    insertSeq = expand(insertSeq, deleteSeq);
+    const [insertSeq1] = summarize(revisions);
+    deleteSeq = expand(deleteSeq, insertSeq1);
+    insertSeq = expand(insertSeq, insertSeq1);
     const { visible, hidden, hiddenSeq } = this.snapshot;
     const [inserted] = split(merge(hidden, visible, hiddenSeq), insertSeq);
     insertSeq = interleave(insertSeq, insertSeq)[1];
     const revision1: Revision = {
+      patch: synthesize(inserted, insertSeq, deleteSeq),
       clientId: this.client.id,
       priority: 0,
       localVersion: this.localVersion,
-      insertSeq,
-      deleteSeq: difference(deleteSeq, this.snapshot.hiddenSeq),
+      lastKnownVersion: this.lastKnownVersion,
     };
-    this.snapshot = this.apply(inserted, revision1);
+    this.snapshot = this.apply(revision1);
     this.revisions.push(revision1);
     this.localVersion++;
     this.client.save(this.id);
   }
 
-  ingest(message: Message): void {
-    if (message.version == null) {
-      throw new Error("Missing message version");
+  ingest(revision: Revision): void {
+    if (revision.version == null) {
+      throw new Error("Missing revision version");
     } else if (
-      this.lastKnownVersion + 1 < message.version ||
-      this.lastKnownVersion < message.lastKnownVersion
+      this.lastKnownVersion + 1 < revision.version ||
+      this.lastKnownVersion < revision.lastKnownVersion
     ) {
       // TODO: attempt repair
-      throw new Error("Missing message");
-    } else if (message.version <= this.lastKnownVersion) {
+      throw new Error("Missing revision");
+    } else if (revision.version <= this.lastKnownVersion) {
       return;
-    } else if (message.clientId === this.client.id) {
-      this.lastKnownVersion = message.version;
+    } else if (revision.clientId === this.client.id) {
+      this.lastKnownVersion = revision.version;
       return;
     }
-    let lastKnownVersion = message.lastKnownVersion;
+    let lastKnownVersion = revision.lastKnownVersion;
     for (let v = this.lastKnownVersion; v >= lastKnownVersion; v--) {
-      if (message.clientId === this.revisions[v].clientId) {
+      if (revision.clientId === this.revisions[v].clientId) {
         lastKnownVersion = v;
         break;
       }
     }
-    let hiddenSeq = this.hiddenSeqAt(lastKnownVersion);
-    let baseInsertSeq: Subseq | undefined;
-    if (message.lastKnownVersion < lastKnownVersion) {
+    let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
+    if (revision.lastKnownVersion < lastKnownVersion) {
       const revisions = this.revisions.slice(
-        message.lastKnownVersion + 1,
+        revision.lastKnownVersion + 1,
         lastKnownVersion + 1,
       );
-      let baseDeleteSeq: Subseq | undefined;
-      [baseInsertSeq, baseDeleteSeq] = summarize(revisions, message.clientId);
-      hiddenSeq = difference(hiddenSeq, baseDeleteSeq);
-      hiddenSeq = shrink(hiddenSeq, baseInsertSeq);
+      const [baseInsertSeq] = summarize(revisions, revision.clientId);
+      insertSeq = expand(insertSeq, baseInsertSeq);
+      deleteSeq = expand(deleteSeq, baseInsertSeq);
     }
-    let { inserted, insertSeq, deleteSeq } = factor(message.patch);
-    let revision: Revision = {
-      clientId: message.clientId,
-      priority: message.priority,
-      localVersion: message.localVersion,
-      insertSeq: interleave(insertSeq, hiddenSeq)[1],
-      deleteSeq: expand(deleteSeq, hiddenSeq),
+    revision = {
+      ...revision,
+      patch: synthesize(inserted, insertSeq, deleteSeq),
     };
-    if (baseInsertSeq != null) {
-      revision.insertSeq = expand(revision.insertSeq, baseInsertSeq);
-      revision.deleteSeq = expand(revision.deleteSeq, baseInsertSeq);
-    }
     let revisions = this.revisions.slice(
       lastKnownVersion + 1,
       this.lastKnownVersion + 1,
     );
-    [revision] = rebase(revision, revisions);
+    [revision] = rebase(
+      revision,
+      revisions,
+      this.hiddenSeqAt(this.lastKnownVersion),
+    );
+    revision = { ...revision, lastKnownVersion: revision.version! };
     revisions = this.revisions.slice(this.lastKnownVersion + 1);
     this.revisions.splice(
       this.lastKnownVersion + 1,
       revisions.length,
       revision,
     );
-    [revision, revisions] = rebase(revision, revisions);
+    [revision, revisions] = rebase(
+      revision,
+      revisions,
+      this.snapshot.hiddenSeq,
+    );
     this.revisions = this.revisions.concat(revisions);
-    this.snapshot = this.apply(inserted, revision);
-    this.lastKnownVersion = message.version;
+    this.snapshot = this.apply(revision);
+    this.lastKnownVersion = revision.version!;
   }
 
-  createMessages(
-    from: number = this.lastKnownVersion + 1,
-    to?: number,
-  ): Message[] {
-    if (from > this.revisions.length) {
-      throw new Error("from greater than this.revisions.length");
-    }
-    const revisions = this.revisions.slice(from, to);
-    return revisions.map((revision, i) => {
-      return {
-        // TODO: only compute this once and bring it forward?
-        patch: this.patchAt(from + i),
-        clientId: revision.clientId,
-        priority: revision.priority,
-        localVersion: revision.localVersion,
-        lastKnownVersion: this.lastKnownVersion,
-      };
-    });
+  pendingRevisions(): Revision[] {
+    return this.revisions.slice(this.lastKnownVersion + 1);
   }
 }
 
 export interface Connection {
   fetchSnapshot(id: string, min?: number): Promise<Snapshot>;
-  fetchMessages(id: string, from?: number, to?: number): Promise<Message[]>;
-  sendMessages(id: string, messages: Message[]): Promise<Message[]>;
+  fetchRevisions(id: string, from?: number, to?: number): Promise<Revision[]>;
   sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot>;
-  messagesChannel(id: string, from?: number): Promise<AsyncIterable<Message[]>>;
+  sendRevisions(id: string, revisions: Revision[]): Promise<Revision[]>;
+  updates(id: string, from?: number): Promise<AsyncIterable<Revision[]>>;
 }
 
 interface ClientSaveOptions {
@@ -794,7 +775,7 @@ export class Client {
           const doc = this.documents[id];
           if (doc) {
             // TODO: error recovery
-            await this.connection.sendMessages(id, doc.createMessages());
+            await this.connection.sendRevisions(id, doc.pendingRevisions());
           }
           this.pending.delete(id);
         }),
@@ -834,13 +815,10 @@ export class Client {
     if (doc == null) {
       throw new Error("Unknown document");
     }
-    const messagesChannel = await this.connection.messagesChannel(
-      id,
-      doc.snapshot.version,
-    );
-    for await (const messages of messagesChannel) {
-      for (const message of messages) {
-        doc.ingest(message);
+    const updates = await this.connection.updates(id, doc.snapshot.version);
+    for await (const revisions of updates) {
+      for (const revision of revisions) {
+        doc.ingest(revision);
       }
     }
   }
@@ -857,8 +835,11 @@ export class Client {
       return this.documents[id];
     }
     const snapshot = await this.connection.fetchSnapshot(id);
-    const messages = await this.connection.fetchMessages(id, snapshot.version);
-    const doc = Document.from(id, this, snapshot, messages);
+    const revisions = await this.connection.fetchRevisions(
+      id,
+      snapshot.version,
+    );
+    const doc = Document.from(id, this, snapshot, revisions);
     this.documents[id] = doc;
     return doc;
   }
@@ -869,14 +850,14 @@ import { Channel, FixedBuffer } from "./channel";
 export class InMemoryStorage implements Connection {
   protected clientVersionsById: Record<string, Record<string, number>> = {};
   protected snapshotsById: Record<string, Snapshot[]> = {};
-  protected messagesById: Record<string, Message[]> = {};
-  protected channelsById: Record<string, Channel<Message[]>[]> = {};
+  protected revisionsById: Record<string, Revision[]> = {};
+  protected channelsById: Record<string, Channel<Revision[]>[]> = {};
 
-  async fetchMessages(
+  async fetchRevisions(
     id: string,
     from?: number,
     to?: number,
-  ): Promise<Message[]> {
+  ): Promise<Revision[]> {
     if (this.clientVersionsById[id] == null) {
       throw new Error("Unknown document");
     }
@@ -888,7 +869,7 @@ export class InMemoryStorage implements Connection {
         from = 0;
       }
     }
-    return this.messagesById[id].slice(from, to);
+    return this.revisionsById[id].slice(from, to);
   }
 
   async fetchSnapshot(id: string, min?: number): Promise<Snapshot> {
@@ -910,55 +891,55 @@ export class InMemoryStorage implements Connection {
     return snapshots[0];
   }
 
-  saveMessage(id: string, message: Message): Message {
+  saveRevision(id: string, revision: Revision): Revision {
     const clientVersions: Record<string, number> = this.clientVersionsById[id];
     if (clientVersions == null) {
-      if (message.localVersion !== 0) {
+      if (revision.localVersion !== 0) {
         throw new Error("Unknown document");
       }
       this.clientVersionsById[id] = {};
-      this.clientVersionsById[id][message.clientId] = message.localVersion;
-      message = { ...message, version: 0 };
-      this.messagesById[id] = [message];
+      this.clientVersionsById[id][revision.clientId] = revision.localVersion;
+      revision = { ...revision, version: 0 };
+      this.revisionsById[id] = [revision];
       this.snapshotsById[id] = [];
       this.channelsById[id] = [];
-      return message;
+      return revision;
     }
     const expectedLocalVersion =
-      clientVersions[message.clientId] == null
+      clientVersions[revision.clientId] == null
         ? 0
-        : clientVersions[message.clientId] + 1;
-    // TODO: reject message if lastKnownVersion is too far off current version
+        : clientVersions[revision.clientId] + 1;
+    // TODO: reject revision if lastKnownVersion is too far off current version
     // TODO: reject if we don’t have a recent-enough snapshot
-    if (message.localVersion > expectedLocalVersion) {
-      throw new Error("Missing message");
-    } else if (message.localVersion < expectedLocalVersion) {
+    if (revision.localVersion > expectedLocalVersion) {
+      throw new Error("Missing revision");
+    } else if (revision.localVersion < expectedLocalVersion) {
       if (
-        message.version === 0 &&
-        message.clientId !== this.messagesById[id][0].clientId
+        revision.version === 0 &&
+        revision.clientId !== this.revisionsById[id][0].clientId
       ) {
         throw new Error("Document already exists");
       }
-      return message;
+      return revision;
     }
-    message = { ...message, version: this.messagesById[id].length };
-    this.messagesById[id].push(message);
-    clientVersions[message.clientId] = message.localVersion;
-    return message;
+    revision = { ...revision, version: this.revisionsById[id].length };
+    this.revisionsById[id].push(revision);
+    clientVersions[revision.clientId] = revision.localVersion;
+    return revision;
   }
 
   // TODO: run this in a transaction
-  async sendMessages(id: string, messages: Message[]): Promise<Message[]> {
-    messages = messages.map((message) => this.saveMessage(id, message));
+  async sendRevisions(id: string, revisions: Revision[]): Promise<Revision[]> {
+    revisions = revisions.map((revision) => this.saveRevision(id, revision));
     this.channelsById[id].map(async (channel, i) => {
       try {
-        await channel.put(messages);
+        await channel.put(revisions);
       } catch (err) {
         channel.close();
         this.channelsById[id].splice(i, 1);
       }
     });
-    return messages;
+    return revisions;
   }
 
   async sendSnapshot(id: string, snapshot: Snapshot): Promise<Snapshot> {
@@ -983,15 +964,12 @@ export class InMemoryStorage implements Connection {
     return snapshot;
   }
 
-  async messagesChannel(
-    id: string,
-    from?: number,
-  ): Promise<Channel<Message[]>> {
+  async updates(id: string, from?: number): Promise<Channel<Revision[]>> {
     if (this.clientVersionsById[id] == null) {
       throw new Error("Unknown document");
     }
-    let channels: Channel<Message[]>[] = this.channelsById[id];
-    const channel = new Channel(new FixedBuffer<Message[]>(1000));
+    let channels: Channel<Revision[]>[] = this.channelsById[id];
+    const channel = new Channel(new FixedBuffer<Revision[]>(1000));
     channels.push(channel);
     channel.onclose = () => {
       const i = channels.indexOf(channel);
@@ -1000,8 +978,8 @@ export class InMemoryStorage implements Connection {
       }
     };
     if (from != null) {
-      const messages = await this.fetchMessages(id, from);
-      channel.put(messages);
+      const revisions = await this.fetchRevisions(id, from);
+      channel.put(revisions);
     }
     return channel;
   }

@@ -299,7 +299,7 @@ describe("patch", () => {
   });
 });
 
-import { Client, Document, Message, InMemoryStorage } from "../index";
+import { Client, Document, InMemoryStorage, Revision } from "../index";
 
 describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
@@ -495,14 +495,14 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      const [message1] = doc1.createMessages();
-      doc1.ingest({ ...message1, version: 0 });
+      const [revision1] = doc1.pendingRevisions();
+      doc1.ingest({ ...revision1, version: 0 });
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
       doc1.edit([0, 13, "s", 13]);
       doc2.edit([0, 5, "_", 6, 11]);
-      const [message2] = doc2.createMessages();
-      doc1.ingest({ ...message2, version: 1 });
+      const [revision2] = doc2.pendingRevisions();
+      doc1.ingest({ ...revision2, version: 1 });
       expect(doc1.snapshot).toEqual({
         visible: "goodbye_worlds",
         hidden: "hello ",
@@ -516,17 +516,17 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      const [message1] = doc1.createMessages();
-      doc1.ingest({ ...message1, version: 0 });
+      const [revision1] = doc1.pendingRevisions();
+      doc1.ingest({ ...revision1, version: 0 });
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const [message2] = doc1.createMessages();
-      doc1.ingest({ ...message2, version: 1 });
-      doc2.ingest({ ...message2, version: 1 });
+      const [revision2] = doc1.pendingRevisions();
+      doc1.ingest({ ...revision2, version: 1 });
+      doc2.ingest({ ...revision2, version: 1 });
       doc2.edit([0, 7, "hello", 7, 13]);
       doc1.edit([0, 13, "s", 13]);
-      const [message3] = doc2.createMessages();
-      doc1.ingest({ ...message3, version: 2 });
+      const [revision3] = doc2.pendingRevisions();
+      doc1.ingest({ ...revision3, version: 2 });
       expect(doc1.snapshot).toEqual({
         visible: "goodbyehello worlds",
         hidden: "hello",
@@ -540,14 +540,14 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      const [message1] = doc1.createMessages();
-      doc1.ingest({ ...message1, version: 0 });
+      const [revision1] = doc1.pendingRevisions();
+      doc1.ingest({ ...revision1, version: 0 });
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const [message2] = doc1.createMessages();
-      doc2.ingest({ ...message2, version: 1 });
-      doc2.ingest({ ...message2, version: 1 });
-      doc2.ingest({ ...message2, version: 1 });
+      const [revision2] = doc1.pendingRevisions();
+      doc2.ingest({ ...revision2, version: 1 });
+      doc2.ingest({ ...revision2, version: 1 });
+      doc2.ingest({ ...revision2, version: 1 });
       expect(doc2.snapshot).toEqual({
         visible: "goodbye world",
         hidden: "hello",
@@ -563,8 +563,8 @@ describe("Document", () => {
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       let version = 0;
-      for (const message of doc1.createMessages()) {
-        doc1.ingest({ ...message, version });
+      for (const revision of doc1.pendingRevisions()) {
+        doc1.ingest({ ...revision, version });
         version += 1;
       }
       const doc2 = doc1.clone(client2);
@@ -572,10 +572,10 @@ describe("Document", () => {
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
-      const messages = doc1.createMessages().concat(doc2.createMessages());
-      for (const message of messages) {
-        doc1.ingest({ ...message, version });
-        doc2.ingest({ ...message, version });
+      const revisions = doc1.pendingRevisions().concat(doc2.pendingRevisions());
+      for (const revision of revisions) {
+        doc1.ingest({ ...revision, version });
+        doc2.ingest({ ...revision, version });
         version += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
@@ -587,8 +587,8 @@ describe("Document", () => {
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       let version = 0;
-      for (const message of doc1.createMessages()) {
-        doc1.ingest({ ...message, version });
+      for (const revision of doc1.pendingRevisions()) {
+        doc1.ingest({ ...revision, version });
         version += 1;
       }
       const doc2 = doc1.clone(client2);
@@ -596,10 +596,10 @@ describe("Document", () => {
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
-      const messages = doc2.createMessages().concat(doc1.createMessages());
-      for (const message of messages) {
-        doc1.ingest({ ...message, version });
-        doc2.ingest({ ...message, version });
+      const revisions = doc2.pendingRevisions().concat(doc1.pendingRevisions());
+      for (const revision of revisions) {
+        doc1.ingest({ ...revision, version });
+        doc2.ingest({ ...revision, version });
         version += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
@@ -609,16 +609,19 @@ describe("Document", () => {
 });
 
 describe("InMemoryStorage", () => {
-  describe("sendMessages", () => {
-    test("send message", async () => {
+  describe("sendRevisions", () => {
+    test("send revision", async () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
       doc.edit([0, 11, "!", 11]);
       doc.edit(["goodbye", 5, 12]);
-      const messages = await storage.sendMessages(doc.id, doc.createMessages());
-      const messages1 = await storage.fetchMessages(doc.id);
-      expect(messages).toEqual(messages1);
+      const revisions = await storage.sendRevisions(
+        doc.id,
+        doc.pendingRevisions(),
+      );
+      const revisions1 = await storage.fetchRevisions(doc.id);
+      expect(revisions).toEqual(revisions1);
     });
 
     test("send snapshot", async () => {
@@ -626,50 +629,53 @@ describe("InMemoryStorage", () => {
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
       doc.edit([0, 11, "!", 11]);
-      await storage.sendMessages(doc.id, doc.createMessages());
+      await storage.sendRevisions(doc.id, doc.pendingRevisions());
       storage.sendSnapshot(doc.id, doc.snapshotAt(1));
       storage.sendSnapshot(doc.id, doc.snapshotAt(0));
       const snapshot0 = await storage.fetchSnapshot(doc.id, 0);
       const snapshot1 = await storage.fetchSnapshot(doc.id);
       expect(snapshot0).toEqual(doc.snapshotAt(0));
       expect(snapshot1).toEqual(doc.snapshotAt(1));
-      const messages = await storage.fetchMessages(doc.id);
-      expect(messages).toEqual([]);
+      const revisions = await storage.fetchRevisions(doc.id);
+      expect(revisions).toEqual([]);
     });
   });
 
-  describe("messagesChannel", () => {
+  describe("updates", () => {
     test("subscribe", async () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
-      const messages = await storage.sendMessages(doc.id, doc.createMessages());
+      const revisions = await storage.sendRevisions(
+        doc.id,
+        doc.pendingRevisions(),
+      );
       let version = 0;
-      for (const message of messages) {
-        doc.ingest({ ...message, version });
+      for (const revision of revisions) {
+        doc.ingest({ ...revision, version });
         version += 1;
       }
-      const messageChan = await storage.messagesChannel(doc.id);
-      const messagesPromise: Promise<Message[]> = (async () => {
-        let messages: Message[] = [];
-        for await (const messages1 of messageChan) {
-          messages = messages.concat(messages1);
+      const updates = await storage.updates(doc.id);
+      const revisionsPromise: Promise<Revision[]> = (async () => {
+        let revisions: Revision[] = [];
+        for await (const revisions1 of updates) {
+          revisions = revisions.concat(revisions1);
         }
-        return messages;
+        return revisions;
       })();
       doc.edit([0, 11, "!", 11]);
       doc.edit(["H", 1, 6, "W", 7, 12]);
-      const messages1 = await storage.sendMessages(
+      const revisions1 = await storage.sendRevisions(
         doc.id,
-        doc.createMessages(),
+        doc.pendingRevisions(),
       );
-      for (const message of messages1) {
-        doc.ingest({ ...message, version });
+      for (const revision of revisions1) {
+        doc.ingest({ ...revision, version });
         version += 1;
       }
-      messageChan.close();
+      updates.close();
       expect(storage["channelsById"][doc.id]).toEqual([]);
-      await expect(messagesPromise).resolves.toEqual(messages1);
+      await expect(revisionsPromise).resolves.toEqual(revisions1);
     });
   });
 
@@ -684,7 +690,7 @@ describe("InMemoryStorage", () => {
       expect(doc1.snapshot).toEqual(doc2.snapshot);
     });
 
-    test("message", async () => {
+    test("revisions", async () => {
       const connection = new InMemoryStorage();
       const client1 = new Client("id1", connection);
       const client2 = new Client("id2", connection);
@@ -707,11 +713,11 @@ describe.skip("Client", () => {
       const doc = await client.createDocument("doc1", "hello world");
       doc.edit([0, 11, "!", 11]);
       doc.edit([0, 11, 12]);
-      const messages = doc
-        .createMessages()
-        .map((message, version) => ({ ...message, version }));
+      const revisions = doc
+        .pendingRevisions()
+        .map((revision, version) => ({ ...revision, version }));
       await client.save(doc.id, { force: true });
-      await expect(storage.fetchMessages(doc.id)).resolves.toEqual(messages);
+      await expect(storage.fetchRevisions(doc.id)).resolves.toEqual(revisions);
     });
   });
 });
