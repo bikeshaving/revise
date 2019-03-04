@@ -21,8 +21,8 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
   return subseq.length;
 }
 
-// [length, flag]
-export type Segment = [number, boolean];
+// [length, ...flags]
+export type Segment = [number, ...boolean[]];
 
 export class SegmentIterator implements IterableIterator<Segment> {
   private i = 1;
@@ -93,10 +93,7 @@ export function complement(subseq: Subseq): Subseq {
   return [subseq[0] ? 0 : 1].concat(subseq.slice(1));
 }
 
-// [length, flag1, flag2]
-export type ZippedSegment = [number, boolean, boolean];
-
-export class ZippedSegmentIterator implements IterableIterator<ZippedSegment> {
+export class ZippedSegmentIterator implements IterableIterator<Segment> {
   private iter1: SegmentIterator;
   private iter2: SegmentIterator;
   private it1: IteratorResult<Segment>;
@@ -108,7 +105,7 @@ export class ZippedSegmentIterator implements IterableIterator<ZippedSegment> {
     this.it2 = this.iter2.next();
   }
 
-  next(): IteratorResult<ZippedSegment> {
+  next(): IteratorResult<Segment> {
     if (this.it1.done || this.it2.done) {
       if (!this.it1.done || !this.it2.done) {
         throw new Error("Length mismatch");
@@ -208,37 +205,36 @@ export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
   return result;
 }
 
-// TODO: return subseq1 expanded against the insertions of subseq2 and subseq2 expanded against the insertions of subseq1 instead of subseq1 expanded before/after
 export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
   const iter1 = new SegmentIterator(subseq1);
   const iter2 = new SegmentIterator(subseq2);
   let it1 = iter1.next();
   let it2 = iter2.next();
-  const resultBefore: Subseq = [];
-  const resultAfter: Subseq = [];
+  const result1: Subseq = [];
+  const result2: Subseq = [];
 
   while (!it1.done && !it2.done) {
     const [length1, flag1] = it1.value;
     const [length2, flag2] = it2.value;
     if (flag1 && flag2) {
-      push(resultBefore, length1, true);
-      push(resultBefore, length2, false);
-      push(resultAfter, length2, false);
-      push(resultAfter, length1, true);
+      push(result1, length1, true);
+      push(result1, length2, false);
+      push(result2, length1, false);
+      push(result2, length2, true);
       it1 = iter1.next();
       it2 = iter2.next();
     } else if (flag1) {
-      push(resultBefore, length1, true);
-      push(resultAfter, length1, true);
+      push(result1, length1, true);
+      push(result2, length1, false);
       it1 = iter1.next();
     } else if (flag2) {
-      push(resultBefore, length2, false);
-      push(resultAfter, length2, false);
+      push(result1, length2, false);
+      push(result2, length2, true);
       it2 = iter2.next();
     } else {
       const length = Math.min(length1, length2);
-      push(resultBefore, length, false);
-      push(resultAfter, length, false);
+      push(result1, length, false);
+      push(result2, length, false);
       if (length1 - length > 0) {
         it1.value[0] = length1 - length;
       } else {
@@ -257,8 +253,8 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
     if (!flag1 || !iter1.next().done) {
       throw new Error("Length mismatch");
     }
-    push(resultBefore, length1, flag1);
-    push(resultAfter, length1, flag1);
+    push(result1, length1, true);
+    push(result2, length1, false);
   }
 
   if (!it2.done) {
@@ -266,11 +262,11 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
     if (!flag2 || !iter2.next().done) {
       throw new Error("Length mismatch");
     }
-    push(resultBefore, length2, false);
-    push(resultAfter, length2, false);
+    push(result1, length2, false);
+    push(result2, length2, true);
   }
 
-  return [resultBefore, resultAfter];
+  return [result1, result2];
 }
 
 export function split(text: string, subseq: Subseq): [string, string] {
@@ -353,13 +349,19 @@ export function apply(text: string, patch: Patch): string {
   return result;
 }
 
-interface FactorResult {
+// export interface Moves {
+//   [to: number]: Subseq;
+// }
+
+export interface FactoredPatch {
   inserted: string;
   insertSeq: Subseq;
   deleteSeq: Subseq;
+  // reviveSeq: Subseq;
+  // moves: { [number] : Subseq };
 }
 
-export function factor(patch: Patch): FactorResult {
+export function factor(patch: Patch): FactoredPatch {
   const length = patch[patch.length - 1];
   if (typeof length !== "number") {
     throw new Error("Malformed patch");
@@ -471,10 +473,13 @@ function rebase(
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
     } = factor(revision1.patch);
-    insertSeq = interleave(insertSeq, insertSeq1)[before ? 0 : 1];
     deleteSeq1 = difference(deleteSeq1, deleteSeq);
     deleteSeq = expand(deleteSeq, insertSeq1);
-    insertSeq1 = expand(insertSeq1, insertSeq);
+    if (before) {
+      [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
+    } else {
+      [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
+    }
     deleteSeq1 = expand(deleteSeq1, shrink(insertSeq, insertSeq1));
     revisions1.push({
       ...revision1,
@@ -629,7 +634,7 @@ export class Document {
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     const hiddenSeq = this.hiddenSeqAt(version);
-    [, insertSeq] = interleave(insertSeq, hiddenSeq);
+    [, insertSeq] = interleave(hiddenSeq, insertSeq);
     deleteSeq = expand(deleteSeq, hiddenSeq);
     let revision: Revision = {
       patch: synthesize(inserted, insertSeq, deleteSeq),
@@ -658,7 +663,7 @@ export class Document {
     insertSeq = expand(insertSeq, insertSeq1);
     const { visible, hidden, hiddenSeq } = this.snapshot;
     const [inserted] = split(merge(hidden, visible, hiddenSeq), insertSeq);
-    insertSeq = interleave(insertSeq, insertSeq)[1];
+    [, insertSeq] = interleave(insertSeq, insertSeq);
     const revision1: Revision = {
       patch: synthesize(inserted, insertSeq, deleteSeq),
       clientId: this.client.id,
@@ -964,7 +969,7 @@ export class InMemoryStorage implements Connection {
     return snapshot;
   }
 
-  async updates(id: string, from?: number): Promise<Channel<Revision[]>> {
+  async updates(id: string, from?: number): Promise<AsyncIterable<Revision[]>> {
     if (this.clientVersionsById[id] == null) {
       throw new Error("Unknown document");
     }
@@ -982,5 +987,13 @@ export class InMemoryStorage implements Connection {
       channel.put(revisions);
     }
     return channel;
+  }
+
+  async close(id: string): Promise<void> {
+    if (this.clientVersionsById[id] == null) {
+      throw new Error("Unknown document");
+    }
+    await Promise.all(this.channelsById[id].map((channel) => channel.close()));
+    this.channelsById[id] = [];
   }
 }

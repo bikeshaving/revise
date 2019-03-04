@@ -69,16 +69,26 @@ describe("subseq", () => {
       }).toThrow();
     });
 
-    test("empty transform 1", () => {
+    test("empty subseq 1", () => {
+      // =++=======
       const s = [0, 1, 2, 7];
+      // ========
       const t = [0, 8];
-      expect(shredder.interleave(s, t)).toEqual([s, s]);
+      // ==========
+      const t1 = [0, 10];
+      expect(shredder.interleave(s, t)).toEqual([s, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s]);
     });
 
-    test("empty transform 2", () => {
+    test("empty subseq 2", () => {
+      // =====+======+
       const s = [0, 5, 1, 6, 1];
+      // ===========
       const t = [0, 11];
-      expect(shredder.interleave(s, t)).toEqual([s, s]);
+      // =============
+      const t1 = [0, 13];
+      expect(shredder.interleave(s, t)).toEqual([s, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s]);
     });
 
     test("smaller transform", () => {
@@ -86,11 +96,15 @@ describe("subseq", () => {
       const s = [1, 3, 4, 1];
       // ***====
       const t = [1, 3, 4];
+      // 12345678901
       // +++***====+
-      const result = [1, 3, 7, 1];
+      const s1 = [1, 3, 7, 1];
+      const t1 = [0, 3, 3, 5];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
       // ***+++====+
-      const result1 = [0, 3, 3, 4, 1];
-      expect(shredder.interleave(s, t)).toEqual([result, result1]);
+      const s2 = [0, 3, 3, 4, 1];
+      const t2 = [1, 3, 8];
+      expect(shredder.interleave(t, s)).toEqual([t2, s2]);
     });
 
     test("same position", () => {
@@ -99,10 +113,13 @@ describe("subseq", () => {
       // ==**  ====
       const t = [0, 2, 2, 4];
       // ==++**====
-      const result = [0, 2, 2, 6];
+      const s1 = [0, 2, 2, 6];
+      const t1 = [0, 4, 2, 4];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
       // ==**++====
-      const result1 = [0, 4, 2, 4];
-      expect(shredder.interleave(s, t)).toEqual([result, result1]);
+      const s2 = [0, 4, 2, 4];
+      const t2 = [0, 2, 2, 6];
+      expect(shredder.interleave(t, s)).toEqual([t2, s2]);
     });
 
     test("same position different lengths", () => {
@@ -111,10 +128,13 @@ describe("subseq", () => {
       // ==**    ==
       const t = [0, 2, 2, 2];
       // ==++++**==
-      const result = [0, 2, 4, 4];
+      const s1 = [0, 2, 4, 4];
+      const t1 = [0, 6, 2, 2];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
       // ==**++++==
-      const result1 = [0, 4, 4, 2];
-      expect(shredder.interleave(s, t)).toEqual([result, result1]);
+      const s2 = [0, 4, 4, 2];
+      const t2 = [0, 2, 2, 6];
+      expect(shredder.interleave(t, s)).toEqual([t2, s2]);
     });
 
     test("subseq before", () => {
@@ -123,8 +143,11 @@ describe("subseq", () => {
       //  =****====
       const t = [0, 1, 4, 4];
       // +=****====
-      const result = [1, 1, 9];
-      expect(shredder.interleave(s, t)).toEqual([result, result]);
+      const s1 = [1, 1, 9];
+      const t1 = [0, 2, 4, 4];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
+      // +=****====
+      expect(shredder.interleave(t, s)).toEqual([t1, s1]);
     });
 
     test("subseq before overlapping", () => {
@@ -133,8 +156,10 @@ describe("subseq", () => {
       //   =****===
       const t = [0, 1, 4, 3];
       // ++=****===
-      const result = [1, 2, 8];
-      expect(shredder.interleave(s, t)).toEqual([result, result]);
+      const s1 = [1, 2, 8];
+      const t1 = [0, 3, 4, 3];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s1]);
     });
 
     test("subseq after", () => {
@@ -143,8 +168,10 @@ describe("subseq", () => {
       // *=    ====
       const t = [1, 1, 5];
       // *=++++====
-      const result = [0, 2, 4, 4];
-      expect(shredder.interleave(s, t)).toEqual([result, result]);
+      const s1 = [0, 2, 4, 4];
+      const t1 = [1, 1, 9];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s1]);
     });
 
     test("subseq after overlapping 1", () => {
@@ -153,8 +180,10 @@ describe("subseq", () => {
       // ==****==
       const t = [0, 2, 4, 2];
       // ==****==++
-      const result = [0, 8, 2];
-      expect(shredder.interleave(s, t)).toEqual([result, result]);
+      const s1 = [0, 8, 2];
+      const t1 = [0, 2, 4, 4];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s1]);
     });
 
     test("subseq after overlapping 2", () => {
@@ -163,8 +192,10 @@ describe("subseq", () => {
       // =***=  ===
       const t = [0, 1, 3, 4];
       // =***=++===
-      const result = [0, 5, 2, 3];
-      expect(shredder.interleave(s, t)).toEqual([result, result]);
+      const s1 = [0, 5, 2, 3];
+      const t1 = [0, 1, 3, 6];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s1]);
     });
 
     test("subseq after overlapping 3", () => {
@@ -173,8 +204,10 @@ describe("subseq", () => {
       // **=    ===
       const t = [1, 2, 4];
       // **=++++===
-      const result = [0, 3, 4, 3];
-      expect(shredder.interleave(s, t)).toEqual([result, result]);
+      const s1 = [0, 3, 4, 3];
+      const t1 = [1, 2, 8];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
+      expect(shredder.interleave(t, s)).toEqual([t1, s1]);
     });
 
     test("multiple segments", () => {
@@ -183,10 +216,13 @@ describe("subseq", () => {
       //  =*  = ==*
       const t = [0, 1, 1, 3, 1];
       // +=++*=+==*
-      const result = [1, 1, 1, 2, 2, 1, 3];
+      const s1 = [1, 1, 1, 2, 2, 1, 3];
+      const t1 = [0, 4, 1, 4, 1];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
       // +=*++=+==*
-      const result1 = [1, 1, 2, 2, 1, 1, 3];
-      expect(shredder.interleave(s, t)).toEqual([result, result1]);
+      const s2 = [1, 1, 2, 2, 1, 1, 3];
+      const t2 = [0, 2, 1, 6, 1];
+      expect(shredder.interleave(t, s)).toEqual([t2, s2]);
     });
 
     test("complex", () => {
@@ -195,10 +231,13 @@ describe("subseq", () => {
       // ****=====******======*
       const t = [1, 4, 5, 6, 6, 1];
       // ****=====******======++++*
-      const result = [0, 21, 4, 1];
+      const s1 = [0, 21, 4, 1];
+      const t1 = [1, 4, 5, 6, 10, 1];
+      expect(shredder.interleave(s, t)).toEqual([s1, t1]);
       // ****=====******======*++++
-      const result1 = [0, 22, 4];
-      expect(shredder.interleave(s, t)).toEqual([result, result1]);
+      const s2 = [0, 22, 4];
+      const t2 = [1, 4, 5, 6, 6, 1, 4];
+      expect(shredder.interleave(t, s)).toEqual([t2, s2]);
     });
   });
 });
@@ -673,7 +712,7 @@ describe("InMemoryStorage", () => {
         doc.ingest({ ...revision, version });
         version += 1;
       }
-      updates.close();
+      storage.close(doc.id);
       expect(storage["channelsById"][doc.id]).toEqual([]);
       await expect(revisionsPromise).resolves.toEqual(revisions1);
     });
