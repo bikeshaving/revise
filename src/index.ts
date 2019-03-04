@@ -692,7 +692,7 @@ export class Document {
       this.lastKnownVersion = revision.version;
       return;
     }
-    let lastKnownVersion = revision.lastKnownVersion;
+    let lastKnownVersion = Math.max(revision.lastKnownVersion, 0);
     for (let v = this.lastKnownVersion; v >= lastKnownVersion; v--) {
       if (revision.clientId === this.revisions[v].clientId) {
         lastKnownVersion = v;
@@ -700,7 +700,10 @@ export class Document {
       }
     }
     let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
-    if (revision.lastKnownVersion < lastKnownVersion) {
+    if (
+      revision.lastKnownVersion > -1 &&
+      revision.lastKnownVersion < lastKnownVersion
+    ) {
       const revisions = this.revisions.slice(
         revision.lastKnownVersion + 1,
         lastKnownVersion + 1,
@@ -815,6 +818,7 @@ export class Client {
     this.pollInternal();
   }
 
+  // TODO: when to connect to the document?
   async connect(id: string): Promise<void> {
     const doc = this.documents[id];
     if (doc == null) {

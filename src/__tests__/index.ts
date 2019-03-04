@@ -718,7 +718,7 @@ describe("InMemoryStorage", () => {
     });
   });
 
-  describe.skip("multiple clients", () => {
+  describe("multiple clients", () => {
     test("initialize", async () => {
       const connection = new InMemoryStorage();
       const client1 = new Client("id1", connection);
@@ -734,8 +734,10 @@ describe("InMemoryStorage", () => {
       const client1 = new Client("id1", connection);
       const client2 = new Client("id2", connection);
       const doc1 = await client1.createDocument("doc1", "hello world");
+      client1.connect("doc1");
       await client1.sync();
       const doc2 = await client2.getDocument("doc1");
+      client2.connect("doc1");
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
       await client2.sync();
@@ -744,7 +746,7 @@ describe("InMemoryStorage", () => {
   });
 });
 
-describe.skip("Client", () => {
+describe("Client", () => {
   describe("saves", () => {
     test("save", async () => {
       const storage = new InMemoryStorage();
