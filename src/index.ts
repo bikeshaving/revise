@@ -208,6 +208,7 @@ export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
   return result;
 }
 
+// TODO: return subseq1 expanded against the insertions of subseq2 and subseq2 expanded against the insertions of subseq1 instead of subseq1 expanded before/after
 export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
   const iter1 = new SegmentIterator(subseq1);
   const iter2 = new SegmentIterator(subseq2);
@@ -403,17 +404,16 @@ export function factor(patch: Patch): FactorResult {
 export function synthesize(
   inserted: string,
   insertSeq: Subseq,
-  deleteSeq: Subseq = clear(insertSeq),
+  deleteSeq: Subseq = empty(count(insertSeq, false)),
 ): Patch {
   const patch: Patch = [];
   let index = 0;
   let consumed = 0;
+  deleteSeq = expand(deleteSeq, insertSeq);
   for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
       index += length;
-      if (!dFlag) {
-        patch.push(inserted.slice(index - length, index));
-      }
+      patch.push(inserted.slice(index - length, index));
     } else {
       consumed += length;
       if (!dFlag) {
@@ -421,9 +421,8 @@ export function synthesize(
       }
     }
   }
-  // TODO: throw error if index !== inserted.length
   if (index !== inserted.length) {
-    // throw new Error("THIS IS WRONG MAN");
+    throw new Error("Length mismatch");
   }
   const last = patch[patch.length - 1];
   const length = count(insertSeq, false);
@@ -567,20 +566,13 @@ export class Document {
     if (version >= this.revisions.length - 1) {
       return this.snapshot;
     }
-    const hiddenSeq: Subseq = this.hiddenSeqAt(version);
+    let { visible, hidden, hiddenSeq } = this.snapshot;
     const [insertSeq] = summarize(this.revisions.slice(version + 1));
-    let { visible, hidden, hiddenSeq: hiddenSeq1 } = this.snapshot;
-    const hiddenSeq2 = expand(hiddenSeq, insertSeq);
-    visible = apply(
-      visible,
-      synthesize(hidden, hiddenSeq1, union(hiddenSeq2, insertSeq)),
-    );
-    // TODO: empty string passed to synthesize is wrong here
-    hidden = apply(
-      hidden,
-      synthesize("", complement(hiddenSeq1), complement(hiddenSeq2)),
-    );
-    return { visible, hidden, hiddenSeq, version };
+    let merged = merge(hidden, visible, hiddenSeq);
+    [, merged] = split(merged, insertSeq);
+    const hiddenSeq1 = this.hiddenSeqAt(version);
+    [hidden, visible] = split(merged, hiddenSeq1);
+    return { visible, hidden, hiddenSeq: hiddenSeq1, version };
   }
 
   patchAt(version: number): Patch {
@@ -593,7 +585,7 @@ export class Document {
     insertSeq = shrink(insertSeq, hiddenSeq);
     deleteSeq = shrink(deleteSeq, hiddenSeq);
     const [inserted] = split(snapshot.visible, shrink(insertSeq, deleteSeq));
-    return synthesize(inserted, insertSeq, deleteSeq);
+    return synthesize(inserted, insertSeq, shrink(deleteSeq, insertSeq));
   }
 
   clone(client: Client = this.client): Document {
@@ -624,7 +616,7 @@ export class Document {
     if (inserted.length) {
       hiddenSeq = expand(hiddenSeq, insertSeq);
       const insertSeq1 = shrink(insertSeq, hiddenSeq);
-      visible = apply(visible, synthesize(inserted, insertSeq1));
+      visible = merge(inserted, visible, insertSeq1);
     }
 
     return { visible, hidden, hiddenSeq, version: snapshot.version + 1 };
@@ -666,13 +658,8 @@ export class Document {
       deleteSeq = expand(deleteSeq, revision.insertSeq);
       insertSeq = expand(insertSeq, revision.insertSeq);
     }
-    const [inserted] = split(
-      apply(
-        this.snapshot.visible,
-        synthesize(this.snapshot.hidden, this.snapshot.hiddenSeq),
-      ),
-      insertSeq,
-    );
+    const { visible, hidden, hiddenSeq } = this.snapshot;
+    const [inserted] = split(merge(hidden, visible, hiddenSeq), insertSeq);
     insertSeq = interleave(insertSeq, insertSeq)[1];
     const revision1: Revision = {
       clientId: this.client.id,

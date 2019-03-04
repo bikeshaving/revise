@@ -250,39 +250,51 @@ describe("patch", () => {
 
     test("simple", () => {
       const insertSeq = [0, 3, 3, 7];
-      const deleteSeq = [0, 6, 3, 3, 1];
+      const deleteSeq = [0, 3, 3, 3, 1];
       const result = [0, 3, "foo", 6, 9, 10];
       expect(shredder.synthesize("foo", insertSeq, deleteSeq)).toEqual(result);
     });
 
-    test("complex", () => {
+    // TODO: make this a property test
+    test("factored", () => {
+      for (const p of [p0, p1, p2, p3]) {
+        const { inserted, insertSeq, deleteSeq } = shredder.factor(p);
+        expect(shredder.synthesize(inserted, insertSeq, deleteSeq)).toEqual(p);
+      }
+    });
+
+    test("applied", () => {
       const { inserted, insertSeq, deleteSeq } = shredder.factor(p0);
-      const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
-      const union = shredder.apply(
+      const combined = shredder.apply(
         text,
         shredder.synthesize(inserted, insertSeq),
       );
-      const text1 = shredder.apply(
-        union,
+      const inserted1 = shredder.apply(
+        combined,
         shredder.synthesize(
           "",
-          [0, shredder.count(deleteSeq1)],
-          shredder.complement(deleteSeq1),
-        ),
-      );
-      const tombstones = shredder.apply(
-        union,
-        shredder.synthesize(
-          "",
-          [0, shredder.count(insertSeq)],
+          shredder.clear(insertSeq),
           shredder.complement(insertSeq),
         ),
       );
-      expect(shredder.synthesize(tombstones, insertSeq, deleteSeq1)).toEqual(
-        p0,
+      expect(inserted).toEqual(inserted1);
+      const deleteSeq1 = shredder.expand(deleteSeq, insertSeq);
+      const deleted = shredder.apply(
+        combined,
+        shredder.synthesize(
+          "",
+          shredder.clear(deleteSeq1),
+          shredder.complement(deleteSeq1),
+        ),
       );
       const result = [0, 1, "ello wor", 4, 6];
-      expect(shredder.synthesize(text1, deleteSeq1, insertSeq)).toEqual(result);
+      expect(
+        shredder.synthesize(
+          deleted,
+          deleteSeq1,
+          shredder.shrink(insertSeq, deleteSeq1),
+        ),
+      ).toEqual(result);
     });
   });
 });
