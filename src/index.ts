@@ -21,6 +21,20 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
   return subseq.length;
 }
 
+export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
+  if (!subseq2.length) {
+    return subseq1;
+  }
+  const flag1 = flagAt(subseq1, subseq1.length - 1);
+  const flag2 = flagAt(subseq2, 0);
+  const length = subseq2[1];
+  if (length && flag1 === flag2) {
+    subseq1 = subseq1.slice();
+    push(subseq1, length, flag1);
+  }
+  return subseq1.concat(subseq2.slice(2));
+}
+
 // [length, ...flags]
 export type Segment = [number, ...boolean[]];
 
@@ -349,6 +363,7 @@ export function apply(text: string, patch: Patch): string {
   return result;
 }
 
+// TODO
 // export interface Moves {
 //   [to: number]: Subseq;
 // }
@@ -357,6 +372,7 @@ export interface FactoredPatch {
   inserted: string;
   insertSeq: Subseq;
   deleteSeq: Subseq;
+  // TODO
   // reviveSeq: Subseq;
   // moves: { [number] : Subseq };
 }
@@ -517,12 +533,14 @@ function summarize(revisions: Revision[], clientId?: string): [Subseq, Subseq] {
 }
 
 export class Document {
+  // TODO: add factored patches to improve performance
   protected constructor(
-    // TODO: does a document need to know its own id
+    // TODO: document doesn’t need to know its own id
     public id: string,
-    // TODO: does a document need to know its own client besides clientId
+    // TODO: document doesn’t need to know its own client besides clientId
     public client: Client,
     public snapshot: Snapshot,
+    // TODO: make revisions a possibly sparse array of revisions
     public revisions: Revision[],
     public lastKnownVersion = -1,
     public localVersion = 0,
