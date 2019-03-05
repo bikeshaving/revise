@@ -43,14 +43,23 @@ describe("patch", () => {
   });
 
   describe("synthesize", () => {
-    test("empty", () => {
-      expect(synthesize({ inserted: "", insertSeq: [] })).toEqual([0]);
-    });
-
-    test("mismatched inserted and insertSeq", () => {
+    test("mismatched inserted and insertSeq throws", () => {
       expect(() => {
         synthesize({ inserted: "foo", insertSeq: [0, 2, 2] });
       }).toThrow();
+    });
+
+    test("insertions after deletions throws", () => {
+      const inserted = "bro";
+      const deleteSeq = [0, 6, 5];
+      const insertSeq = [0, 11, 3];
+      expect(() => {
+        synthesize({ inserted, deleteSeq, insertSeq });
+      }).toThrow();
+    });
+
+    test("empty", () => {
+      expect(synthesize({ inserted: "", insertSeq: [] })).toEqual([0]);
     });
 
     test("simple", () => {
@@ -71,21 +80,6 @@ describe("patch", () => {
       for (const p of [p0, p1, p2, p3]) {
         expect(synthesize(factor(p))).toEqual(p);
       }
-    });
-
-    // This is an edge case where inserts at the end of a patch can be placed after deletes, causing the insertSeq passed into synthesize to differ from the insertSeq returned from factor. Not sure how to proceed.
-    test("impossible inserts", () => {
-      const inserted = "bro";
-      const deleteSeq = [0, 6, 5];
-      const insertSeq = [0, 11, 3];
-      const insertSeq1 = [0, 6, 3, 5];
-      const patch = synthesize({ inserted, deleteSeq, insertSeq });
-      expect(patch).toEqual([0, 6, "bro", 11]);
-      expect(factor(patch)).toEqual({
-        inserted,
-        deleteSeq,
-        insertSeq: insertSeq1,
-      });
     });
 
     test("apply", () => {

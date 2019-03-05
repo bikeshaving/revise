@@ -2,8 +2,12 @@
 // TODO: make subseq [boolean, ...number[]]?
 export type Subseq = number[];
 
-// TODO: handle edge cases where subseq.length is 0 or index is 0. What should we do in those cases?
-export function flagAt(subseq: Subseq, index: number): boolean {
+export function flagAt(subseq: Subseq, index: number): boolean | undefined {
+  if (subseq.length < 2) {
+    return;
+  } else if (index <= 0 || index > subseq.length - 1) {
+    throw new RangeError("index out of range of subseq");
+  }
   return !subseq[0] === (index % 2 === 0);
 }
 
@@ -13,7 +17,7 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
   } else if (!subseq.length) {
     subseq.push(flag ? 1 : 0, length);
   } else {
-    const flag1 = flagAt(subseq, subseq.length - 1);
+    const flag1 = flagAt(subseq, subseq.length - 1)!;
     if (flag === flag1) {
       subseq[subseq.length - 1] += length;
     } else {
@@ -24,11 +28,13 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
 }
 
 export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
-  if (!subseq2.length) {
+  if (subseq2.length < 2) {
     return subseq1;
+  } else if (subseq1.length < 2) {
+    return subseq2;
   }
-  const flag1 = flagAt(subseq1, subseq1.length - 1);
-  const flag2 = flagAt(subseq2, 1);
+  const flag1 = flagAt(subseq1, subseq1.length - 1)!;
+  const flag2 = flagAt(subseq2, 1)!;
   const length = subseq2[1];
   if (length && flag1 === flag2) {
     subseq1 = subseq1.slice();
@@ -43,14 +49,18 @@ export type Segment = [number, ...boolean[]];
 export class SegmentIterator implements IterableIterator<Segment> {
   private i = 1;
 
-  constructor(private subseq: Subseq) {}
+  constructor(private subseq: Subseq) {
+    if (subseq.length === 1) {
+      throw new Error("Malformed subseq");
+    }
+  }
 
   next(): IteratorResult<Segment> {
     const length = this.subseq[this.i];
     if (length == null) {
       return { done: true } as any;
     }
-    const flag = flagAt(this.subseq, this.i);
+    const flag = flagAt(this.subseq, this.i)!;
     this.i++;
     return { done: false, value: [length, flag] };
   }

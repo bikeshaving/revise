@@ -3,6 +3,7 @@ import {
   count,
   empty,
   expand,
+  flagAt,
   merge,
   push,
   split,
@@ -112,6 +113,12 @@ export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
 
 export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let { inserted, insertSeq, deleteSeq } = complete(patch);
+  if (
+    flagAt(insertSeq, insertSeq.length - 1) &&
+    flagAt(deleteSeq, deleteSeq.length - 1)
+  ) {
+    throw new Error("Insertions after deletions");
+  }
   const result: Patch = [];
   let index = 0;
   let consumed = 0;
