@@ -63,7 +63,7 @@ export function rebase(
   for (const revision1 of revisions) {
     const comp = compare(revision, revision1);
     if (comp === 0) {
-      throw new Error("Concurrent edits with the same client and priority");
+      throw new Error("Concurrent edits same client and priority");
     }
     let {
       inserted: inserted1,
@@ -224,7 +224,7 @@ export class Document {
 
   edit(
     patch: Patch,
-    priority: number = 0,
+    priority?: number,
     version: number = this.revisions.length - 1,
   ): void {
     if (version < 0 || version > this.revisions.length - 1) {
@@ -265,7 +265,6 @@ export class Document {
     const revision1: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
       clientId: this.client.id,
-      priority: 0,
       localVersion: this.localVersion,
       lastKnownVersion: this.lastKnownVersion,
     };
