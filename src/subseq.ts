@@ -2,6 +2,7 @@
 // TODO: make subseq [boolean, ...number[]]?
 export type Subseq = number[];
 
+// TODO: handle edge cases where subseq.length is 0 or index is 0. What should we do in those cases?
 export function flagAt(subseq: Subseq, index: number): boolean {
   return !subseq[0] === (index % 2 === 0);
 }
@@ -27,7 +28,7 @@ export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
     return subseq1;
   }
   const flag1 = flagAt(subseq1, subseq1.length - 1);
-  const flag2 = flagAt(subseq2, 0);
+  const flag2 = flagAt(subseq2, 1);
   const length = subseq2[1];
   if (length && flag1 === flag2) {
     subseq1 = subseq1.slice();

@@ -22,7 +22,7 @@ export interface Snapshot {
   version: number;
 }
 
-export type Revision = {
+export interface Revision {
   patch: Patch;
   clientId: string;
   // TODO: make optional?
@@ -30,7 +30,7 @@ export type Revision = {
   version?: number;
   localVersion: number;
   lastKnownVersion: number;
-};
+}
 
 export interface RevisionInternal {
   patch: FactoredPatch;

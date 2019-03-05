@@ -57,7 +57,7 @@ describe("subseq", () => {
   });
 
   describe("interleave", () => {
-    test("error when mismatched", () => {
+    test("error when mismatched 1", () => {
       expect(() => {
         subseq.interleave([0, 5, 1], [1, 1, 4]);
       }).toThrow();
@@ -69,7 +69,7 @@ describe("subseq", () => {
       }).toThrow();
     });
 
-    test("empty subseq 1", () => {
+    test("empty 1", () => {
       // =++=======
       const s = [0, 1, 2, 7];
       // ========
@@ -80,7 +80,7 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t1, s]);
     });
 
-    test("empty subseq 2", () => {
+    test("empty 2", () => {
       // =====+======+
       const s = [0, 5, 1, 6, 1];
       // ===========
@@ -91,7 +91,80 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t1, s]);
     });
 
-    test("smaller transform", () => {
+    test("simple 1", () => {
+      // +=    ====
+      const s = [1, 1, 5];
+      //  =****====
+      const t = [0, 1, 4, 4];
+      // +=****====
+      const s1 = [1, 1, 9];
+      const t1 = [0, 2, 4, 4];
+      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
+      // +=****====
+      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
+    });
+
+    test("simple 2", () => {
+      // ++=    ===
+      const s = [1, 2, 4];
+      //   =****===
+      const t = [0, 1, 4, 3];
+      // ++=****===
+      const s1 = [1, 2, 8];
+      const t1 = [0, 3, 4, 3];
+      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
+      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
+    });
+
+    test("simple 3", () => {
+      //  =++++====
+      const s = [0, 1, 4, 4];
+      // *=    ====
+      const t = [1, 1, 5];
+      // *=++++====
+      const s1 = [0, 2, 4, 4];
+      const t1 = [1, 1, 9];
+      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
+      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
+    });
+
+    test("simple 4", () => {
+      // ==    ==++
+      const s = [0, 4, 2];
+      // ==****==
+      const t = [0, 2, 4, 2];
+      // ==****==++
+      const s1 = [0, 8, 2];
+      const t1 = [0, 2, 4, 4];
+      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
+      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
+    });
+
+    test("simple 5", () => {
+      // =   =++===
+      const s = [0, 2, 2, 3];
+      // =***=  ===
+      const t = [0, 1, 3, 4];
+      // =***=++===
+      const s1 = [0, 5, 2, 3];
+      const t1 = [0, 1, 3, 6];
+      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
+      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
+    });
+
+    test("simple 6", () => {
+      //   =++++===
+      const s = [0, 1, 4, 3];
+      // **=    ===
+      const t = [1, 2, 4];
+      // **=++++===
+      const s1 = [0, 3, 4, 3];
+      const t1 = [1, 2, 8];
+      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
+      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
+    });
+
+    test("overlapping 1", () => {
       // +++====+
       const s = [1, 3, 4, 1];
       // ***====
@@ -107,7 +180,7 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t2, s2]);
     });
 
-    test("same position", () => {
+    test("overlapping 2", () => {
       // ==++  ====
       const s = [0, 2, 2, 4];
       // ==**  ====
@@ -122,7 +195,7 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t2, s2]);
     });
 
-    test("same position different lengths", () => {
+    test("overlapping 3", () => {
       // ==++++  ==
       const s = [0, 2, 4, 2];
       // ==**    ==
@@ -137,80 +210,7 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t2, s2]);
     });
 
-    test("subseq before", () => {
-      // +=    ====
-      const s = [1, 1, 5];
-      //  =****====
-      const t = [0, 1, 4, 4];
-      // +=****====
-      const s1 = [1, 1, 9];
-      const t1 = [0, 2, 4, 4];
-      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
-      // +=****====
-      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
-    });
-
-    test("subseq before overlapping", () => {
-      // ++=    ===
-      const s = [1, 2, 4];
-      //   =****===
-      const t = [0, 1, 4, 3];
-      // ++=****===
-      const s1 = [1, 2, 8];
-      const t1 = [0, 3, 4, 3];
-      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
-      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
-    });
-
-    test("subseq after", () => {
-      //  =++++====
-      const s = [0, 1, 4, 4];
-      // *=    ====
-      const t = [1, 1, 5];
-      // *=++++====
-      const s1 = [0, 2, 4, 4];
-      const t1 = [1, 1, 9];
-      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
-      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
-    });
-
-    test("subseq after overlapping 1", () => {
-      // ==    ==++
-      const s = [0, 4, 2];
-      // ==****==
-      const t = [0, 2, 4, 2];
-      // ==****==++
-      const s1 = [0, 8, 2];
-      const t1 = [0, 2, 4, 4];
-      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
-      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
-    });
-
-    test("subseq after overlapping 2", () => {
-      // =   =++===
-      const s = [0, 2, 2, 3];
-      // =***=  ===
-      const t = [0, 1, 3, 4];
-      // =***=++===
-      const s1 = [0, 5, 2, 3];
-      const t1 = [0, 1, 3, 6];
-      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
-      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
-    });
-
-    test("subseq after overlapping 3", () => {
-      //   =++++===
-      const s = [0, 1, 4, 3];
-      // **=    ===
-      const t = [1, 2, 4];
-      // **=++++===
-      const s1 = [0, 3, 4, 3];
-      const t1 = [1, 2, 8];
-      expect(subseq.interleave(s, t)).toEqual([s1, t1]);
-      expect(subseq.interleave(t, s)).toEqual([t1, s1]);
-    });
-
-    test("multiple segments", () => {
+    test("complex 1", () => {
       // +=++ =+==
       const s = [1, 1, 1, 2, 1, 1, 2];
       //  =*  = ==*
@@ -225,7 +225,7 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t2, s2]);
     });
 
-    test("complex", () => {
+    test("complex 2", () => {
       //     =====      ======++++
       const s = [0, 11, 4];
       // ****=====******======*

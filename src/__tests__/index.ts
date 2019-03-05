@@ -51,7 +51,7 @@ describe("Document", () => {
   });
 
   describe("patchAt", () => {
-    test("full", () => {
+    test("visible", () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit([0, 11, "!", 11]);
@@ -177,7 +177,7 @@ describe("Document", () => {
   });
 
   describe("Document.revert", () => {
-    test("selective", () => {
+    test("simple", () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       doc.edit(["goodbye", 5, 11]);
@@ -188,7 +188,7 @@ describe("Document", () => {
   });
 
   describe("Document.ingest", () => {
-    test("simple", () => {
+    test("simple 1", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");

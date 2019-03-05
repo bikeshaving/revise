@@ -6,7 +6,7 @@ import {
 } from "../channel";
 
 describe("FixedBuffer", () => {
-  test("fixed", () => {
+  test("simple", () => {
     const buffer = new FixedBuffer<number>(2);
     buffer.put(1);
     buffer.put(2);
@@ -15,7 +15,7 @@ describe("FixedBuffer", () => {
     expect(buffer.take()).toEqual(undefined);
   });
 
-  test("waits when full", async () => {
+  test("parks when full", async () => {
     const buffer = new FixedBuffer<number>(3);
     buffer.put(1);
     buffer.put(2);
@@ -35,7 +35,7 @@ describe("FixedBuffer", () => {
 });
 
 describe("SlidingBuffer", () => {
-  test("slide", () => {
+  test("simple", () => {
     const buffer = new SlidingBuffer<number>(2);
     buffer.put(1);
     buffer.put(2);
@@ -49,7 +49,7 @@ describe("SlidingBuffer", () => {
 });
 
 describe("DroppingBuffer", () => {
-  test("drop", () => {
+  test("simple", () => {
     const buffer = new DroppingBuffer<number>(2);
     buffer.put(1);
     buffer.put(2);
@@ -122,7 +122,7 @@ describe("Channel", () => {
     expect(channel.closed).toBe(true);
   });
 
-  test("throws pulling multiple values", async () => {
+  test("throws when pulling multiple values simultaneously", async () => {
     const channel = new Channel<number>();
     setTimeout(async () => {
       await channel.put(1);
@@ -178,7 +178,7 @@ describe("Channel", () => {
     expect(channel.closed).toBe(true);
   });
 
-  test("throw", async () => {
+  test("throw method", async () => {
     const channel = new Channel<number>();
     const error = new Error("Example error");
     const puts = (async () => {
