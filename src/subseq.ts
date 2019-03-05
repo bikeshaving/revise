@@ -180,14 +180,13 @@ export function expand(
   subseq2: Subseq,
   options: { union?: boolean } = {},
 ): Subseq {
-  const union = !!options.union;
   const result: Subseq = [];
   let length1: number | undefined;
   let flag1: boolean;
   const iter = new SegmentIterator(subseq1);
   for (let [length2, flag2] of new SegmentIterator(subseq2)) {
     if (flag2) {
-      push(result, length2, union);
+      push(result, length2, !!options.union);
     } else {
       while (length2 > 0) {
         if (length1 == null || length1 === 0) {

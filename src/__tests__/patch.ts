@@ -42,40 +42,55 @@ describe("patch", () => {
 
   describe("synthesize", () => {
     test("empty", () => {
-      expect(synthesize("", [])).toEqual([0]);
+      const inserted = "";
+      const insertSeq: subseq.Subseq = [];
+      expect(synthesize({ inserted, insertSeq })).toEqual([0]);
     });
 
     test("simple", () => {
       const insertSeq = [0, 3, 3, 7];
       const deleteSeq = [0, 3, 3, 3, 1];
       const result = [0, 3, "foo", 6, 9, 10];
-      expect(synthesize("foo", insertSeq, deleteSeq)).toEqual(result);
+      const inserted = "foo";
+      expect(synthesize({ inserted, insertSeq, deleteSeq })).toEqual(result);
     });
 
     // TODO: make this a property test
     test("factored", () => {
       for (const p of [p0, p1, p2, p3]) {
         const { inserted, insertSeq, deleteSeq } = factor(p);
-        expect(synthesize(inserted, insertSeq, deleteSeq)).toEqual(p);
+        expect(synthesize({ inserted, insertSeq, deleteSeq })).toEqual(p);
       }
     });
 
     test("apply", () => {
       const { inserted, insertSeq, deleteSeq } = factor(p0);
-      const combined = apply(text, synthesize(inserted, insertSeq));
+      const combined = apply(text, synthesize({ inserted, insertSeq }));
       const inserted1 = apply(
         combined,
-        synthesize("", subseq.clear(insertSeq), subseq.complement(insertSeq)),
+        synthesize({
+          inserted: "",
+          insertSeq: subseq.clear(insertSeq),
+          deleteSeq: subseq.complement(insertSeq),
+        }),
       );
       expect(inserted).toEqual(inserted1);
       const deleteSeq1 = subseq.expand(deleteSeq, insertSeq);
       const deleted = apply(
         combined,
-        synthesize("", subseq.clear(deleteSeq1), subseq.complement(deleteSeq1)),
+        synthesize({
+          inserted: "",
+          insertSeq: subseq.clear(deleteSeq1),
+          deleteSeq: subseq.complement(deleteSeq1),
+        }),
       );
       const result = [0, 1, "ello wor", 4, 6];
       expect(
-        synthesize(deleted, deleteSeq1, subseq.shrink(insertSeq, deleteSeq1)),
+        synthesize({
+          inserted: deleted,
+          insertSeq: deleteSeq1,
+          deleteSeq: subseq.shrink(insertSeq, deleteSeq1),
+        }),
       ).toEqual(result);
     });
   });

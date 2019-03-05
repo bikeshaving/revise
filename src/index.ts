@@ -13,7 +13,7 @@ import {
   split,
   Subseq,
 } from "./subseq";
-import { factor, Patch, synthesize } from "./patch";
+import { factor, FactoredPatch, Patch, synthesize } from "./patch";
 
 export interface Snapshot {
   visible: string;
@@ -22,13 +22,21 @@ export interface Snapshot {
   version: number;
 }
 
-export interface Revision {
+export type Revision = {
   patch: Patch;
   clientId: string;
+  // TODO: make optional?
   priority: number;
   version?: number;
   localVersion: number;
   lastKnownVersion: number;
+};
+
+export interface RevisionInternal {
+  patch: FactoredPatch;
+  clientId: string;
+  priority: number;
+  localVersion: number;
 }
 
 export function rebase(
@@ -63,42 +71,40 @@ export function rebase(
     }
     revisions1.push({
       ...revision1,
-      patch: synthesize(inserted1, insertSeq1, deleteSeq1),
+      patch: synthesize({
+        inserted: inserted1,
+        insertSeq: insertSeq1,
+        deleteSeq: deleteSeq1,
+      }),
     });
   }
   deleteSeq = difference(deleteSeq, hiddenSeq);
-  revision = { ...revision, patch: synthesize(inserted, insertSeq, deleteSeq) };
+  revision = {
+    ...revision,
+    patch: synthesize({ inserted, insertSeq, deleteSeq }),
+  };
   return [revision, revisions1];
 }
 
-// TODO: remove deleteSeq from result
-export function summarize(
-  revisions: Revision[],
-  clientId?: string,
-): [Subseq, Subseq] {
+export function summarize(revisions: Revision[], clientId?: string): Subseq {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
-  let { insertSeq, deleteSeq } = factor(revisions[0].patch);
-  deleteSeq = expand(deleteSeq, insertSeq);
-  if (revisions[0].clientId === clientId) {
+  const revision = revisions[0];
+  let { insertSeq } = factor(revision.patch);
+  if (revision.clientId === clientId) {
     insertSeq = clear(insertSeq);
-    deleteSeq = clear(deleteSeq);
   }
   for (const revision of revisions.slice(1)) {
-    const own = clientId === revision.clientId;
-    const { insertSeq: insertSeq1, deleteSeq: deleteSeq1 } = factor(
-      revision.patch,
-    );
-    insertSeq = expand(insertSeq, insertSeq1, { union: !own });
-    deleteSeq = own
-      ? difference(deleteSeq, deleteSeq1)
-      : union(deleteSeq, deleteSeq1);
-    deleteSeq = expand(deleteSeq, insertSeq1);
+    const { insertSeq: insertSeq1 } = factor(revision.patch);
+    insertSeq = expand(insertSeq, insertSeq1, {
+      union: clientId !== revision.clientId,
+    });
   }
-  return [insertSeq, deleteSeq];
+  return insertSeq;
 }
 
+// TODO: remove all references to clients in Document and rename to Replica
 export class Document {
   // TODO: add factored patches to improve performance
   protected constructor(
@@ -107,7 +113,7 @@ export class Document {
     // TODO: document doesn’t need to know its own client
     public client: Client,
     public snapshot: Snapshot,
-    // TODO: make revisions a possibly sparse array of revisions
+    // TODO: make revisions a sparse array
     public revisions: Revision[],
     public lastKnownVersion = -1,
     public localVersion = 0,
@@ -121,7 +127,7 @@ export class Document {
       version: 0,
     };
     const revision: Revision = {
-      patch: synthesize(initial, full(initial.length)),
+      patch: synthesize({ inserted: initial, insertSeq: full(initial.length) }),
       clientId: client.id,
       priority: 0,
       localVersion: 0,
@@ -159,7 +165,7 @@ export class Document {
       return this.snapshot;
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
-    const [insertSeq] = summarize(this.revisions.slice(version + 1));
+    const insertSeq = summarize(this.revisions.slice(version + 1));
     let merged = merge(hidden, visible, hiddenSeq);
     [, merged] = split(merged, insertSeq);
     const hiddenSeq1 = this.hiddenSeqAt(version);
@@ -175,8 +181,8 @@ export class Document {
     deleteSeq = expand(deleteSeq, insertSeq);
     const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
     insertSeq = shrink(insertSeq, hiddenSeq);
-    deleteSeq = shrink(deleteSeq, hiddenSeq);
-    return synthesize(inserted, insertSeq, shrink(deleteSeq, insertSeq));
+    deleteSeq = shrink(shrink(deleteSeq, hiddenSeq), insertSeq);
+    return synthesize({ inserted, insertSeq, deleteSeq });
   }
 
   clone(client: Client = this.client): Document {
@@ -194,8 +200,7 @@ export class Document {
     let { visible, hidden, hiddenSeq } = snapshot;
 
     if (count(deleteSeq, true) > 0) {
-      let hiddenSeq1: Subseq;
-      hiddenSeq1 = union(hiddenSeq, deleteSeq);
+      const hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [hidden, visible] = shuffle(hidden, visible, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
@@ -222,7 +227,7 @@ export class Document {
     [, insertSeq] = interleave(hiddenSeq, insertSeq);
     deleteSeq = expand(deleteSeq, hiddenSeq);
     let revision: Revision = {
-      patch: synthesize(inserted, insertSeq, deleteSeq),
+      patch: synthesize({ inserted, insertSeq, deleteSeq }),
       clientId: this.client.id,
       priority,
       localVersion: this.localVersion,
@@ -243,14 +248,14 @@ export class Document {
     const [revision, ...revisions] = this.revisions.slice(version);
     let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(revision.patch);
     insertSeq = expand(insertSeq, deleteSeq);
-    const [insertSeq1] = summarize(revisions);
+    const insertSeq1 = summarize(revisions);
     deleteSeq = expand(deleteSeq, insertSeq1);
     insertSeq = expand(insertSeq, insertSeq1);
     const { visible, hidden, hiddenSeq } = this.snapshot;
     const [inserted] = split(merge(hidden, visible, hiddenSeq), insertSeq);
     [, insertSeq] = interleave(insertSeq, insertSeq);
     const revision1: Revision = {
-      patch: synthesize(inserted, insertSeq, deleteSeq),
+      patch: synthesize({ inserted, insertSeq, deleteSeq }),
       clientId: this.client.id,
       priority: 0,
       localVersion: this.localVersion,
@@ -293,13 +298,13 @@ export class Document {
         revision.lastKnownVersion + 1,
         lastKnownVersion + 1,
       );
-      const [baseInsertSeq] = summarize(revisions, revision.clientId);
+      const baseInsertSeq = summarize(revisions, revision.clientId);
       insertSeq = expand(insertSeq, baseInsertSeq);
       deleteSeq = expand(deleteSeq, baseInsertSeq);
     }
     revision = {
       ...revision,
-      patch: synthesize(inserted, insertSeq, deleteSeq),
+      patch: synthesize({ inserted, insertSeq, deleteSeq }),
     };
     let revisions = this.revisions.slice(
       lastKnownVersion + 1,
@@ -340,10 +345,6 @@ export interface Connection {
   updates(id: string, from?: number): Promise<AsyncIterable<Revision[]>>;
 }
 
-interface ClientSaveOptions {
-  force?: boolean;
-}
-
 export class Client {
   protected documents: Record<string, Document> = {};
   protected pending: Set<string> = new Set();
@@ -353,7 +354,7 @@ export class Client {
     this.poll();
   }
 
-  save(id: string, options: ClientSaveOptions = {}): Promise<void> {
+  save(id: string, options: { force?: boolean } = {}): Promise<void> {
     this.pending.add(id);
     if (options.force) {
       return this.sync();
