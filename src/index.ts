@@ -25,8 +25,7 @@ export interface Snapshot {
 export interface Revision {
   patch: Patch;
   clientId: string;
-  // TODO: make optional?
-  priority: number;
+  priority?: number;
   version?: number;
   localVersion: number;
   lastKnownVersion: number;
@@ -39,6 +38,21 @@ export interface RevisionInternal {
   localVersion: number;
 }
 
+export function compare(revision1: Revision, revision2: Revision) {
+  const { priority: priority1 = 0, clientId: clientId1 } = revision1;
+  const { priority: priority2 = 0, clientId: clientId2 } = revision2;
+  if (priority1 < priority2) {
+    return -1;
+  } else if (priority1 > priority2) {
+    return 1;
+  } else if (clientId1 < clientId2) {
+    return -1;
+  } else if (clientId1 > clientId2) {
+    return 1;
+  }
+  return 0;
+}
+
 export function rebase(
   revision: Revision,
   revisions: Revision[],
@@ -47,16 +61,10 @@ export function rebase(
   let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
   const revisions1: Revision[] = [];
   for (const revision1 of revisions) {
-    if (
-      revision.priority === revision1.priority &&
-      revision.clientId === revision1.clientId
-    ) {
+    const comp = compare(revision, revision1);
+    if (comp === 0) {
       throw new Error("Concurrent edits with the same client and priority");
     }
-    const before =
-      revision.priority === revision1.priority
-        ? revision.clientId < revision1.clientId
-        : revision.priority < revision1.priority;
     let {
       inserted: inserted1,
       insertSeq: insertSeq1,
@@ -64,7 +72,7 @@ export function rebase(
     } = factor(revision1.patch);
     deleteSeq1 = expand(difference(deleteSeq1, deleteSeq), insertSeq);
     deleteSeq = expand(deleteSeq, insertSeq1);
-    if (before) {
+    if (comp < 0) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
     } else {
       [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
