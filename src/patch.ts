@@ -113,10 +113,7 @@ export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
 
 export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let { inserted, insertSeq, deleteSeq } = complete(patch);
-  if (
-    flagAt(insertSeq, insertSeq.length - 1) &&
-    flagAt(deleteSeq, deleteSeq.length - 1)
-  ) {
+  if (flagAt(insertSeq) && flagAt(deleteSeq)) {
     throw new Error("Insertions after deletions");
   }
   const result: Patch = [];

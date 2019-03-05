@@ -2,7 +2,10 @@
 // TODO: make subseq [boolean, ...number[]]?
 export type Subseq = number[];
 
-export function flagAt(subseq: Subseq, index: number): boolean | undefined {
+export function flagAt(
+  subseq: Subseq,
+  index: number = subseq.length - 1,
+): boolean | undefined {
   if (subseq.length < 2) {
     return;
   } else if (index <= 0 || index > subseq.length - 1) {
@@ -17,7 +20,7 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
   } else if (!subseq.length) {
     subseq.push(flag ? 1 : 0, length);
   } else {
-    const flag1 = flagAt(subseq, subseq.length - 1)!;
+    const flag1 = flagAt(subseq)!;
     if (flag === flag1) {
       subseq[subseq.length - 1] += length;
     } else {
@@ -33,7 +36,7 @@ export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
   } else if (subseq1.length < 2) {
     return subseq2;
   }
-  const flag1 = flagAt(subseq1, subseq1.length - 1)!;
+  const flag1 = flagAt(subseq1)!;
   const flag2 = flagAt(subseq2, 1)!;
   const length = subseq2[1];
   if (length && flag1 === flag2) {
