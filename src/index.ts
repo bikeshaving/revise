@@ -13,7 +13,7 @@ import {
   split,
   Subseq,
 } from "./subseq";
-import { factor, FactoredPatch, Patch, synthesize } from "./patch";
+import { factor, Patch, synthesize } from "./patch";
 
 export interface Snapshot {
   visible: string;
@@ -24,30 +24,23 @@ export interface Snapshot {
 
 export interface Revision {
   patch: Patch;
-  clientId: string;
+  client: string;
   priority?: number;
-  version?: number;
-  localVersion: number;
-  lastKnownVersion: number;
+  global?: number;
+  local: number;
+  latest: number;
 }
 
-export interface RevisionInternal {
-  patch: FactoredPatch;
-  clientId: string;
-  priority: number;
-  localVersion: number;
-}
-
-export function compare(revision1: Revision, revision2: Revision) {
-  const { priority: priority1 = 0, clientId: clientId1 } = revision1;
-  const { priority: priority2 = 0, clientId: clientId2 } = revision2;
+export function compare(revision1: Revision, revision2: Revision): number {
+  const { priority: priority1 = 0, client: client1 } = revision1;
+  const { priority: priority2 = 0, client: client2 } = revision2;
   if (priority1 < priority2) {
     return -1;
   } else if (priority1 > priority2) {
     return 1;
-  } else if (clientId1 < clientId2) {
+  } else if (client1 < client2) {
     return -1;
-  } else if (clientId1 > clientId2) {
+  } else if (client1 > client2) {
     return 1;
   }
   return 0;
@@ -94,19 +87,19 @@ export function rebase(
   return [revision, revisions1];
 }
 
-export function summarize(revisions: Revision[], clientId?: string): Subseq {
+export function summarize(revisions: Revision[], client?: string): Subseq {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
   const revision = revisions[0];
   let { insertSeq } = factor(revision.patch);
-  if (revision.clientId === clientId) {
+  if (revision.client === client) {
     insertSeq = clear(insertSeq);
   }
   for (const revision of revisions.slice(1)) {
     const { insertSeq: insertSeq1 } = factor(revision.patch);
     insertSeq = expand(insertSeq, insertSeq1, {
-      union: clientId !== revision.clientId,
+      union: client !== revision.client,
     });
   }
   return insertSeq;
@@ -123,8 +116,8 @@ export class Document {
     public snapshot: Snapshot,
     // TODO: make revisions a sparse array
     public revisions: Revision[],
-    public lastKnownVersion = -1,
-    public localVersion = 0,
+    public latest = -1,
+    public local = 0,
   ) {}
 
   static create(id: string, client: Client, initial: string = ""): Document {
@@ -136,19 +129,19 @@ export class Document {
     };
     const revision: Revision = {
       patch: synthesize({ inserted: initial, insertSeq: full(initial.length) }),
-      clientId: client.id,
+      client: client.id,
       priority: 0,
-      localVersion: 0,
-      lastKnownVersion: -1,
+      local: 0,
+      latest: -1,
     };
-    return new Document(id, client, snapshot, [revision], -1, 1);
+    return new Document(id, client, snapshot, [revision], -1);
   }
 
   static from(
     id: string,
     client: Client,
     snapshot: Snapshot,
-    revisions: Revision[],
+    revisions: Revision[] = [],
   ): Document {
     const doc = new Document(id, client, snapshot, [], snapshot.version);
     for (const revision of revisions) {
@@ -199,7 +192,7 @@ export class Document {
       client,
       { ...this.snapshot },
       this.revisions.slice(),
-      this.lastKnownVersion,
+      this.latest,
     );
   }
 
@@ -236,10 +229,10 @@ export class Document {
     deleteSeq = expand(deleteSeq, hiddenSeq);
     let revision: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
-      clientId: this.client.id,
+      client: this.client.id,
       priority,
-      localVersion: this.localVersion,
-      lastKnownVersion: this.lastKnownVersion,
+      local: this.local,
+      latest: this.latest,
     };
     [revision] = rebase(
       revision,
@@ -248,7 +241,6 @@ export class Document {
     );
     this.snapshot = this.apply(revision);
     this.revisions.push(revision);
-    this.localVersion++;
     this.client.save(this.id);
   }
 
@@ -264,48 +256,43 @@ export class Document {
     [, insertSeq] = interleave(insertSeq, insertSeq);
     const revision1: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
-      clientId: this.client.id,
-      localVersion: this.localVersion,
-      lastKnownVersion: this.lastKnownVersion,
+      client: this.client.id,
+      local: this.local,
+      latest: this.latest,
     };
     this.snapshot = this.apply(revision1);
     this.revisions.push(revision1);
-    this.localVersion++;
     this.client.save(this.id);
   }
 
   ingest(revision: Revision): void {
-    if (revision.version == null) {
+    // TODO: move this logic to clients?
+    if (revision.global == null) {
       throw new Error("Missing revision version");
     } else if (
-      this.lastKnownVersion + 1 < revision.version ||
-      this.lastKnownVersion < revision.lastKnownVersion
+      this.latest < revision.latest ||
+      this.latest + 1 < revision.global
     ) {
       // TODO: attempt repair
       throw new Error("Missing revision");
-    } else if (revision.version <= this.lastKnownVersion) {
+    } else if (revision.global <= this.latest) {
       return;
-    } else if (revision.clientId === this.client.id) {
-      this.lastKnownVersion = revision.version;
+    } else if (revision.client === this.client.id) {
+      this.local++;
+      this.latest = revision.global;
       return;
     }
-    let lastKnownVersion = Math.max(revision.lastKnownVersion, 0);
-    for (let v = this.lastKnownVersion; v >= lastKnownVersion; v--) {
-      if (revision.clientId === this.revisions[v].clientId) {
-        lastKnownVersion = v;
+    let latest = Math.max(revision.latest, 0);
+    for (let v = this.latest; v >= latest; v--) {
+      if (revision.client === this.revisions[v].client) {
+        latest = v;
         break;
       }
     }
     let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
-    if (
-      revision.lastKnownVersion > -1 &&
-      revision.lastKnownVersion < lastKnownVersion
-    ) {
-      const revisions = this.revisions.slice(
-        revision.lastKnownVersion + 1,
-        lastKnownVersion + 1,
-      );
-      const baseInsertSeq = summarize(revisions, revision.clientId);
+    if (revision.latest > -1 && revision.latest < latest) {
+      const revisions = this.revisions.slice(revision.latest + 1, latest + 1);
+      const baseInsertSeq = summarize(revisions, revision.client);
       insertSeq = expand(insertSeq, baseInsertSeq);
       deleteSeq = expand(deleteSeq, baseInsertSeq);
     }
@@ -313,22 +300,10 @@ export class Document {
       ...revision,
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
     };
-    let revisions = this.revisions.slice(
-      lastKnownVersion + 1,
-      this.lastKnownVersion + 1,
-    );
-    [revision] = rebase(
-      revision,
-      revisions,
-      this.hiddenSeqAt(this.lastKnownVersion),
-    );
-    revision = { ...revision, lastKnownVersion: revision.version! };
-    revisions = this.revisions.slice(this.lastKnownVersion + 1);
-    this.revisions.splice(
-      this.lastKnownVersion + 1,
-      revisions.length,
-      revision,
-    );
+    let revisions = this.revisions.slice(latest + 1, this.latest + 1);
+    [revision] = rebase(revision, revisions, this.hiddenSeqAt(this.latest));
+    revisions = this.revisions.slice(this.latest + 1);
+    this.revisions.splice(this.latest + 1, revisions.length, revision);
     [revision, revisions] = rebase(
       revision,
       revisions,
@@ -336,11 +311,15 @@ export class Document {
     );
     this.revisions = this.revisions.concat(revisions);
     this.snapshot = this.apply(revision);
-    this.lastKnownVersion = revision.version!;
+    this.latest = revision.global!;
   }
 
-  pendingRevisions(): Revision[] {
-    return this.revisions.slice(this.lastKnownVersion + 1);
+  get pending(): Revision[] {
+    return this.revisions.slice(this.latest + 1).map((revision, i) => ({
+      ...revision,
+      local: this.local + i,
+      latest: this.latest,
+    }));
   }
 }
 
@@ -376,7 +355,7 @@ export class Client {
           const doc = this.documents[id];
           if (doc) {
             // TODO: error recovery
-            await this.connection.sendRevisions(id, doc.pendingRevisions());
+            await this.connection.sendRevisions(id, doc.pending);
           }
           this.pending.delete(id);
         }),
@@ -496,37 +475,37 @@ export class InMemoryStorage implements Connection {
   saveRevision(id: string, revision: Revision): Revision {
     const clientVersions: Record<string, number> = this.clientVersionsById[id];
     if (clientVersions == null) {
-      if (revision.localVersion !== 0) {
+      if (revision.local !== 0) {
         throw new Error("Unknown document");
       }
       this.clientVersionsById[id] = {};
-      this.clientVersionsById[id][revision.clientId] = revision.localVersion;
-      revision = { ...revision, version: 0 };
+      this.clientVersionsById[id][revision.client] = revision.local;
+      revision = { ...revision, global: 0 };
       this.revisionsById[id] = [revision];
       this.snapshotsById[id] = [];
       this.channelsById[id] = [];
       return revision;
     }
     const expectedLocalVersion =
-      clientVersions[revision.clientId] == null
+      clientVersions[revision.client] == null
         ? 0
-        : clientVersions[revision.clientId] + 1;
-    // TODO: reject revision if lastKnownVersion is too far off current version
+        : clientVersions[revision.client] + 1;
+    // TODO: reject revision if latest is too far off current version
     // TODO: reject if we don’t have a recent-enough snapshot
-    if (revision.localVersion > expectedLocalVersion) {
+    if (revision.local > expectedLocalVersion) {
       throw new Error("Missing revision");
-    } else if (revision.localVersion < expectedLocalVersion) {
+    } else if (revision.local < expectedLocalVersion) {
       if (
-        revision.version === 0 &&
-        revision.clientId !== this.revisionsById[id][0].clientId
+        revision.global === 0 &&
+        revision.client !== this.revisionsById[id][0].client
       ) {
         throw new Error("Document already exists");
       }
       return revision;
     }
-    revision = { ...revision, version: this.revisionsById[id].length };
+    revision = { ...revision, global: this.revisionsById[id].length };
     this.revisionsById[id].push(revision);
-    clientVersions[revision.clientId] = revision.localVersion;
+    clientVersions[revision.client] = revision.local;
     return revision;
   }
 

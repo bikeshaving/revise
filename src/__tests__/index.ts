@@ -192,14 +192,14 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      const [revision1] = doc1.pendingRevisions();
-      doc1.ingest({ ...revision1, version: 0 });
+      const [revision1] = doc1.pending;
+      doc1.ingest({ ...revision1, global: 0 });
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
       doc1.edit([0, 13, "s", 13]);
       doc2.edit([0, 5, "_", 6, 11]);
-      const [revision2] = doc2.pendingRevisions();
-      doc1.ingest({ ...revision2, version: 1 });
+      const [revision2] = doc2.pending;
+      doc1.ingest({ ...revision2, global: 1 });
       expect(doc1.snapshot).toEqual({
         visible: "goodbye_worlds",
         hidden: "hello ",
@@ -213,17 +213,17 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      const [revision1] = doc1.pendingRevisions();
-      doc1.ingest({ ...revision1, version: 0 });
+      const [revision1] = doc1.pending;
+      doc1.ingest({ ...revision1, global: 0 });
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const [revision2] = doc1.pendingRevisions();
-      doc1.ingest({ ...revision2, version: 1 });
-      doc2.ingest({ ...revision2, version: 1 });
+      const [revision2] = doc1.pending;
+      doc1.ingest({ ...revision2, global: 1 });
+      doc2.ingest({ ...revision2, global: 1 });
       doc2.edit([0, 7, "hello", 7, 13]);
       doc1.edit([0, 13, "s", 13]);
-      const [revision3] = doc2.pendingRevisions();
-      doc1.ingest({ ...revision3, version: 2 });
+      const [revision3] = doc2.pending;
+      doc1.ingest({ ...revision3, global: 2 });
       expect(doc1.snapshot).toEqual({
         visible: "goodbyehello worlds",
         hidden: "hello",
@@ -237,14 +237,14 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      const [revision1] = doc1.pendingRevisions();
-      doc1.ingest({ ...revision1, version: 0 });
+      const [revision1] = doc1.pending;
+      doc1.ingest({ ...revision1, global: 0 });
       const doc2 = doc1.clone(client2);
       doc1.edit(["goodbye", 5, 11]);
-      const [revision2] = doc1.pendingRevisions();
-      doc2.ingest({ ...revision2, version: 1 });
-      doc2.ingest({ ...revision2, version: 1 });
-      doc2.ingest({ ...revision2, version: 1 });
+      const [revision2] = doc1.pending;
+      doc2.ingest({ ...revision2, global: 1 });
+      doc2.ingest({ ...revision2, global: 1 });
+      doc2.ingest({ ...revision2, global: 1 });
       expect(doc2.snapshot).toEqual({
         visible: "goodbye world",
         hidden: "hello",
@@ -259,21 +259,21 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      let version = 0;
-      for (const revision of doc1.pendingRevisions()) {
-        doc1.ingest({ ...revision, version });
-        version += 1;
+      let global = 0;
+      for (const revision of doc1.pending) {
+        doc1.ingest({ ...revision, global });
+        global += 1;
       }
       const doc2 = doc1.clone(client2);
       doc1.edit(["H", 1, 6, "W", 7, 11]);
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
-      const revisions = doc1.pendingRevisions().concat(doc2.pendingRevisions());
+      const revisions = doc1.pending.concat(doc2.pending);
       for (const revision of revisions) {
-        doc1.ingest({ ...revision, version });
-        doc2.ingest({ ...revision, version });
-        version += 1;
+        doc1.ingest({ ...revision, global });
+        doc2.ingest({ ...revision, global });
+        global += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
@@ -283,21 +283,21 @@ describe("Document", () => {
       const client1 = new Client("id1", new InMemoryStorage());
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
-      let version = 0;
-      for (const revision of doc1.pendingRevisions()) {
-        doc1.ingest({ ...revision, version });
-        version += 1;
+      let global = 0;
+      for (const revision of doc1.pending) {
+        doc1.ingest({ ...revision, global });
+        global += 1;
       }
       const doc2 = doc1.clone(client2);
       doc1.edit(["H", 1, 6, "W", 7, 11]);
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
-      const revisions = doc2.pendingRevisions().concat(doc1.pendingRevisions());
+      const revisions = doc2.pending.concat(doc1.pending);
       for (const revision of revisions) {
-        doc1.ingest({ ...revision, version });
-        doc2.ingest({ ...revision, version });
-        version += 1;
+        doc1.ingest({ ...revision, global });
+        doc2.ingest({ ...revision, global });
+        global += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
       expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
@@ -315,7 +315,7 @@ describe("InMemoryStorage", () => {
       doc.edit(["goodbye", 5, 12]);
       const revisions = await storage.sendRevisions(
         doc.id,
-        doc.pendingRevisions(),
+        doc.pending,
       );
       const revisions1 = await storage.fetchRevisions(doc.id);
       expect(revisions).toEqual(revisions1);
@@ -326,7 +326,7 @@ describe("InMemoryStorage", () => {
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
       doc.edit([0, 11, "!", 11]);
-      await storage.sendRevisions(doc.id, doc.pendingRevisions());
+      await storage.sendRevisions(doc.id, doc.pending);
       storage.sendSnapshot(doc.id, doc.snapshotAt(1));
       storage.sendSnapshot(doc.id, doc.snapshotAt(0));
       const snapshot0 = await storage.fetchSnapshot(doc.id, 0);
@@ -345,12 +345,12 @@ describe("InMemoryStorage", () => {
       const storage = new InMemoryStorage();
       const revisions = await storage.sendRevisions(
         doc.id,
-        doc.pendingRevisions(),
+        doc.pending,
       );
-      let version = 0;
+      let global = 0;
       for (const revision of revisions) {
-        doc.ingest({ ...revision, version });
-        version += 1;
+        doc.ingest({ ...revision, global });
+        global += 1;
       }
       const updates = await storage.updates(doc.id);
       const revisionsPromise: Promise<Revision[]> = (async () => {
@@ -364,11 +364,11 @@ describe("InMemoryStorage", () => {
       doc.edit(["H", 1, 6, "W", 7, 12]);
       const revisions1 = await storage.sendRevisions(
         doc.id,
-        doc.pendingRevisions(),
+        doc.pending,
       );
       for (const revision of revisions1) {
-        doc.ingest({ ...revision, version });
-        version += 1;
+        doc.ingest({ ...revision, global });
+        global += 1;
       }
       storage.close(doc.id);
       expect(storage["channelsById"][doc.id]).toEqual([]);
@@ -413,8 +413,8 @@ describe("Client", () => {
       doc.edit([0, 11, "!", 11]);
       doc.edit([0, 11, 12]);
       const revisions = doc
-        .pendingRevisions()
-        .map((revision, version) => ({ ...revision, version }));
+        .pending
+        .map((revision, global) => ({ ...revision, global }));
       await client.save(doc.id, { force: true });
       await expect(storage.fetchRevisions(doc.id)).resolves.toEqual(revisions);
     });
