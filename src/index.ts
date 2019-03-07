@@ -31,9 +31,9 @@ export interface Revision {
   latest: number;
 }
 
-export function compare(revision1: Revision, revision2: Revision): number {
-  const { priority: priority1 = 0, client: client1 } = revision1;
-  const { priority: priority2 = 0, client: client2 } = revision2;
+export function compare(rev1: Revision, rev2: Revision): number {
+  const { priority: priority1 = 0, client: client1 } = rev1;
+  const { priority: priority2 = 0, client: client2 } = rev2;
   if (priority1 < priority2) {
     return -1;
   } else if (priority1 > priority2) {
@@ -47,14 +47,14 @@ export function compare(revision1: Revision, revision2: Revision): number {
 }
 
 export function rebase(
-  revision: Revision,
+  rev: Revision,
   revisions: Revision[],
   hiddenSeq: Subseq,
 ): [Revision, Revision[]] {
-  let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
+  let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
   const revisions1: Revision[] = [];
-  for (const revision1 of revisions) {
-    const comp = compare(revision, revision1);
+  for (const rev1 of revisions) {
+    const comp = compare(rev, rev1);
     if (comp === 0) {
       throw new Error("Concurrent edits same client and priority");
     }
@@ -62,8 +62,9 @@ export function rebase(
       inserted: inserted1,
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
-    } = factor(revision1.patch);
-    deleteSeq1 = expand(difference(deleteSeq1, deleteSeq), insertSeq);
+    } = factor(rev1.patch);
+    deleteSeq1 = difference(deleteSeq1, deleteSeq);
+    deleteSeq1 = expand(deleteSeq1, insertSeq);
     deleteSeq = expand(deleteSeq, insertSeq1);
     if (comp < 0) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
@@ -71,7 +72,7 @@ export function rebase(
       [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
     }
     revisions1.push({
-      ...revision1,
+      ...rev1,
       patch: synthesize({
         inserted: inserted1,
         insertSeq: insertSeq1,
@@ -80,35 +81,32 @@ export function rebase(
     });
   }
   deleteSeq = difference(deleteSeq, hiddenSeq);
-  revision = {
-    ...revision,
-    patch: synthesize({ inserted, insertSeq, deleteSeq }),
-  };
-  return [revision, revisions1];
+  rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
+  return [rev, revisions1];
 }
 
 export function summarize(revisions: Revision[], client?: string): Subseq {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
-  const revision = revisions[0];
-  let { insertSeq } = factor(revision.patch);
-  if (revision.client === client) {
+  const rev = revisions[0];
+  let { insertSeq } = factor(rev.patch);
+  if (rev.client === client) {
     insertSeq = clear(insertSeq);
   }
-  for (const revision of revisions.slice(1)) {
-    const { insertSeq: insertSeq1 } = factor(revision.patch);
+  for (const rev of revisions.slice(1)) {
+    const { insertSeq: insertSeq1 } = factor(rev.patch);
     insertSeq = expand(insertSeq, insertSeq1, {
-      union: client !== revision.client,
+      union: client !== rev.client,
     });
   }
   return insertSeq;
 }
 
-// TODO: remove all references to clients in Document and rename to Replica
+// TODO: remove all references to clients in Document and rename to Replica and create a more user-friendly Document to expose to developers
+// TODO: add or cache factored patches to improve performance
 export class Document {
-  // TODO: add factored patches to improve performance
-  protected constructor(
+  constructor(
     // TODO: document doesn’t need to know its own id
     public id: string,
     // TODO: document doesn’t need to know its own client
@@ -127,14 +125,14 @@ export class Document {
       hiddenSeq: empty(initial.length),
       version: 0,
     };
-    const revision: Revision = {
+    const rev: Revision = {
       patch: synthesize({ inserted: initial, insertSeq: full(initial.length) }),
       client: client.id,
       priority: 0,
       local: 0,
       latest: -1,
     };
-    return new Document(id, client, snapshot, [revision], -1);
+    return new Document(id, client, snapshot, [rev]);
   }
 
   static from(
@@ -144,8 +142,8 @@ export class Document {
     revisions: Revision[] = [],
   ): Document {
     const doc = new Document(id, client, snapshot, [], snapshot.version);
-    for (const revision of revisions) {
-      doc.ingest(revision);
+    for (const rev of revisions) {
+      doc.ingest(rev);
     }
     return doc;
   }
@@ -153,8 +151,8 @@ export class Document {
   hiddenSeqAt(version: number): Subseq {
     let hiddenSeq = this.snapshot.hiddenSeq;
     const revisions = this.revisions.slice(version + 1).reverse();
-    for (const revision of revisions) {
-      const { insertSeq, deleteSeq } = factor(revision.patch);
+    for (const rev of revisions) {
+      const { insertSeq, deleteSeq } = factor(rev.patch);
       hiddenSeq = shrink(hiddenSeq, insertSeq);
       hiddenSeq = difference(hiddenSeq, deleteSeq);
     }
@@ -176,9 +174,9 @@ export class Document {
 
   patchAt(version: number): Patch {
     const snapshot = this.snapshotAt(version);
-    const revision =
+    const rev =
       this.revisions[version] || this.revisions[this.revisions.length - 1];
-    let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
+    let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
     deleteSeq = expand(deleteSeq, insertSeq);
     const hiddenSeq = difference(snapshot.hiddenSeq, deleteSeq);
     insertSeq = shrink(insertSeq, hiddenSeq);
@@ -196,8 +194,8 @@ export class Document {
     );
   }
 
-  apply(revision: Revision, snapshot: Snapshot = this.snapshot): Snapshot {
-    let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
+  apply(rev: Revision, snapshot: Snapshot = this.snapshot): Snapshot {
+    let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
     let { visible, hidden, hiddenSeq } = snapshot;
 
     if (count(deleteSeq, true) > 0) {
@@ -221,32 +219,32 @@ export class Document {
     version: number = this.revisions.length - 1,
   ): void {
     if (version < 0 || version > this.revisions.length - 1) {
-      throw new Error("Version out of range");
+      throw new Error("version out of range");
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     const hiddenSeq = this.hiddenSeqAt(version);
     [, insertSeq] = interleave(hiddenSeq, insertSeq);
     deleteSeq = expand(deleteSeq, hiddenSeq);
-    let revision: Revision = {
+    let rev: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
       client: this.client.id,
       priority,
       local: this.local,
       latest: this.latest,
     };
-    [revision] = rebase(
-      revision,
+    [rev] = rebase(
+      rev,
       this.revisions.slice(version + 1),
       this.snapshot.hiddenSeq,
     );
-    this.snapshot = this.apply(revision);
-    this.revisions.push(revision);
+    this.snapshot = this.apply(rev);
+    this.revisions.push(rev);
     this.client.save(this.id);
   }
 
   revert(version: number): void {
-    const [revision, ...revisions] = this.revisions.slice(version);
-    let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(revision.patch);
+    const [rev, ...revisions] = this.revisions.slice(version);
+    let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(rev.patch);
     insertSeq = expand(insertSeq, deleteSeq);
     const insertSeq1 = summarize(revisions);
     deleteSeq = expand(deleteSeq, insertSeq1);
@@ -254,69 +252,60 @@ export class Document {
     const { visible, hidden, hiddenSeq } = this.snapshot;
     const [inserted] = split(merge(hidden, visible, hiddenSeq), insertSeq);
     [, insertSeq] = interleave(insertSeq, insertSeq);
-    const revision1: Revision = {
+    const rev1: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
       client: this.client.id,
       local: this.local,
       latest: this.latest,
     };
-    this.snapshot = this.apply(revision1);
-    this.revisions.push(revision1);
+    this.snapshot = this.apply(rev1);
+    this.revisions.push(rev1);
     this.client.save(this.id);
   }
 
-  ingest(revision: Revision): void {
+  ingest(rev: Revision): void {
     // TODO: move this logic to clients?
-    if (revision.global == null) {
-      throw new Error("Missing revision version");
-    } else if (
-      this.latest < revision.latest ||
-      this.latest + 1 < revision.global
-    ) {
+    if (rev.global == null) {
+      throw new Error("Missing version");
+    } else if (this.latest < rev.latest || this.latest + 1 < rev.global) {
       // TODO: attempt repair
       throw new Error("Missing revision");
-    } else if (revision.global <= this.latest) {
+    } else if (rev.global <= this.latest) {
       return;
-    } else if (revision.client === this.client.id) {
+    } else if (rev.client === this.client.id) {
       this.local++;
-      this.latest = revision.global;
+      this.latest = rev.global;
       return;
     }
-    let latest = Math.max(revision.latest, 0);
+    let latest = Math.max(rev.latest, 0);
     for (let v = this.latest; v >= latest; v--) {
-      if (revision.client === this.revisions[v].client) {
+      if (rev.client === this.revisions[v].client) {
         latest = v;
         break;
       }
     }
-    let { inserted, insertSeq, deleteSeq } = factor(revision.patch);
-    if (revision.latest > -1 && revision.latest < latest) {
-      const revisions = this.revisions.slice(revision.latest + 1, latest + 1);
-      const baseInsertSeq = summarize(revisions, revision.client);
-      insertSeq = expand(insertSeq, baseInsertSeq);
-      deleteSeq = expand(deleteSeq, baseInsertSeq);
+    let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
+    if (rev.latest > -1 && rev.latest < latest) {
+      const revisions = this.revisions.slice(rev.latest + 1, latest + 1);
+      // TODO: cache or memoize this for performance
+      const insertSeq1 = summarize(revisions, rev.client);
+      insertSeq = expand(insertSeq, insertSeq1);
+      deleteSeq = expand(deleteSeq, insertSeq1);
     }
-    revision = {
-      ...revision,
-      patch: synthesize({ inserted, insertSeq, deleteSeq }),
-    };
+    rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
     let revisions = this.revisions.slice(latest + 1, this.latest + 1);
-    [revision] = rebase(revision, revisions, this.hiddenSeqAt(this.latest));
+    [rev] = rebase(rev, revisions, this.hiddenSeqAt(this.latest));
     revisions = this.revisions.slice(this.latest + 1);
-    this.revisions.splice(this.latest + 1, revisions.length, revision);
-    [revision, revisions] = rebase(
-      revision,
-      revisions,
-      this.snapshot.hiddenSeq,
-    );
+    this.revisions.splice(this.latest + 1, revisions.length, rev);
+    [rev, revisions] = rebase(rev, revisions, this.snapshot.hiddenSeq);
     this.revisions = this.revisions.concat(revisions);
-    this.snapshot = this.apply(revision);
-    this.latest = revision.global!;
+    this.snapshot = this.apply(rev);
+    this.latest = rev.global!;
   }
 
   get pending(): Revision[] {
-    return this.revisions.slice(this.latest + 1).map((revision, i) => ({
-      ...revision,
+    return this.revisions.slice(this.latest + 1).map((rev, i) => ({
+      ...rev,
       local: this.local + i,
       latest: this.latest,
     }));
@@ -398,8 +387,8 @@ export class Client {
     }
     const updates = await this.connection.updates(id, doc.snapshot.version);
     for await (const revisions of updates) {
-      for (const revision of revisions) {
-        doc.ingest(revision);
+      for (const rev of revisions) {
+        doc.ingest(rev);
       }
     }
   }
@@ -472,46 +461,41 @@ export class InMemoryStorage implements Connection {
     return snapshots[0];
   }
 
-  saveRevision(id: string, revision: Revision): Revision {
+  saveRevision(id: string, rev: Revision): Revision {
     const clientVersions: Record<string, number> = this.clientVersionsById[id];
     if (clientVersions == null) {
-      if (revision.local !== 0) {
+      if (rev.local !== 0) {
         throw new Error("Unknown document");
       }
       this.clientVersionsById[id] = {};
-      this.clientVersionsById[id][revision.client] = revision.local;
-      revision = { ...revision, global: 0 };
-      this.revisionsById[id] = [revision];
+      this.clientVersionsById[id][rev.client] = rev.local;
+      rev = { ...rev, global: 0 };
+      this.revisionsById[id] = [rev];
       this.snapshotsById[id] = [];
       this.channelsById[id] = [];
-      return revision;
+      return rev;
     }
     const expectedLocalVersion =
-      clientVersions[revision.client] == null
-        ? 0
-        : clientVersions[revision.client] + 1;
-    // TODO: reject revision if latest is too far off current version
+      clientVersions[rev.client] == null ? 0 : clientVersions[rev.client] + 1;
+    // TODO: reject rev if latest is too far off current version
     // TODO: reject if we don’t have a recent-enough snapshot
-    if (revision.local > expectedLocalVersion) {
-      throw new Error("Missing revision");
-    } else if (revision.local < expectedLocalVersion) {
-      if (
-        revision.global === 0 &&
-        revision.client !== this.revisionsById[id][0].client
-      ) {
+    if (rev.local > expectedLocalVersion) {
+      throw new Error("Missing rev");
+    } else if (rev.local < expectedLocalVersion) {
+      if (rev.global === 0 && rev.client !== this.revisionsById[id][0].client) {
         throw new Error("Document already exists");
       }
-      return revision;
+      return rev;
     }
-    revision = { ...revision, global: this.revisionsById[id].length };
-    this.revisionsById[id].push(revision);
-    clientVersions[revision.client] = revision.local;
-    return revision;
+    rev = { ...rev, global: this.revisionsById[id].length };
+    this.revisionsById[id].push(rev);
+    clientVersions[rev.client] = rev.local;
+    return rev;
   }
 
   // TODO: run this in a transaction
   async sendRevisions(id: string, revisions: Revision[]): Promise<Revision[]> {
-    revisions = revisions.map((revision) => this.saveRevision(id, revision));
+    revisions = revisions.map((rev) => this.saveRevision(id, rev));
     this.channelsById[id].map(async (channel, i) => {
       try {
         await channel.put(revisions);

@@ -260,8 +260,8 @@ describe("Document", () => {
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       let global = 0;
-      for (const revision of doc1.pending) {
-        doc1.ingest({ ...revision, global });
+      for (const rev of doc1.pending) {
+        doc1.ingest({ ...rev, global });
         global += 1;
       }
       const doc2 = doc1.clone(client2);
@@ -270,9 +270,9 @@ describe("Document", () => {
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
       const revisions = doc1.pending.concat(doc2.pending);
-      for (const revision of revisions) {
-        doc1.ingest({ ...revision, global });
-        doc2.ingest({ ...revision, global });
+      for (const rev of revisions) {
+        doc1.ingest({ ...rev, global });
+        doc2.ingest({ ...rev, global });
         global += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
@@ -284,8 +284,8 @@ describe("Document", () => {
       const client2 = new Client("id2", new InMemoryStorage());
       const doc1 = Document.create("doc1", client1, "hello world");
       let global = 0;
-      for (const revision of doc1.pending) {
-        doc1.ingest({ ...revision, global });
+      for (const rev of doc1.pending) {
+        doc1.ingest({ ...rev, global });
         global += 1;
       }
       const doc2 = doc1.clone(client2);
@@ -294,9 +294,9 @@ describe("Document", () => {
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
       doc2.edit([0, 11, 12]);
       const revisions = doc2.pending.concat(doc1.pending);
-      for (const revision of revisions) {
-        doc1.ingest({ ...revision, global });
-        doc2.ingest({ ...revision, global });
+      for (const rev of revisions) {
+        doc1.ingest({ ...rev, global });
+        doc2.ingest({ ...rev, global });
         global += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
@@ -313,10 +313,7 @@ describe("InMemoryStorage", () => {
       const storage = new InMemoryStorage();
       doc.edit([0, 11, "!", 11]);
       doc.edit(["goodbye", 5, 12]);
-      const revisions = await storage.sendRevisions(
-        doc.id,
-        doc.pending,
-      );
+      const revisions = await storage.sendRevisions(doc.id, doc.pending);
       const revisions1 = await storage.fetchRevisions(doc.id);
       expect(revisions).toEqual(revisions1);
     });
@@ -343,13 +340,10 @@ describe("InMemoryStorage", () => {
       const client = new Client("id1", new InMemoryStorage());
       const doc = Document.create("doc1", client, "hello world");
       const storage = new InMemoryStorage();
-      const revisions = await storage.sendRevisions(
-        doc.id,
-        doc.pending,
-      );
+      const revisions = await storage.sendRevisions(doc.id, doc.pending);
       let global = 0;
-      for (const revision of revisions) {
-        doc.ingest({ ...revision, global });
+      for (const rev of revisions) {
+        doc.ingest({ ...rev, global });
         global += 1;
       }
       const updates = await storage.updates(doc.id);
@@ -362,12 +356,9 @@ describe("InMemoryStorage", () => {
       })();
       doc.edit([0, 11, "!", 11]);
       doc.edit(["H", 1, 6, "W", 7, 12]);
-      const revisions1 = await storage.sendRevisions(
-        doc.id,
-        doc.pending,
-      );
-      for (const revision of revisions1) {
-        doc.ingest({ ...revision, global });
+      const revisions1 = await storage.sendRevisions(doc.id, doc.pending);
+      for (const rev of revisions1) {
+        doc.ingest({ ...rev, global });
         global += 1;
       }
       storage.close(doc.id);
@@ -412,9 +403,7 @@ describe("Client", () => {
       const doc = await client.createDocument("doc1", "hello world");
       doc.edit([0, 11, "!", 11]);
       doc.edit([0, 11, 12]);
-      const revisions = doc
-        .pending
-        .map((revision, global) => ({ ...revision, global }));
+      const revisions = doc.pending.map((rev, global) => ({ ...rev, global }));
       await client.save(doc.id, { force: true });
       await expect(storage.fetchRevisions(doc.id)).resolves.toEqual(revisions);
     });
