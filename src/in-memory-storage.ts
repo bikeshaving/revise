@@ -97,20 +97,10 @@ export class InMemoryStorage implements Connection {
       throw new Error("Unknown document");
     }
     const snapshots = this.snapshotsById[id];
-    if (!snapshots.length) {
-      snapshots.push(snapshot);
-      return snapshot;
-    }
-    for (let i = snapshots.length - 1; i > 0; i--) {
-      const snapshot1 = snapshots[i];
-      if (snapshot1.version === snapshot.version) {
-        return snapshot;
-      } else if (snapshot1.version < snapshot.version) {
-        snapshots.splice(i + 1, 0, snapshot);
-        return snapshot;
-      }
-    }
-    snapshots.unshift(snapshot);
+    // TODO: use binary search or a quick sort algorithm
+    // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
+    snapshots.push(snapshot);
+    snapshots.sort((a, b) => a.version - b.version);
     return snapshot;
   }
 

@@ -13,9 +13,7 @@ export class Client {
   protected pending: Set<string> = new Set();
   protected pollTimeout: any;
   protected saveResolves: (() => void)[] = [];
-  constructor(public id: string, public connection: Connection) {
-    this.poll();
-  }
+  constructor(public id: string, public connection: Connection) {}
 
   save(id: string, options: { force?: boolean } = {}): Promise<void> {
     this.pending.add(id);
@@ -82,9 +80,8 @@ export class Client {
   }
 
   async createDocument(id: string, initial?: string): Promise<Document> {
-    const doc = Document.create(id, this, initial);
+    const doc = Document.create(this.id, initial);
     this.documents[id] = doc;
-    this.save(doc.id, { force: true });
     return doc;
   }
 
@@ -97,7 +94,7 @@ export class Client {
       id,
       snapshot.version,
     );
-    const doc = Document.from(id, this, snapshot, revisions);
+    const doc = Document.from(this.id, snapshot, revisions);
     this.documents[id] = doc;
     return doc;
   }

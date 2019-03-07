@@ -1,12 +1,9 @@
 import { Document } from "../document";
-import { Client } from "../client";
-import { InMemoryStorage } from "../in-memory-storage";
 
 describe("Document", () => {
   describe("Document.hiddenSeqAt", () => {
     test("concurrent revisions", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
@@ -20,8 +17,7 @@ describe("Document", () => {
 
   describe("Document.snapshotAt", () => {
     test("concurrent revisions", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
@@ -55,8 +51,7 @@ describe("Document", () => {
 
   describe("patchAt", () => {
     test("visible", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([0, 11, "!", 11]);
       doc.edit([0, 5, "_", 6, 12]);
       doc.edit([0, 11, 12]);
@@ -69,8 +64,7 @@ describe("Document", () => {
 
   describe("Document.edit", () => {
     test("simple", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       expect(doc.snapshot).toEqual({
         visible: "herald",
@@ -81,24 +75,21 @@ describe("Document", () => {
     });
 
     test("sequential 1", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit([0, 6, "ry", 6]);
       expect(doc.snapshot.visible).toEqual("heraldry");
     });
 
     test("sequential 2", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       expect(doc.snapshot.visible).toEqual("Hello, Brian");
     });
 
     test("sequential 3", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
@@ -106,16 +97,14 @@ describe("Document", () => {
     });
 
     test("concurrent 1", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([0, 1, "era", 9, 11]);
       doc.edit(["Great H", 2, 5, 11], 1, 0);
       expect(doc.snapshot.visible).toEqual("Great Hera");
     });
 
     test("concurrent 2", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
       doc.edit([0, 5, ", Dr. Evil", 11], 1, 1);
@@ -123,8 +112,7 @@ describe("Document", () => {
     });
 
     test("concurrent 3", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
@@ -137,8 +125,7 @@ describe("Document", () => {
     });
 
     test("concurrent 4", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5], 1);
       doc.edit(["goodbye ", 0, 5], undefined, 1);
@@ -151,8 +138,7 @@ describe("Document", () => {
     });
 
     test("concurrent 5", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit([6, 11]);
       doc.edit(["hey ", 0, 5]);
       doc.edit(["goodbye ", 6, 11], 1, 0);
@@ -165,8 +151,7 @@ describe("Document", () => {
     });
 
     test("concurrent 6", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       //"hello world"
       // ===========++++
       doc.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
@@ -181,8 +166,7 @@ describe("Document", () => {
 
   describe("Document.revert", () => {
     test("simple", () => {
-      const client = new Client("id1", new InMemoryStorage());
-      const doc = Document.create("doc1", client, "hello world");
+      const doc = Document.create("client1", "hello world");
       doc.edit(["goodbye", 5, 11]);
       doc.edit([0, 13, "s", 13]);
       doc.revert(1);
@@ -192,12 +176,10 @@ describe("Document", () => {
 
   describe("Document.ingest", () => {
     test("simple 1", () => {
-      const client1 = new Client("id1", new InMemoryStorage());
-      const client2 = new Client("id2", new InMemoryStorage());
-      const doc1 = Document.create("doc1", client1, "hello world");
+      const doc1 = Document.create("client1", "hello world");
       const [revision1] = doc1.pending;
       doc1.ingest({ ...revision1, global: 0 });
-      const doc2 = doc1.clone(client2);
+      const doc2 = doc1.clone("client2");
       doc1.edit(["goodbye", 5, 11]);
       doc1.edit([0, 13, "s", 13]);
       doc2.edit([0, 5, "_", 6, 11]);
@@ -213,12 +195,10 @@ describe("Document", () => {
     });
 
     test("simple 2", () => {
-      const client1 = new Client("id1", new InMemoryStorage());
-      const client2 = new Client("id2", new InMemoryStorage());
-      const doc1 = Document.create("doc1", client1, "hello world");
+      const doc1 = Document.create("client1", "hello world");
       const [revision1] = doc1.pending;
       doc1.ingest({ ...revision1, global: 0 });
-      const doc2 = doc1.clone(client2);
+      const doc2 = doc1.clone("client2");
       doc1.edit(["goodbye", 5, 11]);
       const [revision2] = doc1.pending;
       doc1.ingest({ ...revision2, global: 1 });
@@ -237,12 +217,10 @@ describe("Document", () => {
     });
 
     test("idempotent", () => {
-      const client1 = new Client("id1", new InMemoryStorage());
-      const client2 = new Client("id2", new InMemoryStorage());
-      const doc1 = Document.create("doc1", client1, "hello world");
+      const doc1 = Document.create("client1", "hello world");
       const [revision1] = doc1.pending;
       doc1.ingest({ ...revision1, global: 0 });
-      const doc2 = doc1.clone(client2);
+      const doc2 = doc1.clone("client2");
       doc1.edit(["goodbye", 5, 11]);
       const [revision2] = doc1.pending;
       doc2.ingest({ ...revision2, global: 1 });
@@ -259,15 +237,13 @@ describe("Document", () => {
     });
 
     test("concurrent 1", () => {
-      const client1 = new Client("id1", new InMemoryStorage());
-      const client2 = new Client("id2", new InMemoryStorage());
-      const doc1 = Document.create("doc1", client1, "hello world");
+      const doc1 = Document.create("client1", "hello world");
       let global = 0;
       for (const rev of doc1.pending) {
         doc1.ingest({ ...rev, global });
         global += 1;
       }
-      const doc2 = doc1.clone(client2);
+      const doc2 = doc1.clone("client2");
       doc1.edit(["H", 1, 6, "W", 7, 11]);
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);
@@ -283,15 +259,13 @@ describe("Document", () => {
     });
 
     test("concurrent 2", () => {
-      const client1 = new Client("id1", new InMemoryStorage());
-      const client2 = new Client("id2", new InMemoryStorage());
-      const doc1 = Document.create("doc1", client1, "hello world");
+      const doc1 = Document.create("client1", "hello world");
       let global = 0;
       for (const rev of doc1.pending) {
         doc1.ingest({ ...rev, global });
         global += 1;
       }
-      const doc2 = doc1.clone(client2);
+      const doc2 = doc1.clone("client2");
       doc1.edit(["H", 1, 6, "W", 7, 11]);
       doc1.edit([0, 5, 6, 11]);
       doc2.edit([0, 5, "_", 6, 11, "!", 11]);

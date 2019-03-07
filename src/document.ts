@@ -1,5 +1,3 @@
-// TODO: delete circular import
-import { Client } from "./client";
 import { factor, Patch, synthesize } from "./patch";
 import {
   clear,
@@ -48,6 +46,7 @@ export function compare(rev1: Revision, rev2: Revision): number {
   return 0;
 }
 
+// TODO: make this a method instead?
 export function rebase(
   rev: Revision,
   revisions: Revision[],
@@ -80,6 +79,7 @@ export function rebase(
         insertSeq: insertSeq1,
         deleteSeq: deleteSeq1,
       }),
+      latest: rev.global == null ? rev1.latest : rev.global,
     });
   }
   deleteSeq = difference(deleteSeq, hiddenSeq);
@@ -87,6 +87,8 @@ export function rebase(
   return [rev, revisions1];
 }
 
+// TODO: make this a method instead?
+// TODO: cache or memoize this
 export function summarize(revisions: Revision[], client?: string): Subseq {
   if (!revisions.length) {
     throw new Error("Empty revisions");
@@ -105,14 +107,9 @@ export function summarize(revisions: Revision[], client?: string): Subseq {
   return insertSeq;
 }
 
-// TODO: remove all references to clients in Document and rename to Replica and create a more user-friendly Document to expose to developers
-// TODO: add or cache factored patches to improve performance
 export class Document {
   constructor(
-    // TODO: document doesn’t need to know its own id
-    public id: string,
-    // TODO: document doesn’t need to know its own client
-    public client: Client,
+    public client: string,
     public snapshot: Snapshot,
     // TODO: make revisions a sparse array
     public revisions: Revision[],
@@ -120,31 +117,27 @@ export class Document {
     public local = 0,
   ) {}
 
-  static create(id: string, client: Client, initial: string = ""): Document {
+  static create(client: string, initial: string = ""): Document {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
       hiddenSeq: empty(initial.length),
       version: 0,
     };
-    const rev: Revision = {
-      patch: synthesize({ inserted: initial, insertSeq: full(initial.length) }),
-      // TODO: pass in client id
-      client: client.id,
-      priority: 0,
-      local: 0,
-      latest: -1,
-    };
-    return new Document(id, client, snapshot, [rev]);
+    const patch = synthesize({
+      inserted: initial,
+      insertSeq: full(initial.length),
+    });
+    const rev: Revision = { patch, client, local: 0, latest: -1 };
+    return new Document(client, snapshot, [rev], -1, 1);
   }
 
   static from(
-    id: string,
-    client: Client,
+    client: string,
     snapshot: Snapshot,
     revisions: Revision[] = [],
   ): Document {
-    const doc = new Document(id, client, snapshot, [], snapshot.version);
+    const doc = new Document(client, snapshot, [], snapshot.version);
     for (const rev of revisions) {
       doc.ingest(rev);
     }
@@ -187,9 +180,11 @@ export class Document {
     return synthesize({ inserted, insertSeq, deleteSeq });
   }
 
-  clone(client: Client = this.client): Document {
+  clone(client: string): Document {
+    if (client === this.client) {
+      throw new Error("Cannot have multiple clients per Document");
+    }
     return new Document(
-      this.id,
       client,
       { ...this.snapshot },
       this.revisions.slice(),
@@ -219,32 +214,30 @@ export class Document {
   edit(
     patch: Patch,
     priority?: number,
-    version: number = this.revisions.length - 1,
+    parent: number = this.revisions.length - 1,
   ): Revision {
-    if (version < 0 || version > this.revisions.length - 1) {
-      throw new Error("version out of range");
+    if (parent < 0 || parent > this.revisions.length - 1) {
+      throw new RangeError("parent out of range");
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
-    const hiddenSeq = this.hiddenSeqAt(version);
+    const hiddenSeq = this.hiddenSeqAt(parent);
     [, insertSeq] = interleave(hiddenSeq, insertSeq);
     deleteSeq = expand(deleteSeq, hiddenSeq);
     let rev: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
-      // TODO: pass in client id
-      client: this.client.id,
+      client: this.client,
       priority,
       local: this.local,
       latest: this.latest,
     };
     [rev] = rebase(
       rev,
-      this.revisions.slice(version + 1),
+      this.revisions.slice(parent + 1),
       this.snapshot.hiddenSeq,
     );
     this.snapshot = this.apply(rev);
     this.revisions.push(rev);
-    // TODO: remove
-    this.client.save(this.id);
+    this.local++;
     return rev;
   }
 
@@ -260,29 +253,28 @@ export class Document {
     [, insertSeq] = interleave(insertSeq, insertSeq);
     rev = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
-      client: rev.client,
+      client: this.client,
       local: this.local,
       latest: this.latest,
     };
     this.snapshot = this.apply(rev);
     this.revisions.push(rev);
-    // TODO: remove
-    this.client.save(this.id);
+    this.local++;
     return rev;
   }
 
   ingest(rev: Revision): Revision {
     // TODO: move this logic to clients?
     if (rev.global == null) {
-      throw new Error("Missing version");
+      throw new Error("Revision missing global version");
     } else if (this.latest < rev.latest || this.latest + 1 < rev.global) {
       // TODO: attempt repair
       throw new Error("Missing revision");
     } else if (rev.global <= this.latest) {
       return rev;
-      // TODO: pass in client id
-    } else if (rev.client === this.client.id) {
-      this.local++;
+    } else if (rev.client === this.client) {
+      // TODO: make sure revision is the same
+      this.revisions[rev.global].global = rev.global;
       this.latest = rev.global;
       return rev;
     }
@@ -314,10 +306,6 @@ export class Document {
   }
 
   get pending(): Revision[] {
-    return this.revisions.slice(this.latest + 1).map((rev, i) => ({
-      ...rev,
-      local: this.local + i,
-      latest: this.latest,
-    }));
+    return this.revisions.slice(this.latest + 1);
   }
 }
