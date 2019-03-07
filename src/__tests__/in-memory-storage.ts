@@ -1,10 +1,10 @@
 import { InMemoryStorage } from "../in-memory-storage";
-import { Document, Revision } from "../document";
+import { Replica, Revision } from "../replica";
 
 describe("InMemoryStorage", () => {
   describe("sendRevisions", () => {
     test("send and fetch revisions", async () => {
-      const doc = Document.create("client1", "hello world");
+      const doc = Replica.create("client1", "hello world");
       const storage = new InMemoryStorage();
       doc.edit([0, 11, "!", 11]);
       doc.edit(["goodbye", 5, 12]);
@@ -14,7 +14,7 @@ describe("InMemoryStorage", () => {
     });
 
     test("send and fetch snapshots", async () => {
-      const doc = Document.create("client1", "hello world");
+      const doc = Replica.create("client1", "hello world");
       const storage = new InMemoryStorage();
       doc.edit([0, 11, "!", 11]);
       await storage.sendRevisions("doc1", doc.pending);
@@ -31,7 +31,7 @@ describe("InMemoryStorage", () => {
 
   describe("updates", () => {
     test("subscribe", async () => {
-      const doc = Document.create("client1", "hello world");
+      const doc = Replica.create("client1", "hello world");
       const storage = new InMemoryStorage();
       storage.sendRevisions("doc1", doc.pending);
       const updates = await storage.updates("doc1");

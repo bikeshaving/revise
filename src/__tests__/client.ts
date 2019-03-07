@@ -1,6 +1,7 @@
 import { Client } from "../client";
 import { InMemoryStorage } from "../in-memory-storage";
 
+// TODO: unskip this
 describe.skip("Client", () => {
   describe("saves", () => {
     test("save", async () => {

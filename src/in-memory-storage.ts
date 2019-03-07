@@ -1,6 +1,6 @@
 import { Channel, FixedBuffer } from "./channel";
 import { Connection } from "./client";
-import { Snapshot, Revision } from "./document";
+import { Snapshot, Revision } from "./replica";
 
 export class InMemoryStorage implements Connection {
   protected clientVersionsById: Record<string, Record<string, number>> = {};

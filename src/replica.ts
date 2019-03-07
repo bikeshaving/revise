@@ -107,7 +107,7 @@ export function summarize(revisions: Revision[], client?: string): Subseq {
   return insertSeq;
 }
 
-export class Document {
+export class Replica {
   constructor(
     public client: string,
     public snapshot: Snapshot,
@@ -117,7 +117,7 @@ export class Document {
     public local = 0,
   ) {}
 
-  static create(client: string, initial: string = ""): Document {
+  static create(client: string, initial: string = ""): Replica {
     const snapshot: Snapshot = {
       visible: initial,
       hidden: "",
@@ -129,15 +129,15 @@ export class Document {
       insertSeq: full(initial.length),
     });
     const rev: Revision = { patch, client, local: 0, latest: -1 };
-    return new Document(client, snapshot, [rev], -1, 1);
+    return new Replica(client, snapshot, [rev], -1, 1);
   }
 
   static from(
     client: string,
     snapshot: Snapshot,
     revisions: Revision[] = [],
-  ): Document {
-    const doc = new Document(client, snapshot, [], snapshot.version);
+  ): Replica {
+    const doc = new Replica(client, snapshot, [], snapshot.version);
     for (const rev of revisions) {
       doc.ingest(rev);
     }
@@ -180,11 +180,11 @@ export class Document {
     return synthesize({ inserted, insertSeq, deleteSeq });
   }
 
-  clone(client: string): Document {
+  clone(client: string): Replica {
     if (client === this.client) {
-      throw new Error("Cannot have multiple clients per Document");
+      throw new Error("Cannot have multiple clients per Replica");
     }
-    return new Document(
+    return new Replica(
       client,
       { ...this.snapshot },
       this.revisions.slice(),

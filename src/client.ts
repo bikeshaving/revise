@@ -1,4 +1,4 @@
-import { Document, Revision, Snapshot } from "./document";
+import { Replica, Revision, Snapshot } from "./Replica";
 
 export interface Connection {
   fetchSnapshot(id: string, min?: number): Promise<Snapshot>;
@@ -9,60 +9,19 @@ export interface Connection {
 }
 
 export class Client {
-  protected documents: Record<string, Document> = {};
-  protected pending: Set<string> = new Set();
-  protected pollTimeout: any;
-  protected saveResolves: (() => void)[] = [];
+  protected documents: Record<string, Replica> = {};
   constructor(public id: string, public connection: Connection) {}
 
-  save(id: string, options: { force?: boolean } = {}): Promise<void> {
-    this.pending.add(id);
-    if (options.force) {
-      return this.sync();
-    }
-    return this.whenSynced();
-  }
-
   async sync(): Promise<void> {
-    if (this.pending.size) {
-      await Promise.all(
-        Array.from(this.pending).map(async (id) => {
-          const doc = this.documents[id];
-          if (doc) {
-            // TODO: error recovery
-            await this.connection.sendRevisions(id, doc.pending);
-          }
-          this.pending.delete(id);
-        }),
-      );
-      this.saveResolves.forEach((resolve) => resolve());
-      this.saveResolves = [];
-    }
-  }
-
-  whenSynced(): Promise<void> {
-    if (this.pending.size) {
-      return new Promise((resolve) => {
-        this.saveResolves.push(resolve);
-      });
-    }
-    return Promise.resolve();
-  }
-
-  hasPending(): boolean {
-    return !!this.pending.size;
-  }
-
-  protected pollInternal = async () => {
-    await this.sync();
-    this.pollTimeout = setTimeout(this.pollInternal, 4000);
-  };
-
-  poll(): void {
-    if (this.pollTimeout) {
-      return;
-    }
-    this.pollInternal();
+    await Promise.all(
+      Object.keys(this.documents).map(async (id) => {
+        const pending = this.documents[id] && this.documents[id].pending;
+        if (pending && pending.length) {
+          // TODO: error recovery
+          await this.connection.sendRevisions(id, pending);
+        }
+      }),
+    );
   }
 
   // TODO: when to connect to the document?
@@ -79,13 +38,13 @@ export class Client {
     }
   }
 
-  async createDocument(id: string, initial?: string): Promise<Document> {
-    const doc = Document.create(this.id, initial);
+  async createDocument(id: string, initial?: string): Promise<Replica> {
+    const doc = Replica.create(this.id, initial);
     this.documents[id] = doc;
     return doc;
   }
 
-  async getDocument(id: string): Promise<Document> {
+  async getDocument(id: string): Promise<Replica> {
     if (this.documents[id]) {
       return this.documents[id];
     }
@@ -94,7 +53,7 @@ export class Client {
       id,
       snapshot.version,
     );
-    const doc = Document.from(this.id, snapshot, revisions);
+    const doc = Replica.from(this.id, snapshot, revisions);
     this.documents[id] = doc;
     return doc;
   }
