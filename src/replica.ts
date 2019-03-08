@@ -83,23 +83,20 @@ export class Replica {
     return doc;
   }
 
-  protected apply(rev: Revision, snapshot: Snapshot = this.snapshot): Snapshot {
+  protected apply(rev: Revision): void {
     let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-    let { visible, hidden, hiddenSeq } = snapshot;
-
+    let { visible, hidden, hiddenSeq, version } = this.snapshot;
     if (count(deleteSeq, true) > 0) {
       const hiddenSeq1 = union(hiddenSeq, deleteSeq);
       [hidden, visible] = shuffle(hidden, visible, hiddenSeq, hiddenSeq1);
       hiddenSeq = hiddenSeq1;
     }
-
     if (inserted.length) {
       hiddenSeq = expand(hiddenSeq, insertSeq);
       const insertSeq1 = shrink(insertSeq, hiddenSeq);
       visible = merge(inserted, visible, insertSeq1);
     }
-
-    return { visible, hidden, hiddenSeq, version: snapshot.version + 1 };
+    this.snapshot = { visible, hidden, hiddenSeq, version: version + 1 };
   }
 
   protected rebase(
@@ -241,7 +238,7 @@ export class Replica {
       latest: this.latest,
     };
     rev = this.rebase(rev, parent + 1);
-    this.snapshot = this.apply(rev);
+    this.apply(rev);
     this.revisions.push(rev);
     this.local++;
     return rev;
@@ -271,7 +268,7 @@ export class Replica {
       local: this.local,
       latest: this.latest,
     };
-    this.snapshot = this.apply(rev);
+    this.apply(rev);
     this.revisions.push(rev);
     this.local++;
     return rev;
@@ -309,7 +306,7 @@ export class Replica {
     rev = this.rebase(rev, latest + 1, this.latest + 1);
     this.revisions.splice(this.latest + 1, 0, rev);
     rev = this.rebase(rev, this.latest + 2, undefined, { mutate: true });
-    this.snapshot = this.apply(rev);
+    this.apply(rev);
     this.latest = rev.global!;
     return rev;
   }
