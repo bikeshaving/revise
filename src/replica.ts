@@ -14,6 +14,7 @@ import {
   split,
   Subseq,
 } from "./subseq";
+import { findLastIndex } from "./utils";
 
 export interface Snapshot {
   visible: string;
@@ -289,13 +290,11 @@ export class Replica {
       this.latest = rev.global;
       return rev;
     }
-    let latest = Math.max(rev.latest, 0);
-    for (let v = this.latest; v >= latest; v--) {
-      if (rev.client === this.revisions[v].client) {
-        latest = v;
-        break;
-      }
-    }
+    const latest = Math.max(
+      rev.latest,
+      findLastIndex(this.revisions, (rev1) => rev.client === rev1.client),
+      0,
+    );
     if (rev.latest > -1 && rev.latest < latest) {
       let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
       const insertSeq1 = this.summarize(rev.latest + 1, latest + 1, rev.client);
