@@ -15,8 +15,10 @@ export function flagAt(
 }
 
 export function push(subseq: Subseq, length: number, flag: boolean): number {
-  if (length <= 0) {
-    throw new Error("Cannot push empty segment");
+  if (length < 0) {
+    throw new RangeError("Negative length");
+  } else if (length === 0) {
+    return subseq.length;
   } else if (!subseq.length) {
     subseq.push(flag ? 1 : 0, length);
   } else {
@@ -93,9 +95,7 @@ export function count(subseq: Subseq, test?: boolean): number {
 
 export function empty(length: number): Subseq {
   const result: Subseq = [];
-  if (length) {
-    push(result, length, false);
-  }
+  push(result, length, false);
   return result;
 }
 
@@ -105,9 +105,7 @@ export function clear(subseq: Subseq): Subseq {
 
 export function full(length: number): Subseq {
   const result: Subseq = [];
-  if (length) {
-    push(result, length, true);
-  }
+  push(result, length, true);
   return result;
 }
 

@@ -86,10 +86,9 @@ export function factor(patch: Patch): FactoredPatch {
       // TODO: number less than consumed means we’re moving the segment
       if (p < consumed) {
         throw new Error("Malformed patch");
-      } else if (p > consumed) {
-        push(insertSeq, p - consumed, false);
-        push(deleteSeq, p - consumed, true);
       }
+      push(insertSeq, p - consumed, false);
+      push(deleteSeq, p - consumed, true);
       consumed = p;
       start = p;
     } else {
@@ -97,10 +96,8 @@ export function factor(patch: Patch): FactoredPatch {
       inserted += p;
     }
   }
-  if (length > consumed) {
-    push(insertSeq, length - consumed, false);
-    push(deleteSeq, length - consumed, true);
-  }
+  push(insertSeq, length - consumed, false);
+  push(deleteSeq, length - consumed, true);
   return { inserted, insertSeq, deleteSeq };
 }
 
