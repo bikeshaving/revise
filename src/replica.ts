@@ -200,11 +200,11 @@ export class Replica {
       return this.snapshot;
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
+    const merged = merge(hidden, visible, hiddenSeq);
     const insertSeq = this.summarize(version + 1);
-    let merged = merge(hidden, visible, hiddenSeq);
-    [, merged] = split(merged, insertSeq);
+    const [, merged1] = split(merged, insertSeq);
     const hiddenSeq1 = this.hiddenSeqAt(version);
-    [hidden, visible] = split(merged, hiddenSeq1);
+    [hidden, visible] = split(merged1, hiddenSeq1);
     return { visible, hidden, hiddenSeq: hiddenSeq1, version };
   }
 
@@ -303,9 +303,9 @@ export class Replica {
       rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
     }
     rev = this.rebase(rev, latest + 1, this.latest + 1);
+    const rev1 = this.rebase(rev, this.latest + 1, undefined, { mutate: true });
+    this.apply(rev1);
     this.revisions.splice(this.latest + 1, 0, rev);
-    rev = this.rebase(rev, this.latest + 2, undefined, { mutate: true });
-    this.apply(rev);
     this.latest = rev.global!;
     return rev;
   }
