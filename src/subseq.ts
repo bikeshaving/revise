@@ -334,3 +334,40 @@ export function shuffle(
 ): [string, string] {
   return split(merge(text1, text2, subseq1), subseq2);
 }
+
+export function compose(
+  text1: string,
+  text2: string,
+  subseq1: Subseq,
+  subseq2: Subseq,
+): [string, Subseq] {
+  let result = "";
+  let consumed1 = 0;
+  let consumed2 = 0;
+  subseq1 = expand(subseq1, subseq2);
+  for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
+    if (flag1) {
+      result += text1.slice(consumed1, consumed1 + length);
+      consumed1 += length;
+    }
+    if (flag2) {
+      result += text2.slice(consumed2, consumed2 + length);
+      consumed2 += length;
+    }
+  }
+  return [result, union(subseq1, subseq2)];
+}
+
+export function erase(text: string, subseq1: Subseq, subseq2: Subseq): string {
+  let result = "";
+  let consumed = 0;
+  for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
+    if (flag1) {
+      if (!flag2) {
+        result += text.slice(consumed, consumed + length);
+      }
+      consumed += length;
+    }
+  }
+  return result;
+}

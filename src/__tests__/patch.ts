@@ -1,5 +1,5 @@
 import * as subseq from "../subseq";
-import { apply, factor, Patch, synthesize } from "../patch";
+import { apply, factor, Patch, PatchBuilder, synthesize } from "../patch";
 describe("patch", () => {
   const text = "hello world";
   const p0: Patch = [0, 1, "era", 9, 11];
@@ -49,13 +49,17 @@ describe("patch", () => {
       }).toThrow();
     });
 
-    test("insertions after deletions throws", () => {
+    test("insertions after deletions are normalized", () => {
       const inserted = "bro";
-      const deleteSeq = [0, 6, 5];
       const insertSeq = [0, 11, 3];
-      expect(() => {
-        synthesize({ inserted, deleteSeq, insertSeq });
-      }).toThrow();
+      const deleteSeq = [0, 6, 5];
+      const patch = synthesize({ inserted, insertSeq, deleteSeq });
+      expect(patch).toEqual([0, 6, "bro", 11]);
+      expect(factor(patch)).toEqual({
+        inserted: "bro",
+        insertSeq: [0, 6, 3, 5],
+        deleteSeq: [0, 6, 5],
+      });
     });
 
     test("empty", () => {
@@ -111,6 +115,24 @@ describe("patch", () => {
           deleteSeq: subseq.shrink(insertSeq, deleteSeq1),
         }),
       ).toEqual(result);
+    });
+  });
+});
+
+describe("PatchBuilder", () => {
+  describe("replace", () => {
+    test("comprehensive", () => {
+      const builder = new PatchBuilder(11);
+      builder.replace(5, 6, "__");
+      expect(builder.patch).toEqual([0, 5, "__", 6, 11]);
+      builder.replace(0, 5, "Hi");
+      expect(builder.patch).toEqual(["Hi__", 6, 11]);
+      builder.replace(0, 4, "");
+      expect(builder.patch).toEqual([6, 11]);
+      builder.replace(3, 5, "m");
+      expect(builder.patch).toEqual([6, 9, "m", 11]);
+      builder.replace(0, 0, "goodbye ");
+      expect(builder.patch).toEqual(["goodbye ", 6, 9, "m", 11]);
     });
   });
 });

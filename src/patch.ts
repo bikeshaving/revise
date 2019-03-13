@@ -1,15 +1,5 @@
-import {
-  clear,
-  count,
-  empty,
-  expand,
-  flagAt,
-  merge,
-  push,
-  split,
-  Subseq,
-  zip,
-} from "./subseq";
+import { Subseq } from "./subseq";
+import * as subseq from "./subseq";
 
 // Patches are arrays of strings and numbers which represent changes to text.
 // Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result.
@@ -45,8 +35,8 @@ export type Patch = (string | number)[];
 
 export function apply(text: string, patch: Patch): string {
   const { inserted, insertSeq, deleteSeq } = factor(patch);
-  [, text] = split(text, deleteSeq);
-  return merge(inserted, text, insertSeq);
+  [, text] = subseq.split(text, deleteSeq);
+  return subseq.merge(inserted, text, insertSeq);
 }
 
 // TODO
@@ -78,8 +68,8 @@ export function factor(patch: Patch): FactoredPatch {
       if (typeof p !== "number" || p <= consumed || p > length) {
         throw new Error("Malformed patch");
       }
-      push(insertSeq, p - start, false);
-      push(deleteSeq, p - start, false);
+      subseq.push(insertSeq, p - start, false);
+      subseq.push(deleteSeq, p - start, false);
       consumed = p;
       start = undefined;
     } else if (typeof p === "number") {
@@ -87,39 +77,44 @@ export function factor(patch: Patch): FactoredPatch {
       if (p < consumed) {
         throw new Error("Malformed patch");
       }
-      push(insertSeq, p - consumed, false);
-      push(deleteSeq, p - consumed, true);
+      subseq.push(insertSeq, p - consumed, false);
+      subseq.push(deleteSeq, p - consumed, true);
       consumed = p;
       start = p;
     } else {
-      push(insertSeq, p.length, true);
+      subseq.push(insertSeq, p.length, true);
       inserted += p;
     }
   }
-  push(insertSeq, length - consumed, false);
-  push(deleteSeq, length - consumed, true);
+  subseq.push(insertSeq, length - consumed, false);
+  subseq.push(deleteSeq, length - consumed, true);
   return { inserted, insertSeq, deleteSeq };
 }
 
 export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
   let { inserted = "", insertSeq, deleteSeq } = patch;
-  insertSeq = insertSeq || (deleteSeq && clear(deleteSeq)) || [];
-  deleteSeq = deleteSeq || (insertSeq && empty(count(insertSeq, false))) || [];
+  insertSeq = insertSeq || (deleteSeq && subseq.clear(deleteSeq)) || [];
+  deleteSeq =
+    deleteSeq ||
+    (insertSeq && subseq.empty(subseq.count(insertSeq, false))) ||
+    [];
   return { inserted, insertSeq, deleteSeq };
 }
 
 export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let { inserted, insertSeq, deleteSeq } = complete(patch);
-  if (flagAt(insertSeq) && flagAt(deleteSeq)) {
-    throw new Error("Insertions after deletions");
-  }
   const result: Patch = [];
   let index = 0;
   let consumed = 0;
-  deleteSeq = expand(deleteSeq, insertSeq);
-  for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
+  deleteSeq = subseq.expand(deleteSeq, insertSeq);
+  for (const [length, iFlag, dFlag] of subseq.zip(insertSeq, deleteSeq)) {
     if (iFlag) {
-      result.push(inserted.slice(index, index + length));
+      const text = inserted.slice(index, index + length);
+      if (typeof result[result.length - 1] === "string") {
+        result[result.length - 1] = result[result.length - 1] + text;
+      } else {
+        result.push(text);
+      }
       index += length;
     } else {
       if (!dFlag) {
@@ -132,9 +127,66 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
     throw new Error("Length mismatch");
   }
   const last = result[result.length - 1];
-  const length = count(insertSeq, false);
+  const length = subseq.count(insertSeq, false);
   if (typeof last !== "number" || last < length) {
     result.push(length);
   }
   return result;
+}
+
+export function compose(patch1: Patch, patch2: Patch): Patch {
+  let {
+    inserted: inserted1,
+    insertSeq: insertSeq1,
+    deleteSeq: deleteSeq1,
+  } = factor(patch1);
+  let {
+    inserted: inserted2,
+    insertSeq: insertSeq2,
+    deleteSeq: deleteSeq2,
+  } = factor(patch2);
+  let hiddenSeq = subseq.expand(deleteSeq1, insertSeq1);
+  deleteSeq2 = subseq.expand(deleteSeq2, hiddenSeq, { union: true });
+  let reviveSeq = subseq.intersection(insertSeq1, deleteSeq2);
+  deleteSeq2 = subseq.shrink(deleteSeq2, insertSeq1);
+  [insertSeq2] = subseq.interleave(insertSeq2, hiddenSeq);
+  reviveSeq = subseq.expand(reviveSeq, insertSeq2);
+  [inserted2, insertSeq2] = subseq.compose(
+    inserted1,
+    inserted2,
+    insertSeq1,
+    insertSeq2,
+  );
+  inserted2 = subseq.erase(inserted2, insertSeq2, reviveSeq);
+  insertSeq2 = subseq.shrink(insertSeq2, reviveSeq);
+  return synthesize({
+    inserted: inserted2,
+    insertSeq: insertSeq2,
+    deleteSeq: deleteSeq2,
+  });
+}
+
+export class PatchBuilder {
+  public patch: Patch | undefined;
+  constructor(protected length: number) {}
+
+  replace(start: number, end: number, inserted: string): void {
+    if (end < start) {
+      throw new Error("end < start");
+    }
+    const length = inserted.length - (end - start);
+    let deleteSeq: Subseq = [];
+    subseq.push(deleteSeq, start, false);
+    subseq.push(deleteSeq, end - start, true);
+    subseq.push(deleteSeq, this.length - end, false);
+    let insertSeq: Subseq = [];
+    subseq.push(insertSeq, start, false);
+    subseq.push(insertSeq, inserted.length, true);
+    subseq.push(insertSeq, this.length - start, false);
+    const patch = synthesize({ inserted, insertSeq, deleteSeq });
+    // this is a prettier issue https://github.com/prettier/prettier/issues/5969
+    // prettier-ignore
+    this.patch = this.patch == null ? patch : compose(this.patch, patch);
+    this.length += length;
+  }
 }
