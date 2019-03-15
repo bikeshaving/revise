@@ -7,6 +7,7 @@ export interface Snapshot {
   visible: string;
   hidden: string;
   hiddenSeq: Subseq;
+  // TODO: move this property to its own interface
   version: number;
 }
 
@@ -14,6 +15,7 @@ export interface Revision {
   patch: Patch;
   client: string;
   priority?: number;
+  // TODO: move these properties to their own interface
   global?: number;
   local: number;
   latest: number;
@@ -42,12 +44,14 @@ export const INITIAL_SNAPSHOT: Snapshot = Object.freeze({
 });
 
 export class Replica {
+  // TODO: move this property to clients
   public latest: number;
   constructor(
     public client: string,
     public snapshot: Snapshot = INITIAL_SNAPSHOT,
-    // TODO: make revisions a sparse array
+    // TODO: allow revisions to be a sparse array
     public revisions: Revision[] = [],
+    // TODO: move this property to clients
     public local = 0,
   ) {
     this.latest = this.snapshot.version;
@@ -265,8 +269,10 @@ export class Replica {
     return rev;
   }
 
+  // TODO: pass in rev.latest, and maybe this.latest?
+  // ingest(rev: Revision, last: number): Revision {
   ingest(rev: Revision): Revision {
-    // TODO: move this logic to clients?
+    // TODO: move this logic to clients
     if (rev.global == null) {
       throw new Error("Revision missing global version");
     } else if (this.latest < rev.latest || this.latest + 1 < rev.global) {
@@ -275,7 +281,10 @@ export class Replica {
     } else if (rev.global <= this.latest) {
       return rev;
     } else if (rev.client === this.client) {
-      // TODO: make sure revision is the same
+      if (!this.revisions[rev.global]) {
+        throw new Error("Missing revision");
+      }
+      // TODO: integrity check to make sure revisions are the same
       this.revisions[rev.global].global = rev.global;
       this.latest = rev.global;
       return rev;
@@ -300,6 +309,7 @@ export class Replica {
     return rev;
   }
 
+  // TODO: freeze revisions that have been read
   get pending(): Revision[] {
     return this.revisions.slice(this.latest + 1);
   }

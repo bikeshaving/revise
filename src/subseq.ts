@@ -1,5 +1,5 @@
+// TODO: stop using flags and just have the first segment be false
 // [flag, ...lengths[]]
-// TODO: make subseq [boolean, ...number[]]?
 export type Subseq = number[];
 
 export function flagAt(
@@ -335,6 +335,7 @@ export function shuffle(
   return split(merge(text1, text2, subseq1), subseq2);
 }
 
+// TODO: rename/remove compose
 export function compose(
   text1: string,
   text2: string,
@@ -358,6 +359,7 @@ export function compose(
   return [result, union(subseq1, subseq2)];
 }
 
+// TODO: rename/remove erase
 export function erase(text: string, subseq1: Subseq, subseq2: Subseq): string {
   let result = "";
   let consumed = 0;

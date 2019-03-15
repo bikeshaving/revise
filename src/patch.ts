@@ -39,7 +39,7 @@ export function apply(text: string, patch: Patch): string {
   return subseq.merge(inserted, text, insertSeq);
 }
 
-// TODO
+// TODO: add moves interface
 // export interface Moves {
 //   [to: number]: Subseq;
 // }
@@ -64,7 +64,6 @@ export function factor(patch: Patch): FactoredPatch {
   let start: number | undefined;
   for (const p of patch) {
     if (start != null) {
-      // TODO: repeated number means we’re reviving a segment
       if (typeof p !== "number" || p <= consumed || p > length) {
         throw new Error("Malformed patch");
       }
@@ -73,7 +72,6 @@ export function factor(patch: Patch): FactoredPatch {
       consumed = p;
       start = undefined;
     } else if (typeof p === "number") {
-      // TODO: number less than consumed means we’re moving the segment
       if (p < consumed) {
         throw new Error("Malformed patch");
       }
