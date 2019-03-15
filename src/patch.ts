@@ -134,7 +134,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   return result;
 }
 
-export function compose(patch1: Patch, patch2: Patch): Patch {
+export function meld(patch1: Patch, patch2: Patch): Patch {
   let {
     inserted: inserted1,
     insertSeq: insertSeq1,
@@ -184,9 +184,7 @@ export class PatchBuilder {
     subseq.push(insertSeq, inserted.length, true);
     subseq.push(insertSeq, this.length - start, false);
     const patch = synthesize({ inserted, insertSeq, deleteSeq });
-    // this is a prettier issue https://github.com/prettier/prettier/issues/5969
-    // prettier-ignore
-    this.patch = this.patch == null ? patch : compose(this.patch, patch);
+    this.patch = this.patch == null ? patch : meld(this.patch, patch);
     this.length += length;
   }
 }

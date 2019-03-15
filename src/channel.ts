@@ -16,9 +16,7 @@ export class FixedBuffer<T> implements Buffer<T> {
     } else if (this.resolve != null) {
       return Promise.reject(new Error("Full buffer"));
     }
-    return new Promise((resolve) => {
-      this.resolve = resolve;
-    });
+    return new Promise((resolve) => (this.resolve = resolve));
   }
 
   take(): T | undefined {
