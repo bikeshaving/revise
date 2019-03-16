@@ -2,57 +2,58 @@ import { Replica } from "../Replica";
 
 describe("Replica", () => {
   describe("Replica.hiddenSeqAt", () => {
-    test("concurrent revisions", () => {
+    test("comprehensive", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
-      doc.edit([0, 5, ", Dr. Evil", 11], { priority: 1, version: 1 });
-      expect(doc.hiddenSeqAt(0)).toEqual([0, 11]);
-      expect(doc.hiddenSeqAt(1)).toEqual([0, 1, 1, 6, 1, 4]);
-      expect(doc.hiddenSeqAt(2)).toEqual([0, 1, 1, 11, 7]);
-      expect(doc.hiddenSeqAt(3)).toEqual([0, 1, 1, 21, 7]);
-      expect(doc.hiddenSeqAt(3)).toEqual(doc.snapshot.hiddenSeq);
+      doc.edit([0, 5, ", Dr. Evil", 11], { priority: 1, parent: 1 });
+      expect(doc.hiddenSeqAt(0)).toEqual([]);
+      expect(doc.hiddenSeqAt(1)).toEqual([0, 11]);
+      expect(doc.hiddenSeqAt(2)).toEqual([0, 1, 1, 6, 1, 4]);
+      expect(doc.hiddenSeqAt(3)).toEqual([0, 1, 1, 11, 7]);
+      expect(doc.hiddenSeqAt(4)).toEqual([0, 1, 1, 21, 7]);
+      expect(doc.hiddenSeqAt(4)).toEqual(doc.snapshot.hiddenSeq);
     });
   });
 
   describe("Replica.snapshotAt", () => {
-    test("concurrent revisions", () => {
+    test("comprehensive", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       doc.edit(["H", 1, 6, "W", 7, 11]);
       doc.edit([0, 5, ", Brian", 11]);
-      doc.edit([0, 5, ", Dr. Evil", 11], { priority: 1, version: 1 });
-      expect(doc.snapshotAt(0)).toEqual({
+      doc.edit([0, 5, ", Dr. Evil", 11], { priority: 1, parent: 1 });
+      expect(doc.snapshotAt(1)).toEqual({
         visible: "hello world",
         hidden: "",
         hiddenSeq: [0, 11],
-        version: 0,
-      });
-      expect(doc.snapshotAt(1)).toEqual({
-        visible: "Hello World",
-        hidden: "hw",
-        hiddenSeq: [0, 1, 1, 6, 1, 4],
         version: 1,
       });
       expect(doc.snapshotAt(2)).toEqual({
-        visible: "Hello, Brian",
-        hidden: "h Wworld",
-        hiddenSeq: [0, 1, 1, 11, 7],
+        visible: "Hello World",
+        hidden: "hw",
+        hiddenSeq: [0, 1, 1, 6, 1, 4],
         version: 2,
       });
       expect(doc.snapshotAt(3)).toEqual({
+        visible: "Hello, Brian",
+        hidden: "h Wworld",
+        hiddenSeq: [0, 1, 1, 11, 7],
+        version: 3,
+      });
+      expect(doc.snapshotAt(4)).toEqual({
         visible: "Hello, Brian, Dr. Evil",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 21, 7],
-        version: 3,
+        version: 4,
       });
-      expect(doc.snapshotAt(3)).toEqual(doc.snapshot);
+      expect(doc.snapshotAt(4)).toEqual(doc.snapshot);
     });
   });
 
   describe("patchAt", () => {
-    test("visible", () => {
+    test("comprehensive", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       doc.edit([0, 11, "!", 11]);
@@ -74,7 +75,7 @@ describe("Replica", () => {
         visible: "herald",
         hidden: "ello wor",
         hiddenSeq: [0, 4, 8, 2],
-        version: 1,
+        version: 2,
       });
     });
 
@@ -94,57 +95,43 @@ describe("Replica", () => {
       expect(doc.snapshot.visible).toEqual("Hello, Brian");
     });
 
-    test("sequential 3", () => {
+    test("concurrent 1", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       doc.edit([6, 11]);
       doc.edit(["hello ", 0, 5]);
-      doc.edit(["goodbye ", 6, 11], { priority: 1, version: 0 });
+      doc.edit(["goodbye ", 6, 11], { priority: 1, parent: 1 });
       expect(doc.snapshot.visible).toEqual("goodbye hello world");
-    });
-
-    test("concurrent 1", () => {
-      const doc = new Replica("client1");
-      doc.edit(["hello world", 0]);
-      doc.edit([0, 1, "era", 9, 11]);
-      doc.edit(["Great H", 2, 5, 11], { priority: 1, version: 0 });
-      expect(doc.snapshot.visible).toEqual("Great Hera");
     });
 
     test("concurrent 2", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
-      doc.edit(["H", 1, 6, "W", 7, 11]);
-      doc.edit([0, 5, ", Brian", 11]);
-      doc.edit([0, 5, ", Dr. Evil", 11], { priority: 1, version: 1 });
-      expect(doc.snapshot.visible).toEqual("Hello, Brian, Dr. Evil");
+      doc.edit([0, 1, "era", 9, 11]);
+      doc.edit(["Great H", 2, 5, 11], { priority: 1, parent: 1 });
+      expect(doc.snapshot.visible).toEqual("Great Hera");
     });
 
     test("concurrent 3", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
-      doc.edit([6, 11]);
-      doc.edit(["hey ", 0, 5]);
-      doc.edit(["goodbye ", 6, 11], { priority: 1, version: 0 });
-      expect(doc.snapshot).toEqual({
-        visible: "goodbye hey world",
-        hidden: "hello ",
-        hiddenSeq: [0, 8, 6, 9],
-        version: 3,
-      });
+      doc.edit(["H", 1, 6, "W", 7, 11]);
+      doc.edit([0, 5, ", Brian", 11]);
+      doc.edit([0, 5, ", Dr. Evil", 11], { priority: 1, parent: 2 });
+      expect(doc.snapshot.visible).toEqual("Hello, Brian, Dr. Evil");
     });
 
     test("concurrent 4", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       doc.edit([6, 11]);
-      doc.edit(["hey ", 0, 5], { priority: 1 });
-      doc.edit(["goodbye ", 0, 5], { version: 1 });
+      doc.edit(["hey ", 0, 5]);
+      doc.edit(["goodbye ", 6, 11], { priority: 1, parent: 1 });
       expect(doc.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
-        hiddenSeq: [1, 6, 17],
-        version: 3,
+        hiddenSeq: [0, 8, 6, 9],
+        version: 4,
       });
     });
 
@@ -152,17 +139,31 @@ describe("Replica", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       doc.edit([6, 11]);
-      doc.edit(["hey ", 0, 5]);
-      doc.edit(["goodbye ", 6, 11], { priority: 1, version: 0 });
+      doc.edit(["hey ", 0, 5], { priority: 1 });
+      doc.edit(["goodbye ", 0, 5], { parent: 2 });
       expect(doc.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
-        hiddenSeq: [0, 8, 6, 9],
-        version: 3,
+        hiddenSeq: [1, 6, 17],
+        version: 4,
       });
     });
 
     test("concurrent 6", () => {
+      const doc = new Replica("client1");
+      doc.edit(["hello world", 0]);
+      doc.edit([6, 11]);
+      doc.edit(["hey ", 0, 5]);
+      doc.edit(["goodbye ", 6, 11], { priority: 1, parent: 1 });
+      expect(doc.snapshot).toEqual({
+        visible: "goodbye hey world",
+        hidden: "hello ",
+        hiddenSeq: [0, 8, 6, 9],
+        version: 4,
+      });
+    });
+
+    test("concurrent 7", () => {
       const doc = new Replica("client1");
       doc.edit(["hello world", 0]);
       //"hello world"
@@ -170,7 +171,7 @@ describe("Replica", () => {
       doc.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
       // ++++=====++++++======+
       //"why hello there worlds"
-      doc.edit([0, 11, "star", 11], { priority: 1, version: 0 });
+      doc.edit([0, 11, "star", 11], { priority: 1, parent: 1 });
       // ======================++++
       //"why hello there worldsstar"
       expect(doc.snapshot.visible).toEqual("why hello there worldsstar");
@@ -204,9 +205,9 @@ describe("Replica", () => {
         visible: "goodbye_worlds",
         hidden: "hello ",
         hiddenSeq: [0, 7, 5, 1, 1, 6],
-        version: 3,
+        version: 4,
       });
-      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc1.hiddenSeqAt(1)).toEqual([0, 11]);
     });
 
     test("simple 2", () => {
@@ -220,16 +221,15 @@ describe("Replica", () => {
       doc1.ingest({ ...revision2, global: 1 });
       doc2.ingest({ ...revision2, global: 1 });
       doc2.edit([0, 7, "hello", 7, 13]);
-      doc1.edit([0, 13, "s", 13]);
       const [revision3] = doc2.pending;
       doc1.ingest({ ...revision3, global: 2 });
       expect(doc1.snapshot).toEqual({
-        visible: "goodbyehello worlds",
+        visible: "goodbyehello world",
         hidden: "hello",
-        hiddenSeq: [0, 7, 5, 12],
+        hiddenSeq: [0, 7, 5, 11],
         version: 3,
       });
-      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc1.hiddenSeqAt(1)).toEqual([0, 11]);
     });
 
     test("idempotent", () => {
@@ -247,10 +247,10 @@ describe("Replica", () => {
         visible: "goodbye world",
         hidden: "hello",
         hiddenSeq: [0, 7, 5, 6],
-        version: 1,
+        version: 2,
       });
       expect(doc2.snapshot).toEqual(doc1.snapshot);
-      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc1.hiddenSeqAt(1)).toEqual([0, 11]);
     });
 
     test("concurrent 1", () => {
@@ -273,7 +273,7 @@ describe("Replica", () => {
         global += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
-      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc1.hiddenSeqAt(1)).toEqual([0, 11]);
     });
 
     test("concurrent 2", () => {
@@ -296,7 +296,7 @@ describe("Replica", () => {
         global += 1;
       }
       expect(doc1.snapshot).toEqual(doc2.snapshot);
-      expect(doc1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(doc1.hiddenSeqAt(1)).toEqual([0, 11]);
     });
   });
 });

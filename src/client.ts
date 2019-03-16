@@ -18,8 +18,7 @@ export class Client {
     const snapshot = await this.connection.fetchSnapshot(id);
     const revisions = await this.connection.fetchRevisions(
       id,
-      // TODO: make initial snapshot version 0 so we don’t have to do this
-      snapshot.version < 0 ? undefined : snapshot.version,
+      snapshot.version,
     );
     const replica = Replica.from(this.id, snapshot, revisions);
     this.items[id] = { replica, sent: -1 };

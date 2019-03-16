@@ -40,7 +40,7 @@ export const INITIAL_SNAPSHOT: Snapshot = Object.freeze({
   visible: "",
   hidden: "",
   hiddenSeq: [],
-  version: -1,
+  version: 0,
 });
 
 export class Replica {
@@ -54,7 +54,7 @@ export class Replica {
     // TODO: move this property to clients
     public local = 0,
   ) {
-    this.latest = this.snapshot.version;
+    this.latest = this.snapshot.version - 1;
   }
 
   static from(
@@ -134,7 +134,7 @@ export class Replica {
         };
       }
     }
-    const hiddenSeq = this.hiddenSeqAt(end - 1);
+    const hiddenSeq = this.hiddenSeqAt(end);
     deleteSeq = subseq.difference(deleteSeq, hiddenSeq);
     rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
     if (mutate) {
@@ -169,13 +169,16 @@ export class Replica {
     return new Replica(client, { ...this.snapshot }, this.revisions.slice());
   }
 
-  // TODO: Throw more range errors in these xAt methods
   hiddenSeqAt(version: number): Subseq {
-    if (version === -1) {
+    if (version === 0) {
       return [];
+    } else if (version === this.revisions.length) {
+      return this.snapshot.hiddenSeq;
+    } else if (version < 0 || version > this.revisions.length) {
+      throw new RangeError("version out of range");
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
-    const revisions = this.revisions.slice(version + 1).reverse();
+    const revisions = this.revisions.slice(version).reverse();
     for (const rev of revisions) {
       const { insertSeq, deleteSeq } = factor(rev.patch);
       hiddenSeq = subseq.shrink(hiddenSeq, insertSeq);
@@ -185,14 +188,16 @@ export class Replica {
   }
 
   snapshotAt(version: number): Snapshot {
-    if (version === -1) {
+    if (version === 0) {
       return INITIAL_SNAPSHOT;
-    } else if (version >= this.revisions.length - 1) {
+    } else if (version === this.revisions.length) {
       return this.snapshot;
+    } else if (version < 0 || version > this.revisions.length) {
+      throw new RangeError("version out of range");
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
     const merged = subseq.merge(hidden, visible, hiddenSeq);
-    const insertSeq = this.summarize(version + 1);
+    const insertSeq = this.summarize(version);
     const [, merged1] = subseq.split(merged, insertSeq);
     const hiddenSeq1 = this.hiddenSeqAt(version);
     [hidden, visible] = subseq.split(merged1, hiddenSeq1);
@@ -200,26 +205,27 @@ export class Replica {
   }
 
   patchAt(version: number): Patch {
-    const rev =
-      this.revisions[version] || this.revisions[this.revisions.length - 1];
+    if (version < 0 || version > this.revisions.length - 1) {
+      throw new RangeError("version out of range");
+    }
+    const rev = this.revisions[version];
     let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-    deleteSeq = subseq.expand(deleteSeq, insertSeq);
-    const hiddenSeq = subseq.difference(this.hiddenSeqAt(version), deleteSeq);
-    insertSeq = subseq.shrink(insertSeq, hiddenSeq);
-    deleteSeq = subseq.shrink(subseq.shrink(deleteSeq, hiddenSeq), insertSeq);
+    const hiddenSeq = this.hiddenSeqAt(version);
+    insertSeq = subseq.shrink(insertSeq, subseq.expand(hiddenSeq, insertSeq));
+    deleteSeq = subseq.shrink(deleteSeq, hiddenSeq);
     return synthesize({ inserted, insertSeq, deleteSeq });
   }
 
   edit(
     patch: Patch,
-    options: { priority?: number; version?: number } = {},
+    options: { parent?: number; priority?: number } = {},
   ): Revision {
-    const { priority = 0, version = this.revisions.length - 1 } = options;
-    if (version < -1 || version > this.revisions.length - 1) {
-      throw new RangeError("parent out of range");
+    const { parent = this.revisions.length, priority = 0 } = options;
+    if (parent < 0 || parent > this.revisions.length) {
+      throw new RangeError("version out of range");
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
-    const hiddenSeq = this.hiddenSeqAt(version);
+    const hiddenSeq = this.hiddenSeqAt(parent);
     [, insertSeq] = subseq.interleave(hiddenSeq, insertSeq);
     deleteSeq = subseq.expand(deleteSeq, hiddenSeq);
     let rev: Revision = {
@@ -229,7 +235,7 @@ export class Replica {
       local: this.local,
       latest: this.latest,
     };
-    rev = this.rebase(rev, version + 1);
+    rev = this.rebase(rev, parent);
     this.apply(rev);
     this.revisions.push(rev);
     this.local++;
