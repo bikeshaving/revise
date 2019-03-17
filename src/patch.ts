@@ -146,10 +146,12 @@ export function meld(patch1: Patch, patch2: Patch): Patch {
   let hiddenSeq = subseq.expand(deleteSeq1, insertSeq1);
   deleteSeq2 = subseq.expand(deleteSeq2, hiddenSeq, { union: true });
   let reviveSeq = subseq.intersection(insertSeq1, deleteSeq2);
+  // TODO: reorder this so it’s not so disjointed
   deleteSeq2 = subseq.shrink(deleteSeq2, insertSeq1);
-  [insertSeq2] = subseq.interleave(insertSeq2, hiddenSeq);
+  [, insertSeq2] = subseq.interleave(hiddenSeq, insertSeq2);
   reviveSeq = subseq.expand(reviveSeq, insertSeq2);
-  [inserted2, insertSeq2] = subseq.compose(
+  insertSeq1 = subseq.expand(insertSeq1, insertSeq2);
+  [inserted2, insertSeq2] = subseq.unify(
     inserted1,
     inserted2,
     insertSeq1,
@@ -170,9 +172,8 @@ export class PatchBuilder {
 
   replace(start: number, end: number, inserted: string): void {
     if (end < start) {
-      throw new Error("end < start");
+      throw new Error("end cannot be less than start");
     }
-    const length = inserted.length - (end - start);
     let deleteSeq: Subseq = [];
     subseq.push(deleteSeq, start, false);
     subseq.push(deleteSeq, end - start, true);
@@ -183,6 +184,6 @@ export class PatchBuilder {
     subseq.push(insertSeq, this.length - start, false);
     const patch = synthesize({ inserted, insertSeq, deleteSeq });
     this.patch = this.patch == null ? patch : meld(this.patch, patch);
-    this.length += length;
+    this.length += inserted.length - (end - start);
   }
 }

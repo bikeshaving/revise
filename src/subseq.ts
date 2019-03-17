@@ -335,31 +335,31 @@ export function shuffle(
   return split(merge(text1, text2, subseq1), subseq2);
 }
 
-// TODO: rename/remove compose
-export function compose(
+export function unify(
   text1: string,
   text2: string,
   subseq1: Subseq,
   subseq2: Subseq,
 ): [string, Subseq] {
-  let result = "";
+  let text = "";
+  const subseq: Subseq = [];
   let consumed1 = 0;
   let consumed2 = 0;
-  subseq1 = expand(subseq1, subseq2);
   for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
     if (flag1) {
-      result += text1.slice(consumed1, consumed1 + length);
+      text += text1.slice(consumed1, consumed1 + length);
       consumed1 += length;
     }
     if (flag2) {
-      result += text2.slice(consumed2, consumed2 + length);
+      text += text2.slice(consumed2, consumed2 + length);
       consumed2 += length;
     }
+    push(subseq, length, flag1 || flag2);
   }
-  return [result, union(subseq1, subseq2)];
+  return [text, subseq];
 }
 
-// TODO: rename/remove erase
+// TODO: rename or delete erase
 export function erase(text: string, subseq1: Subseq, subseq2: Subseq): string {
   let result = "";
   let consumed = 0;
