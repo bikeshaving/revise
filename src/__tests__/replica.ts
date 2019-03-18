@@ -298,5 +298,100 @@ describe("Replica", () => {
       expect(replica1.snapshot).toEqual(replica2.snapshot);
       expect(replica1.hiddenSeqAt(1)).toEqual([0, 11]);
     });
+
+    test("concurrent 3", () => {
+      const replica1 = new Replica("client1");
+      replica1.edit(["hello world", 0]);
+      let global = 0;
+      for (const rev of replica1.pending) {
+        replica1.ingest({ ...rev, global });
+        global += 1;
+      }
+      const replica2 = replica1.clone("client2");
+      replica1.edit(["H", 1, 6, "W", 7, 11]);
+      replica1.edit([0, 5, "-", 6, 11]);
+      replica2.edit([0, 5, "__", 6, 11, "!", 11]);
+      replica2.edit(["hey", 6, 13]);
+      const revisions = replica1.pending.concat(replica2.pending);
+      for (const rev of revisions) {
+        replica1.ingest({ ...rev, global });
+        replica2.ingest({ ...rev, global });
+        global += 1;
+      }
+      expect(replica1.snapshot).toEqual(replica2.snapshot);
+      expect(replica1.hiddenSeqAt(1)).toEqual([0, 11]);
+    });
+
+    test("concurrent 4", () => {
+      const replica1 = new Replica("client1");
+      replica1.edit(["hello world", 0]);
+      let global = 0;
+      for (const rev of replica1.pending) {
+        replica1.ingest({ ...rev, global });
+        global += 1;
+      }
+      const replica2 = replica1.clone("client2");
+      replica1.edit(["H", 1, 6, "W", 7, 11]);
+      replica1.edit([0, 5, "-", 6, 11]);
+      replica2.edit([0, 5, "__", 6, 11, "!", 11]);
+      replica2.edit(["hey", 6, 13]);
+      const revisions = replica2.pending.concat(replica1.pending);
+      for (const rev of revisions) {
+        replica1.ingest({ ...rev, global });
+        replica2.ingest({ ...rev, global });
+        global += 1;
+      }
+      expect(replica1.snapshot).toEqual(replica2.snapshot);
+      expect(replica1.hiddenSeqAt(1)).toEqual([0, 11]);
+    });
+
+    test("concurrent 5", () => {
+      const replica1 = new Replica("client1");
+      replica1.edit(["abij", 0]);
+      let global = 0;
+      for (const rev of replica1.pending) {
+        replica1.ingest({ ...rev, global });
+        global += 1;
+      }
+      const replica2 = replica1.clone("client2");
+      replica1.edit([0, 2, "d", 2, 4]);
+      replica1.edit([0, 2, "c", 2, 5]);
+      replica2.edit([0, 2, "efgh", 2, 4]);
+      const revisions = replica1.pending.concat(replica2.pending);
+      for (const rev of revisions) {
+        replica1.ingest({ ...rev, global });
+        replica2.ingest({ ...rev, global });
+        global += 1;
+      }
+      expect(replica1.snapshot.visible).toEqual("abcdefghij");
+      expect(replica1.snapshot).toEqual(replica2.snapshot);
+      expect(replica1.hiddenSeqAt(1)).toEqual([0, 4]);
+    });
+
+    test("concurrent 6", () => {
+      const replica1 = new Replica("client1");
+      replica1.edit(["abij", 0]);
+      let global = 0;
+      for (const rev of replica1.pending) {
+        replica1.ingest({ ...rev, global });
+        global += 1;
+      }
+      const replica2 = replica1.clone("client2");
+      replica1.edit([0, 2, "d", 2, 4]);
+      replica1.edit([0, 2, "c", 2, 5]);
+      replica2.edit([0, 2, "efgh", 2, 4]);
+      const revisions = replica2.pending.concat(replica1.pending);
+      for (const rev of revisions) {
+        replica1.ingest({ ...rev, global });
+        replica2.ingest({ ...rev, global });
+        global += 1;
+      }
+      expect(replica1.snapshot.visible).toEqual("abcdefghij");
+      expect(replica1.snapshot).toEqual(replica2.snapshot);
+      expect(replica1.hiddenSeqAt(1)).toEqual([0, 4]);
+    });
+
+    // TODO: add tests which tests ingest between more than two clients
+    // TODO: add tests which edit replicas and ingest revisions in a different order
   });
 });

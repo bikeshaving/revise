@@ -1,7 +1,7 @@
 import { factor, Patch, synthesize } from "./patch";
 import * as subseq from "./subseq";
 import { Subseq } from "./subseq";
-import { findLastIndex } from "./utils";
+import { findLastIndex, invert } from "./utils";
 
 export interface Snapshot {
   visible: string;
@@ -11,19 +11,22 @@ export interface Snapshot {
   version: number;
 }
 
-export interface Revision {
-  patch: Patch;
+export interface Prioritized {
   client: string;
   priority?: number;
+}
+
+export interface Revision extends Prioritized {
+  patch: Patch;
   // TODO: move these properties to their own interface
   global?: number;
   local: number;
   latest: number;
 }
 
-export function prioritize(rev1: Revision, rev2: Revision): number {
-  const { priority: priority1 = 0, client: client1 } = rev1;
-  const { priority: priority2 = 0, client: client2 } = rev2;
+export function compare(p1: Prioritized, p2: Prioritized): number {
+  const { priority: priority1 = 0, client: client1 } = p1;
+  const { priority: priority2 = 0, client: client2 } = p2;
   if (priority1 < priority2) {
     return -1;
   } else if (priority1 > priority2) {
@@ -42,6 +45,89 @@ export const INITIAL_SNAPSHOT: Snapshot = Object.freeze({
   hiddenSeq: [],
   version: 0,
 });
+
+export function summarize(revisions: Revision[]): Subseq {
+  if (!revisions.length) {
+    throw new Error("Empty revisions");
+  }
+  let { insertSeq: result } = factor(revisions[0].patch);
+  for (const rev of revisions.slice(1)) {
+    const { insertSeq } = factor(rev.patch);
+    result = subseq.expand(result, insertSeq, { union: true });
+  }
+  return result;
+}
+
+export function rebase(
+  rev: Revision,
+  revisions: Revision[],
+): [Revision, Revision[]] {
+  if (!revisions.length) {
+    return [rev, revisions];
+  }
+  let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
+  revisions = revisions.map((rev1) => {
+    const priority = compare(rev, rev1);
+    if (priority === 0) {
+      throw new Error("Concurrent edits with same client and priority");
+    }
+    let {
+      inserted: inserted1,
+      insertSeq: insertSeq1,
+      deleteSeq: deleteSeq1,
+    } = factor(rev1.patch);
+    deleteSeq1 = subseq.difference(deleteSeq1, deleteSeq);
+    deleteSeq1 = subseq.expand(deleteSeq1, insertSeq);
+    deleteSeq = subseq.expand(deleteSeq, insertSeq1);
+    if (priority < 0) {
+      [insertSeq, insertSeq1] = subseq.interleave(insertSeq, insertSeq1);
+    } else {
+      [insertSeq1, insertSeq] = subseq.interleave(insertSeq1, insertSeq);
+    }
+    return {
+      ...rev1,
+      patch: synthesize({
+        inserted: inserted1,
+        insertSeq: insertSeq1,
+        deleteSeq: deleteSeq1,
+      }),
+      latest: rev.global == null ? rev1.latest : rev.global,
+    };
+  });
+  rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
+  return [rev, revisions];
+}
+
+export function rearrange(revisions: Revision[], client: string): Revision[] {
+  if (!revisions.length) {
+    return revisions;
+  }
+  const revisions1: Revision[] = [];
+  let insertSeq1: Subseq | undefined;
+  for (let rev of invert(revisions)) {
+    let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
+    if (rev.client === client) {
+      if (insertSeq1 == null) {
+        insertSeq1 = insertSeq;
+      } else {
+        insertSeq1 = subseq.expand(insertSeq, insertSeq1, { union: true });
+      }
+    } else {
+      if (insertSeq1 != null) {
+        deleteSeq = subseq.expand(
+          subseq.expand(deleteSeq, insertSeq),
+          insertSeq1,
+        );
+        insertSeq = subseq.expand(insertSeq, insertSeq1);
+        deleteSeq = subseq.shrink(deleteSeq, insertSeq);
+        insertSeq1 = subseq.shrink(insertSeq1, insertSeq);
+        rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
+      }
+      revisions1.unshift(rev);
+    }
+  }
+  return revisions1;
+}
 
 export class Replica {
   // TODO: move this property to clients
@@ -90,78 +176,6 @@ export class Replica {
     this.snapshot = { visible, hidden, hiddenSeq, version: version + 1 };
   }
 
-  protected rebase(
-    rev: Revision,
-    start: number,
-    end: number = this.revisions.length,
-    options: { mutate?: boolean } = {},
-  ): Revision {
-    const revisions = this.revisions.slice(start, end);
-    if (!revisions.length) {
-      return rev;
-    }
-    const { mutate = false } = options;
-    let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-    for (const [i, rev1] of revisions.entries()) {
-      const priority = prioritize(rev, rev1);
-      if (priority === 0) {
-        throw new Error("Concurrent edits with same client and priority");
-      }
-      let {
-        inserted: inserted1,
-        insertSeq: insertSeq1,
-        deleteSeq: deleteSeq1,
-      } = factor(rev1.patch);
-      if (mutate) {
-        deleteSeq1 = subseq.difference(deleteSeq1, deleteSeq);
-        deleteSeq1 = subseq.expand(deleteSeq1, insertSeq);
-      }
-      deleteSeq = subseq.expand(deleteSeq, insertSeq1);
-      if (priority < 0) {
-        [insertSeq, insertSeq1] = subseq.interleave(insertSeq, insertSeq1);
-      } else {
-        [insertSeq1, insertSeq] = subseq.interleave(insertSeq1, insertSeq);
-      }
-      if (mutate) {
-        revisions[i] = {
-          ...rev1,
-          patch: synthesize({
-            inserted: inserted1,
-            insertSeq: insertSeq1,
-            deleteSeq: deleteSeq1,
-          }),
-          latest: rev.global == null ? rev1.latest : rev.global,
-        };
-      }
-    }
-    const hiddenSeq = this.hiddenSeqAt(end);
-    deleteSeq = subseq.difference(deleteSeq, hiddenSeq);
-    rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
-    if (mutate) {
-      this.revisions.splice(start, revisions.length, ...revisions);
-    }
-    return rev;
-  }
-
-  protected summarize(start: number, end?: number, exclude?: string): Subseq {
-    const revisions = this.revisions.slice(start, end);
-    if (!revisions.length) {
-      throw new Error("Empty revisions");
-    }
-    const rev = revisions[0];
-    let { insertSeq } = factor(rev.patch);
-    if (rev.client === exclude) {
-      insertSeq = subseq.clear(insertSeq);
-    }
-    for (const rev of revisions.slice(1)) {
-      const { insertSeq: insertSeq1 } = factor(rev.patch);
-      insertSeq = subseq.expand(insertSeq, insertSeq1, {
-        union: rev.client !== exclude,
-      });
-    }
-    return insertSeq;
-  }
-
   clone(client: string): Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple clients per Replica");
@@ -178,8 +192,7 @@ export class Replica {
       throw new RangeError("version out of range");
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
-    const revisions = this.revisions.slice(version).reverse();
-    for (const rev of revisions) {
+    for (const rev of invert(this.revisions.slice(version))) {
       const { insertSeq, deleteSeq } = factor(rev.patch);
       hiddenSeq = subseq.shrink(hiddenSeq, insertSeq);
       hiddenSeq = subseq.difference(hiddenSeq, deleteSeq);
@@ -197,7 +210,7 @@ export class Replica {
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
     const merged = subseq.merge(hidden, visible, hiddenSeq);
-    const insertSeq = this.summarize(version);
+    const insertSeq = summarize(this.revisions.slice(version));
     const [, merged1] = subseq.split(merged, insertSeq);
     const hiddenSeq1 = this.hiddenSeqAt(version);
     [hidden, visible] = subseq.split(merged1, hiddenSeq1);
@@ -214,6 +227,19 @@ export class Replica {
     insertSeq = subseq.shrink(insertSeq, subseq.expand(hiddenSeq, insertSeq));
     deleteSeq = subseq.shrink(deleteSeq, hiddenSeq);
     return synthesize({ inserted, insertSeq, deleteSeq });
+  }
+
+  dedupe(rev: Revision, version = this.revisions.length): Revision {
+    const { inserted, insertSeq, deleteSeq } = factor(rev.patch);
+    const hiddenSeq = this.hiddenSeqAt(version);
+    return {
+      ...rev,
+      patch: synthesize({
+        inserted,
+        insertSeq,
+        deleteSeq: subseq.difference(deleteSeq, hiddenSeq),
+      }),
+    };
   }
 
   edit(
@@ -235,7 +261,8 @@ export class Replica {
       local: this.local,
       latest: this.latest,
     };
-    rev = this.rebase(rev, parent);
+    [rev] = rebase(rev, this.revisions.slice(parent));
+    rev = this.dedupe(rev);
     this.apply(rev);
     this.revisions.push(rev);
     this.local++;
@@ -253,7 +280,7 @@ export class Replica {
     let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(rev.patch);
     insertSeq = subseq.expand(insertSeq, deleteSeq);
     if (version <= this.revisions.length - 1) {
-      const insertSeq1 = this.summarize(version + 1);
+      const insertSeq1 = summarize(this.revisions.slice(version + 1));
       deleteSeq = subseq.expand(deleteSeq, insertSeq1);
       insertSeq = subseq.expand(insertSeq, insertSeq1);
     }
@@ -276,7 +303,6 @@ export class Replica {
   }
 
   // TODO: pass in rev.latest, and maybe this.latest?
-  // ingest(rev: Revision, last: number): Revision {
   ingest(rev: Revision): Revision {
     // TODO: move this logic to clients
     if (rev.global == null) {
@@ -290,29 +316,34 @@ export class Replica {
       if (!this.revisions[rev.global]) {
         throw new Error("Missing revision");
       }
-      // TODO: integrity check to make sure revisions are the same
+      // TODO: integrity check?
       this.revisions[rev.global].global = rev.global;
       this.latest = rev.global;
       return rev;
     }
     const latest = Math.max(
+      -1,
       rev.latest,
       findLastIndex(this.revisions, (rev1) => rev.client === rev1.client),
-      0,
     );
-    if (rev.latest > -1 && rev.latest < latest) {
-      let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-      const insertSeq1 = this.summarize(rev.latest + 1, latest + 1, rev.client);
-      insertSeq = subseq.expand(insertSeq, insertSeq1);
-      deleteSeq = subseq.expand(deleteSeq, insertSeq1);
-      rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
+    // TODO: cache the rearranged revisions somewhere
+    if (rev.latest < latest) {
+      const revisions = rearrange(
+        this.revisions.slice(rev.latest + 1, latest + 1),
+        rev.client,
+      );
+      [rev] = rebase(rev, revisions);
     }
-    rev = this.rebase(rev, latest + 1, this.latest + 1);
-    const rev1 = this.rebase(rev, this.latest + 1, undefined, { mutate: true });
+    [rev] = rebase(rev, this.revisions.slice(latest + 1, this.latest + 1));
+    const [rev1, revisions] = rebase(
+      rev,
+      this.revisions.slice(this.latest + 1),
+    );
     this.apply(rev1);
-    this.revisions.splice(this.latest + 1, 0, rev);
+    this.revisions.splice(this.latest + 1, revisions.length, rev);
+    this.revisions = this.revisions.concat(revisions);
     this.latest = rev.global!;
-    return rev;
+    return rev1;
   }
 
   // TODO: freeze revisions that have been read

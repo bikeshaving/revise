@@ -1,16 +1,3 @@
-export function timeout<T>(
-  delay: number = 0,
-  promise?: Promise<T>,
-): Promise<T | undefined> {
-  const timeout: Promise<undefined> = new Promise((resolve) =>
-    setTimeout(resolve, delay),
-  );
-  if (promise == null) {
-    return timeout;
-  }
-  return Promise.race([timeout, promise]);
-}
-
 export function findLastIndex<T>(
   arr: T[],
   test: (v: T, i: number, arr: T[]) => any,
@@ -32,4 +19,37 @@ export function findLast<T>(
     return;
   }
   return arr[i];
+}
+
+export class InvertedArrayIterator<T> implements IterableIterator<T> {
+  private i: number;
+  constructor(private arr: T[]) {
+    this.i = arr.length;
+  }
+
+  next(): IteratorResult<T> {
+    this.i--;
+    return { done: this.i < 0, value: this.arr[this.i] };
+  }
+
+  [Symbol.iterator]() {
+    return this;
+  }
+}
+
+export function invert<T>(arr: T[]): IterableIterator<T> {
+  return new InvertedArrayIterator(arr);
+}
+
+export function timeout<T>(
+  delay: number = 0,
+  promise?: Promise<T>,
+): Promise<T | undefined> {
+  const timeout: Promise<undefined> = new Promise((resolve) =>
+    setTimeout(resolve, delay),
+  );
+  if (promise == null) {
+    return timeout;
+  }
+  return Promise.race([timeout, promise]);
 }
