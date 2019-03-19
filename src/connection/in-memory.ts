@@ -90,9 +90,9 @@ export class InMemoryConnection implements Connection {
     return rev;
   }
 
-  // TODO: run this in a transaction
   async sendRevisions(id: string, revisions: Revision[]): Promise<void> {
     const revisions1: Revision[] = [];
+    // TODO: run this in a transaction?
     for (const rev of revisions) {
       const rev1 = this.saveRevision(id, rev);
       if (rev1) {
@@ -126,15 +126,14 @@ export class InMemoryConnection implements Connection {
         channels: new Set(),
       };
     }
-    const { channels } = item;
     const channel = new Channel(new FixedBuffer<Revision[]>(100));
-    const revisions = await this.fetchRevisions(id, start);
+    const revisions = item.revisions.slice(start);
     if (revisions.length) {
       channel.put(revisions);
     }
-    channels.add(channel);
+    item.channels.add(channel);
     channel.onclose = () => {
-      channels.delete(channel);
+      item.channels.delete(channel);
     };
     return channel;
   }

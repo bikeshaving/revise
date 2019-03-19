@@ -23,8 +23,8 @@ describe("CollabText", () => {
   test("multiple clients", async () => {
     const connection = new InMemoryConnection();
     const client1 = new Client("client1", connection);
-    client1.listen("doc");
     const doc1 = await CollabText.initialize("doc", client1);
+    client1.listen("doc");
     doc1.replace(0, 0, "hi");
     await client1.sync("doc");
     const client2 = new Client("client2", connection);

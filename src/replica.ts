@@ -305,7 +305,8 @@ export class Replica {
     return rev;
   }
 
-  // TODO: pass in rev.latest, and maybe this.latest?
+  // TODO: pass in rev.latest and rev.global and maybe this.latest
+  // ingest(rev: Revision, parent: number, current: number): Revision {
   ingest(rev: Revision): Revision {
     // TODO: move this logic to clients
     if (rev.global == null) {

@@ -34,11 +34,21 @@ export class Client {
   // TODO: cancel from outside loop?
   async listen(id: string): Promise<void> {
     const replica = await this.getReplica(id);
-    const subscription = await this.connection.subscribe(id, replica.latest);
+    const subscription = await this.connection.subscribe(
+      id,
+      replica.latest + 1,
+    );
     for await (const revisions of subscription) {
       for (const rev of revisions) {
-        // TODO: ERROR HANDLING
-        replica.ingest(rev);
+        try {
+          replica.ingest(rev);
+        } catch (err) {
+          // TODO: ERROR HANDLING
+          // console.log(this.client);
+          // console.log(rev);
+          // console.log(err);
+          throw err;
+        }
       }
     }
   }
