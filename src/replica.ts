@@ -98,7 +98,10 @@ export function rebase(
   return [rev, revisions];
 }
 
-export function rearrange(revisions: Revision[], client: string): Revision[] {
+export function rearrange(
+  revisions: Revision[],
+  test: (rev: Revision) => boolean,
+): Revision[] {
   if (!revisions.length) {
     return revisions;
   }
@@ -106,7 +109,7 @@ export function rearrange(revisions: Revision[], client: string): Revision[] {
   let insertSeq1: Subseq | undefined;
   for (let rev of invert(revisions)) {
     let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-    if (rev.client === client) {
+    if (test(rev)) {
       if (insertSeq1 == null) {
         insertSeq1 = insertSeq;
       } else {
@@ -330,7 +333,7 @@ export class Replica {
     if (rev.latest < latest) {
       const revisions = rearrange(
         this.revisions.slice(rev.latest + 1, latest + 1),
-        rev.client,
+        (rev1) => rev1.client === rev.client,
       );
       [rev] = rebase(rev, revisions);
     }
