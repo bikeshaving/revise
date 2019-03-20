@@ -1,34 +1,44 @@
-import { Connection } from "./connection";
+import { Connection, Message } from "./connection";
 import { Replica } from "./replica";
 
 export interface ClientItem {
-  replica: Replica;
-  sent: number;
+  replica: Promise<Replica>;
 }
 
 export class Client {
   protected items: Record<string, ClientItem> = {};
-  protected pending: Record<string, Promise<Replica>> = {};
-  constructor(public id: string, public connection: Connection) {}
+
+  constructor(
+    public readonly id: string,
+    public readonly connection: Connection,
+  ) {}
 
   async fetchReplica(id: string): Promise<Replica> {
     if (this.items[id]) {
       return this.items[id].replica;
     }
-    const snapshot = await this.connection.fetchSnapshot(id);
-    const revisions = await this.connection.fetchRevisions(
-      id,
-      snapshot.version,
-    );
-    const replica = Replica.from(this.id, snapshot, revisions);
-    this.items[id] = { replica, sent: -1 };
-    delete this.pending[id];
+    const milestone = await this.connection.fetchMilestone(id);
+    let replica: Replica;
+    let version: number;
+    if (milestone == null) {
+      replica = new Replica(this.id);
+      version = -1;
+    } else {
+      replica = new Replica(this.id, milestone.snapshot, [], milestone.version);
+      version = milestone.version;
+    }
+    const messages = await this.connection.fetchMessages(id, version + 1);
+    for (const message of messages || []) {
+      replica.ingest(message.revision, message.latest);
+    }
     return replica;
   }
 
   getReplica(id: string): Promise<Replica> {
-    this.pending[id] = this.pending[id] || this.fetchReplica(id);
-    return this.pending[id];
+    if (this.items[id] == null) {
+      this.items[id] = { replica: this.fetchReplica(id) };
+    }
+    return this.items[id].replica;
   }
 
   // TODO: cancel from outside loop?
@@ -38,35 +48,37 @@ export class Client {
       id,
       replica.latest + 1,
     );
-    for await (const revisions of subscription) {
-      for (const rev of revisions) {
-        try {
-          replica.ingest(rev);
-        } catch (err) {
-          // TODO: ERROR HANDLING
-          // console.log(this.client);
-          // console.log(rev);
-          // console.log(err);
-          throw err;
+    for await (const messages of subscription) {
+      for (const message of messages) {
+        // TODO: consider the following cases
+        // message.latest > replica.latest
+        // message.latest > message.global
+        if (message.global == null) {
+          throw new Error("message missing global version");
+        } else if (message.global > replica.latest + 1) {
+          throw new Error("TODO: attempt repair");
+        } else if (message.global < replica.latest + 1) {
+          continue;
         }
+        replica.ingest(message.revision, message.latest);
       }
     }
   }
 
-  // TODO: wait for pending sendRevisions.......
+  // TODO: have only one in-flight group of messages at a time
+  // TODO: send milestones!!!
+  // TODO: freeze sent revisions
+  // TODO: catch sendMessage errors
   async sync(id: string): Promise<void> {
     const replica = await this.getReplica(id);
-    const item = this.items[id];
-    const pending = replica.pending;
-    if (pending.length) {
-      const local = pending[pending.length - 1].local;
-      if (local > item.sent) {
-        await this.connection.sendRevisions(
-          id,
-          pending.slice(item.sent - local),
-        );
-      }
-      item.sent = local;
+    if (replica.pending.length) {
+      const messages: Message[] = replica.pending.map((revision, i) => ({
+        revision,
+        client: this.id,
+        local: replica.local + i,
+        latest: replica.latest,
+      }));
+      await this.connection.sendMessages(id, messages);
     }
   }
 }

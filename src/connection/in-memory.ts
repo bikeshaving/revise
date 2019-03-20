@@ -1,140 +1,128 @@
 import { Channel, FixedBuffer } from "../channel";
-import { Connection } from "../connection";
-import { INITIAL_SNAPSHOT, Snapshot, Revision } from "../replica";
+import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 
-export interface InMemoryConnectionItem {
+interface InMemoryConnectionItem {
+  channels: Set<Channel<Message[]>>;
   clients: Record<string, number>;
-  snapshots: Snapshot[];
-  revisions: Revision[];
-  channels: Set<Channel<Revision[]>>;
+  messages: Message[];
+  milestones: Milestone[];
+}
+
+function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
+  return {
+    channels: new Set(item.channels),
+    clients: { ...item.clients },
+    messages: item.messages.slice(),
+    milestones: item.milestones.slice(),
+  };
 }
 
 export class InMemoryConnection implements Connection {
   protected items: Record<string, InMemoryConnectionItem> = {};
 
-  // TODO: handle negative indexes
-  async fetchSnapshot(id: string, start?: number): Promise<Snapshot> {
-    const snapshots: Snapshot[] | undefined =
-      this.items[id] && this.items[id].snapshots;
-    if (snapshots == null || !snapshots.length) {
-      return INITIAL_SNAPSHOT;
-    } else if (start == null) {
-      return snapshots[snapshots.length - 1];
+  fetchMilestone(id: string, before?: number): Promise<Milestone | undefined> {
+    const milestones: Milestone[] | undefined =
+      this.items[id] && this.items[id].milestones;
+    if (milestones == null || !milestones.length) {
+      return Promise.resolve(undefined);
+    } else if (before == null) {
+      return Promise.resolve(milestones[milestones.length - 1]);
     }
-    return (
-      findLast(snapshots, (snapshot) => snapshot.version <= start) ||
-      snapshots[0]
+    return Promise.resolve(
+      findLast(milestones, (milestone) => milestone.version <= before),
     );
   }
 
-  // TODO: handle negative indexes
-  async fetchRevisions(
+  // TODO: handle negative indexes?
+  fetchMessages(
     id: string,
     start?: number,
     end?: number,
-  ): Promise<Revision[]> {
+  ): Promise<Message[] | undefined> {
     const item = this.items[id];
     if (item == null) {
-      return [];
+      return Promise.resolve(undefined);
     }
-    return item.revisions.slice(start, end);
+    return Promise.resolve(item.messages.slice(start, end));
   }
 
-  async sendSnapshot(id: string, snapshot: Snapshot): Promise<void> {
+  sendMilestone(id: string, milestone: Milestone): Promise<void> {
     const item = this.items[id];
-    if (item == null) {
-      this.items[id] = {
-        clients: {},
-        snapshots: [snapshot],
-        revisions: [],
-        channels: new Set(),
-      };
-      return;
+    if (
+      (item == null && milestone.version !== 0) ||
+      milestone.version > item.messages.length
+    ) {
+      return Promise.reject(new Error("Missing message"));
     }
-    const { snapshots } = item;
     // TODO: use binary search to insert
     // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
-    snapshots.push(snapshot);
-    snapshots.sort((a, b) => a.version - b.version);
+    item.milestones.push(milestone);
+    item.milestones.sort((a, b) => a.version - b.version);
+    return Promise.resolve(undefined);
   }
 
-  // TODO: don’t mutate here so we can error all or nothing
-  protected saveRevision(id: string, rev: Revision): Revision | undefined {
-    const item = this.items[id];
+  sendMessages(id: string, messages: Message[]): Promise<void> {
+    let item = this.items[id];
     if (item == null) {
-      if (rev.local !== 0) {
-        throw new Error("Unknown document");
-      }
-      rev = { ...rev, global: 0 };
-      this.items[id] = {
-        clients: { [rev.client]: 0 },
-        snapshots: [],
-        revisions: [rev],
+      item = {
         channels: new Set(),
+        clients: {},
+        messages: [],
+        milestones: [],
       };
-      return rev;
+    } else {
+      item = cloneItem(item);
     }
-    const { clients, revisions } = item;
-    const local = clients[rev.client] == null ? -1 : clients[rev.client];
-    // TODO: reject rev if latest is too far off global version
-    // TODO: reject if we don’t have a recent-enough snapshot
-    if (rev.local > local + 1) {
-      // TODO: figure out how to allow repair
-      throw new Error("Missing revision");
-    } else if (rev.local < local + 1) {
-      return;
-    }
-    rev = { ...rev, global: revisions.length };
-    revisions.push(rev);
-    clients[rev.client] = rev.local;
-    return rev;
-  }
-
-  async sendRevisions(id: string, revisions: Revision[]): Promise<void> {
-    const revisions1: Revision[] = [];
-    // TODO: run this in a transaction?
-    for (const rev of revisions) {
-      const rev1 = this.saveRevision(id, rev);
-      if (rev1) {
-        revisions1.push(rev1);
+    const start = item.messages.length;
+    for (const message of messages) {
+      const expected =
+        (item.clients[message.client] == null
+          ? -1
+          : item.clients[message.client]) + 1;
+      if (message.local > expected) {
+        return Promise.reject(new Error("Missing message"));
+      } else if (message.local < expected) {
+        continue;
       }
+      item.clients[message.client] = message.local;
+      item.messages.push({
+        ...message,
+        global: item.messages.length,
+      });
     }
-    const { channels } = this.items[id];
-    await Promise.all(
-      Array.from(channels).map(async (channel) => {
+    this.items[id] = item;
+    return Promise.all(
+      Array.from(item.channels).map(async (channel) => {
         try {
-          await channel.put(revisions1);
+          await channel.put(item.messages.slice(start));
         } catch (err) {
           // TODO: do something more???
           channel.close();
         }
       }),
-    );
+    ).then(() => {});
   }
 
-  async subscribe(
-    id: string,
-    start: number,
-  ): Promise<AsyncIterable<Revision[]>> {
+  subscribe(id: string, start: number): Promise<AsyncIterable<Message[]>> {
     let item = this.items[id];
     if (item == null) {
       item = this.items[id] = {
-        clients: {},
-        snapshots: [],
-        revisions: [],
         channels: new Set(),
+        clients: {},
+        messages: [],
+        milestones: [],
       };
     }
-    const channel = new Channel(new FixedBuffer<Revision[]>(100));
-    const revisions = item.revisions.slice(start);
-    if (revisions.length) {
-      channel.put(revisions);
+    const channel = new Channel(new FixedBuffer<Message[]>(100));
+    const messages = item.messages.slice(start);
+    if (messages.length) {
+      channel.put(messages);
     }
     item.channels.add(channel);
     channel.onclose = () => {
       item.channels.delete(channel);
     };
-    return channel;
+    return Promise.resolve(channel);
   }
 }

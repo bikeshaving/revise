@@ -1,10 +1,24 @@
-import { Revision, Snapshot } from "./replica";
+export interface Message {
+  revision: any;
+  client: string;
+  local: number;
+  latest: number;
+  global?: number;
+}
+
+export interface Milestone {
+  snapshot: any;
+  version: number;
+}
 
 export interface Connection {
-  fetchSnapshot(id: string, start?: number): Promise<Snapshot>;
-  fetchRevisions(id: string, start?: number, end?: number): Promise<Revision[]>;
-  // TODO: determine a more informative return value from sendSnapshot and sendRevisions
-  sendSnapshot(id: string, snapshot: Snapshot): Promise<void>;
-  sendRevisions(id: string, revisions: Revision[]): Promise<void>;
-  subscribe(id: string, start: number): Promise<AsyncIterable<Revision[]>>;
+  fetchMilestone(id: string, start?: number): Promise<Milestone | undefined>;
+  fetchMessages(
+    id: string,
+    start?: number,
+    end?: number,
+  ): Promise<Message[] | undefined>;
+  sendMilestone(id: string, milestone: Milestone): Promise<void>;
+  sendMessages(id: string, messages: Message[]): Promise<void>;
+  subscribe(id: string, start: number): Promise<AsyncIterable<Message[]>>;
 }

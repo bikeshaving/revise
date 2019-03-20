@@ -1,14 +1,15 @@
 import { Subseq } from "./subseq";
 import * as subseq from "./subseq";
 
-// Patches are arrays of strings and numbers which represent changes to text.
-// Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result.
-// Deletions are represented via omission.
-// Strings within a patch represent insertions at the latest index.
-// The last element of a patch will always be a number which represent the length of the text being modified.
-// TODO: allow for revive operations to be defined as three consecutive numbers, where the first and the second are the same number.
-// Example: [0, 0, 5, 7, 7, 8, 8, 11]
 /*
+Patches are arrays of strings and numbers which represent changes to text.
+Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result.
+Deletions are represented via omission.
+Strings within a patch represent insertions at the latest index.
+The last element of a patch will always be a number which represent the length of the text being modified.
+TODO: allow for revive operations to be defined as three consecutive numbers, where the first and the second are the same number.
+Example:
+[0, 0, 5, 7, 7, 8, 8, 11]
 [
   // revive 0, 5
   0, 0, 5,
@@ -18,10 +19,9 @@ import * as subseq from "./subseq";
   // retain 8, 11
   8, 11
 ]
-*/
-// TODO: allow for move operations to be defined as three consecutive numbers, the first being a number less than the latest index which indicates a position to move a range of text, and the next two representing the range to be moved.
-// Example: [0, 5, 2, 5, 8, 3, 8, 11]
-/*
+TODO: allow for move operations to be defined as three consecutive numbers, the first being a number less than the latest index which indicates a position to move a range of text, and the next two representing the range to be moved.
+Example:
+[0, 5, 2, 5, 8, 3, 8, 11]
 [
   // retain 0, 5
   0, 5,

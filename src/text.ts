@@ -12,8 +12,7 @@ export class CollabText {
 
   static async initialize(id: string, client: Client): Promise<CollabText> {
     const replica = await client.getReplica(id);
-    const text = new CollabText(id, client, replica);
-    return text;
+    return new CollabText(id, client, replica);
   }
 
   get text(): string {

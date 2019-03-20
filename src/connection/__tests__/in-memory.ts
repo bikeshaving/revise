@@ -1,70 +1,116 @@
+import { Message, Milestone } from "../../connection";
 import { InMemoryConnection } from "../in-memory";
-import { Replica, Revision } from "../../replica";
 
 describe("InMemoryConnection", () => {
   test("send and fetch revisions", async () => {
-    const doc = new Replica("client1");
-    doc.edit(["hello world", 0]);
-    doc.edit([0, 11, "!", 11]);
-    doc.edit(["goodbye", 5, 12]);
     const connection = new InMemoryConnection();
-    await connection.sendRevisions("doc1", doc.pending);
-    const revisions = await connection.fetchRevisions("doc1");
-    const revisions1 = doc.revisions.map((rev, global) => ({ ...rev, global }));
-    expect(revisions).toEqual(revisions1);
+    const messages: Message[] = [
+      {
+        revision: "a",
+        local: 0,
+        latest: -1,
+        client: "client1",
+      },
+      {
+        revision: "b",
+        local: 1,
+        latest: -1,
+        client: "client1",
+      },
+      {
+        revision: "c",
+        local: 2,
+        latest: -1,
+        client: "client1",
+      },
+    ];
+    await connection.sendMessages("doc1", messages);
+    const messages1 = await connection.fetchMessages("doc1");
+    const messages2 = messages.map((message, global) => ({
+      ...message,
+      global,
+    }));
+    expect(messages1).toEqual(messages2);
   });
 
-  test("send and fetch snapshots 1", async () => {
-    const doc = new Replica("client1");
-    doc.edit(["hello world", 0]);
-    doc.edit([0, 11, "!", 11]);
+  // TODO: we shouldn’t be allowed to send milestones whose version is higher than the total number of messages in the connection
+  test("send and fetch snapshots", async () => {
     const connection = new InMemoryConnection();
-    await connection.sendRevisions("doc1", doc.pending);
-    connection.sendSnapshot("doc1", doc.snapshotAt(0));
-    connection.sendSnapshot("doc1", doc.snapshotAt(1));
-    const snapshot0 = await connection.fetchSnapshot("doc1", 0);
-    const snapshot1 = await connection.fetchSnapshot("doc1");
-    expect(snapshot0).toEqual(doc.snapshotAt(0));
-    expect(snapshot1).toEqual(doc.snapshotAt(1));
-  });
+    await connection.sendMessages("doc1", [
+      { revision: "hi", client: "client1", local: 0, latest: -1 },
+      { revision: "hi", client: "client1", local: 1, latest: -1 },
+    ]);
+    const milestoneA: Milestone = {
+      snapshot: "hi",
+      version: 2,
+    };
+    await connection.sendMilestone("doc1", milestoneA);
+    const milestoneB: Milestone = {
+      snapshot: "hello",
+      version: 3,
+    };
+    await expect(
+      connection.sendMilestone("doc1", milestoneB),
+    ).rejects.toBeDefined();
 
-  test("send and fetch snapshots 2", async () => {
-    const doc = new Replica("client1");
-    doc.edit(["hello world", 0]);
-    doc.edit([0, 11, "!", 11]);
-    const connection = new InMemoryConnection();
-    await connection.sendRevisions("doc1", doc.pending);
-    connection.sendSnapshot("doc1", doc.snapshotAt(1));
-    connection.sendSnapshot("doc1", doc.snapshotAt(0));
-    const snapshot0 = await connection.fetchSnapshot("doc1", 0);
-    const snapshot1 = await connection.fetchSnapshot("doc1");
-    expect(snapshot0).toEqual(doc.snapshotAt(0));
-    expect(snapshot1).toEqual(doc.snapshotAt(1));
+    await connection.sendMessages("doc1", [
+      { revision: "hello", client: "client1", local: 2, latest: 2 },
+    ]);
+    await connection.sendMilestone("doc1", milestoneB);
+    const milestoneC: Milestone = {
+      snapshot: "uhhh",
+      version: 1,
+    };
+    await connection.sendMilestone("doc1", milestoneC);
+    const milestoneA1 = await connection.fetchMilestone("doc1", 2);
+    const milestoneB1 = await connection.fetchMilestone("doc1");
+    const milestoneC1 = await connection.fetchMilestone("doc1", 1);
+    expect(milestoneA).toEqual(milestoneA1);
+    expect(milestoneB).toEqual(milestoneB1);
+    expect(milestoneC).toEqual(milestoneC1);
+    await expect(connection.fetchMilestone("doc1", 0)).resolves.toBeUndefined();
   });
 
   test("subscribe", async () => {
-    const doc = new Replica("client1");
     const connection = new InMemoryConnection();
     const subscription = await connection.subscribe("doc", 0);
-    const revisions: Promise<Revision[]> = (async () => {
-      let revisions: Revision[] = [];
-      let global = 0;
-      for await (const revisions1 of subscription) {
-        revisions = revisions.concat(revisions1);
-        for (const rev of revisions) {
-          doc.ingest({ ...rev, global });
-          global += 1;
-        }
-        if (global === 3) {
+    const messages: Promise<Message[]> = (async () => {
+      let messages: Message[] = [];
+      for await (const messages1 of subscription) {
+        messages = messages.concat(messages1);
+        if (messages.length === 3) {
           break;
         }
       }
-      return revisions;
+      return messages;
     })();
-    doc.edit(["hello world", 0]);
-    doc.edit([0, 11, "!", 11]);
-    doc.edit(["H", 1, 6, "W", 7, 12]);
-    await connection.sendRevisions("doc", doc.pending);
-    await expect(revisions).resolves.toEqual(doc.revisions);
+    const messages1 = [
+      {
+        revision: "a",
+        local: 0,
+        latest: -1,
+        client: "client1",
+      },
+      {
+        revision: "b",
+        local: 1,
+        latest: -1,
+        client: "client1",
+      },
+    ];
+    await connection.sendMessages("doc", messages1);
+    const messages2 = [
+      {
+        revision: "c",
+        local: 2,
+        latest: -1,
+        client: "client1",
+      },
+    ];
+    await connection.sendMessages("doc", messages2);
+    const messages3 = messages1
+      .concat(messages2)
+      .map((message, global) => ({ ...message, global }));
+    await expect(messages).resolves.toEqual(messages3);
   });
 });
