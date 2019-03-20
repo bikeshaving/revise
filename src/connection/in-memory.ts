@@ -13,6 +13,7 @@ export interface InMemoryConnectionItem {
 export class InMemoryConnection implements Connection {
   protected items: Record<string, InMemoryConnectionItem> = {};
 
+  // TODO: handle negative indexes
   async fetchSnapshot(id: string, start?: number): Promise<Snapshot> {
     const snapshots: Snapshot[] | undefined =
       this.items[id] && this.items[id].snapshots;
@@ -52,7 +53,7 @@ export class InMemoryConnection implements Connection {
       return;
     }
     const { snapshots } = item;
-    // TODO: use binary search or a quick sort algorithm
+    // TODO: use binary search to insert
     // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
     snapshots.push(snapshot);
     snapshots.sort((a, b) => a.version - b.version);
@@ -117,7 +118,6 @@ export class InMemoryConnection implements Connection {
     start: number,
   ): Promise<AsyncIterable<Revision[]>> {
     let item = this.items[id];
-    // TODO: stop throwing you piece of shit
     if (item == null) {
       item = this.items[id] = {
         clients: {},

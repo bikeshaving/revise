@@ -53,6 +53,7 @@ describe("subseq", () => {
       const result = [0, 4, 4, 11, 4, 4, 1, 3];
       expect(expanded).toEqual(result);
       expect(subseq.shrink(expanded, t)).toEqual(s);
+      expect(subseq.expand(subseq.shrink(expanded, t), t)).toEqual(expanded);
     });
   });
 
