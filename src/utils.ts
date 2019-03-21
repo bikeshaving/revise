@@ -21,7 +21,7 @@ export function findLast<T>(
   return arr[i];
 }
 
-export class InvertedArrayIterator<T> implements IterableIterator<T> {
+class InvertedArrayIterator<T> implements IterableIterator<T> {
   private i: number;
   constructor(private arr: T[]) {
     this.i = arr.length;

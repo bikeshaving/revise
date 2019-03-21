@@ -3,6 +3,8 @@ import { Replica } from "./replica";
 
 export interface ClientItem {
   replica: Promise<Replica>;
+  sent: number;
+  inflight?: Promise<void>;
 }
 
 export class Client {
@@ -10,10 +12,10 @@ export class Client {
 
   constructor(
     public readonly id: string,
-    public readonly connection: Connection,
+    protected readonly connection: Connection,
   ) {}
 
-  async fetchReplica(id: string): Promise<Replica> {
+  protected async fetchReplica(id: string): Promise<Replica> {
     if (this.items[id]) {
       return this.items[id].replica;
     }
@@ -36,7 +38,7 @@ export class Client {
 
   getReplica(id: string): Promise<Replica> {
     if (this.items[id] == null) {
-      this.items[id] = { replica: this.fetchReplica(id) };
+      this.items[id] = { replica: this.fetchReplica(id), sent: -1 };
     }
     return this.items[id].replica;
   }
@@ -65,20 +67,24 @@ export class Client {
     }
   }
 
-  // TODO: have only one in-flight group of messages at a time
   // TODO: send milestones!!!
   // TODO: freeze sent revisions
-  // TODO: catch sendMessage errors
   async sync(id: string): Promise<void> {
     const replica = await this.getReplica(id);
-    if (replica.pending.length) {
-      const messages: Message[] = replica.pending.map((revision, i) => ({
-        revision,
-        client: this.id,
-        local: replica.local + i,
-        latest: replica.latest,
-      }));
-      await this.connection.sendMessages(id, messages);
+    const item = this.items[id];
+    const pending = replica.pending;
+    if (replica.local + pending.length - 1 > item.sent) {
+      const messages: Message[] = replica.pending
+        .map((revision, i) => ({
+          revision,
+          client: this.id,
+          local: replica.local + i,
+          latest: replica.latest,
+        }))
+        .slice(0, replica.local + pending.length - item.sent);
+      item.sent = messages[messages.length - 1].local;
+      item.inflight = this.connection.sendMessages(id, messages);
     }
+    return item.inflight;
   }
 }

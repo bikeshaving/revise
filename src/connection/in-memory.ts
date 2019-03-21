@@ -81,7 +81,7 @@ export class InMemoryConnection implements Connection {
           ? -1
           : item.clients[message.client]) + 1;
       if (message.local > expected) {
-        return Promise.reject(new Error("Missing message"));
+        return Promise.reject(new Error("TODO: repair"));
       } else if (message.local < expected) {
         continue;
       }
