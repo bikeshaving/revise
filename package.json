@@ -10,28 +10,23 @@
     "bench": "NODE_ENV=production node ./bench",
     "develop": "yarn test --watchAll",
     "test": "jest --verbose",
-    "lint": "eslint --ext js,ts src bench",
-    "publish-lib": "yarn clean && yarn lint && yarn test && shx grep -v \"\\\"private\\\": true,\" package.json > lib/package.json && shx cp yarn.lock README.md ./lib && cd ./lib && npm publish"
+    "lint": "eslint --ext js,ts src bench"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^24.0.11",
-    "@types/lodash": "^4.14.123",
-    "@types/node": "^11.11.3",
-    "@types/uuid": "^3.4.4",
-    "@typescript-eslint/eslint-plugin": "^1.4.2",
-    "@typescript-eslint/parser": "^1.4.2",
+    "@typescript-eslint/eslint-plugin": "^1.5.0",
+    "@typescript-eslint/parser": "^1.5.0",
     "benchmark": "^2.1.4",
-    "eslint": "^5.15.2",
+    "eslint": "^5.15.3",
     "eslint-config-prettier": "^4.1.0",
     "eslint-plugin-prettier": "^3.0.1",
-    "fast-check": "^1.12.0",
+    "fast-check": "^1.13.0",
     "jest": "^24.5.0",
     "microtime": "^3.0.0",
     "nodemon": "^1.18.10",
     "prettier": "^1.16.4",
     "shx": "^0.3.2",
     "ts-jest": "^24.0.0",
-    "typescript": "^3.3.3333"
+    "typescript": "^3.3.4000"
   }
 }
