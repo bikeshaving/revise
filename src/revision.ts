@@ -8,14 +8,14 @@ export interface Revision {
   priority?: number;
 }
 
-export function compare(r1: Revision, r2: Revision): number {
-  if ((r1.priority || 0) < (r2.priority || 0)) {
+export function compare(rev1: Revision, rev2: Revision): number {
+  if ((rev1.priority || 0) < (rev2.priority || 0)) {
     return -1;
-  } else if ((r1.priority || 0) > (r2.priority || 0)) {
+  } else if ((rev1.priority || 0) > (rev2.priority || 0)) {
     return 1;
-  } else if (r1.client < r2.client) {
+  } else if (rev1.client < rev2.client) {
     return -1;
-  } else if (r1.client > r2.client) {
+  } else if (rev1.client > rev2.client) {
     return 1;
   }
   return 0;
@@ -25,12 +25,12 @@ export function summarize(revisions: Revision[]): Subseq {
   if (!revisions.length) {
     throw new Error("Empty revisions");
   }
-  let { insertSeq: result } = factor(revisions[0].patch);
+  let { insertSeq: expandSeq } = factor(revisions[0].patch);
   for (const rev of revisions.slice(1)) {
     const { insertSeq } = factor(rev.patch);
-    result = expand(result, insertSeq, { union: true });
+    expandSeq = expand(expandSeq, insertSeq, { union: true });
   }
-  return result;
+  return expandSeq;
 }
 
 export function rebase(
@@ -79,21 +79,21 @@ export function rearrange(
     return revisions;
   }
   const revisions1: Revision[] = [];
-  let insertSeq1: Subseq | undefined;
+  let expandSeq: Subseq | undefined;
   for (let rev of invert(revisions)) {
     let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
     if (test(rev)) {
-      if (insertSeq1 == null) {
-        insertSeq1 = insertSeq;
+      if (expandSeq == null) {
+        expandSeq = insertSeq;
       } else {
-        insertSeq1 = expand(insertSeq, insertSeq1, { union: true });
+        expandSeq = expand(insertSeq, expandSeq, { union: true });
       }
     } else {
-      if (insertSeq1 != null) {
-        deleteSeq = expand(expand(deleteSeq, insertSeq), insertSeq1);
-        insertSeq = expand(insertSeq, insertSeq1);
+      if (expandSeq != null) {
+        deleteSeq = expand(expand(deleteSeq, insertSeq), expandSeq);
+        insertSeq = expand(insertSeq, expandSeq);
         deleteSeq = shrink(deleteSeq, insertSeq);
-        insertSeq1 = shrink(insertSeq1, insertSeq);
+        expandSeq = shrink(expandSeq, insertSeq);
         rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
       }
       revisions1.unshift(rev);
