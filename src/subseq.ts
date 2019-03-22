@@ -359,7 +359,7 @@ export function unify(
   return [text, subseq];
 }
 
-// TODO: rename or delete erase
+// TODO: rename
 export function erase(text: string, subseq1: Subseq, subseq2: Subseq): string {
   let result = "";
   let consumed = 0;

@@ -43,14 +43,18 @@ export class Client {
     return this.items[id].replica;
   }
 
-  // TODO: cancel from outside loop?
-  async listen(id: string): Promise<void> {
+  async listen(id: string, cancel?: Promise<any>): Promise<void> {
     const replica = await this.getReplica(id);
     const subscription = await this.connection.subscribe(
       id,
       replica.latest + 1,
     );
+    let cancelled = false;
+    cancel && cancel.then(() => (cancelled = true));
     for await (const messages of subscription) {
+      if (cancelled) {
+        break;
+      }
       for (const message of messages) {
         // TODO: consider the following cases
         // message.latest > replica.latest

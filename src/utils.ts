@@ -51,5 +51,5 @@ export function timeout<T>(
   if (promise == null) {
     return timeout;
   }
-  return Promise.race([timeout, promise]);
+  return Promise.race([promise, timeout]);
 }

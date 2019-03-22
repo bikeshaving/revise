@@ -96,8 +96,7 @@ export class InMemoryConnection implements Connection {
       Array.from(item.channels).map(async (channel) => {
         try {
           await channel.put(item.messages.slice(start));
-        } catch (err) {
-          // TODO: do something more???
+        } catch {
           channel.close();
         }
       }),

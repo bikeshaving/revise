@@ -5,6 +5,7 @@ import { PatchBuilder } from "./patch";
 // TODO: call client.sync and client.listen and create a lifecycle
 export class CollabText {
   public closed: boolean = false;
+  public err: any;
   constructor(
     public readonly id: string,
     protected readonly client: Client,
@@ -41,7 +42,8 @@ export class CollabText {
     });
   }
 
-  error(_reason: any): void {
+  error(err: any): void {
+    this.err = err;
     this.close();
   }
 

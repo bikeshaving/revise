@@ -22,6 +22,11 @@ export class Replica {
     public local: number = 0,
   ) {}
 
+  // TODO: protect revisions and freeze any revisions that have been seen outside this class
+  get pending(): Revision[] {
+    return this.revisions.slice(this.latest + 1);
+  }
+
   clone(client: string): Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple replicas with the same client id");
@@ -96,13 +101,13 @@ export class Replica {
   edit(
     patch: Patch,
     priority?: number,
-    parent: number = this.revisions.length,
+    version: number = this.revisions.length,
   ): Revision {
-    if (parent < 0 || parent > this.revisions.length) {
+    if (version < 0 || version > this.revisions.length) {
       throw new RangeError("version out of range");
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
-    const hiddenSeq = this.hiddenSeqAt(parent);
+    const hiddenSeq = this.hiddenSeqAt(version);
     [, insertSeq] = interleave(hiddenSeq, insertSeq);
     deleteSeq = expand(deleteSeq, hiddenSeq);
     let rev: Revision = {
@@ -110,7 +115,7 @@ export class Replica {
       client: this.client,
       priority,
     };
-    [rev] = rebase(rev, this.revisions.slice(parent));
+    [rev] = rebase(rev, this.revisions.slice(version));
     rev = this.dedupe(rev);
     this.snapshot = apply(this.snapshot, rev.patch);
     this.revisions.push(rev);
@@ -144,9 +149,9 @@ export class Replica {
     return rev;
   }
 
-  ingest(rev: Revision, parent: number): Revision {
-    if (parent > this.latest) {
-      throw new Error("parent cannot be greater than this.latest");
+  ingest(rev: Revision, version: number): Revision {
+    if (version < -1 || version > this.latest) {
+      throw new RangeError("version out of range");
     }
     if (rev.client === this.client) {
       this.local++;
@@ -155,7 +160,7 @@ export class Replica {
     }
     // TODO: cache the rearranged/rebased somewhere
     const revisions = rearrange(
-      this.revisions.slice(parent + 1, this.latest + 1),
+      this.revisions.slice(version + 1, this.latest + 1),
       (rev1) => rev1.client === rev.client,
     );
     [rev] = rebase(rev, revisions);
@@ -168,10 +173,5 @@ export class Replica {
     this.revisions = this.revisions.concat(revisions1);
     this.latest++;
     return rev1;
-  }
-
-  // TODO: protect revisions and freeze any revisions that have been seen outside this class
-  get pending(): Revision[] {
-    return this.revisions.slice(this.latest + 1);
   }
 }
