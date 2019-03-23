@@ -8,57 +8,49 @@ import {
 describe("FixedBuffer", () => {
   test("simple", () => {
     const buffer = new FixedBuffer<number>(2);
-    buffer.put(1);
-    buffer.put(2);
-    expect(buffer.take()).toEqual(1);
-    expect(buffer.take()).toEqual(2);
-    expect(buffer.take()).toEqual(undefined);
+    buffer.add(1);
+    buffer.add(2);
+    expect(buffer.remove()).toEqual(1);
+    expect(buffer.remove()).toEqual(2);
+    expect(buffer.remove()).toEqual(undefined);
   });
 
-  test("parks when full", async () => {
-    const buffer = new FixedBuffer<number>(3);
-    buffer.put(1);
-    buffer.put(2);
-    setTimeout(() => {
-      expect(buffer.take()).toEqual(1);
-    });
-    await expect(buffer.put(3)).resolves.toBeUndefined();
-    buffer.put(4);
-  });
-
-  test("throws when full", async () => {
+  test("throws when full", () => {
     const buffer = new FixedBuffer<number>(2);
-    buffer.put(1);
-    buffer.put(2);
-    await expect(buffer.put(3)).rejects.toBeDefined();
+    buffer.add(1);
+    buffer.add(2);
+    expect(buffer.full).toBe(true);
+    expect(() => buffer.add(3)).toThrow();
   });
 });
 
 describe("SlidingBuffer", () => {
   test("simple", () => {
     const buffer = new SlidingBuffer<number>(2);
-    buffer.put(1);
-    buffer.put(2);
-    buffer.put(3);
-    buffer.put(4);
-    buffer.put(5);
-    expect(buffer.take()).toEqual(4);
-    expect(buffer.take()).toEqual(5);
-    expect(buffer.take()).toEqual(undefined);
+    buffer.add(1);
+    buffer.add(2);
+    buffer.add(3);
+    buffer.add(4);
+    buffer.add(5);
+    expect(buffer.full).toBe(false);
+    expect(buffer.remove()).toEqual(4);
+    expect(buffer.remove()).toEqual(5);
+    expect(buffer.remove()).toEqual(undefined);
   });
 });
 
 describe("DroppingBuffer", () => {
   test("simple", () => {
     const buffer = new DroppingBuffer<number>(2);
-    buffer.put(1);
-    buffer.put(2);
-    buffer.put(3);
-    buffer.put(4);
-    buffer.put(5);
-    expect(buffer.take()).toEqual(1);
-    expect(buffer.take()).toEqual(2);
-    expect(buffer.take()).toEqual(undefined);
+    buffer.add(1);
+    buffer.add(2);
+    buffer.add(3);
+    buffer.add(4);
+    buffer.add(5);
+    expect(buffer.full).toBe(false);
+    expect(buffer.remove()).toEqual(1);
+    expect(buffer.remove()).toEqual(2);
+    expect(buffer.remove()).toEqual(undefined);
   });
 });
 
@@ -142,7 +134,8 @@ describe("Channel", () => {
     const puts = (async () => {
       await channel.put(1);
       await channel.put(2);
-      return channel.put(3);
+      await channel.put(3);
+      return channel.put(4);
     })();
     let i = 1;
     for await (const num of channel) {
@@ -160,7 +153,8 @@ describe("Channel", () => {
     const puts = (async () => {
       await channel.put(1);
       await channel.put(2);
-      return channel.put(3);
+      await channel.put(3);
+      return channel.put(4);
     })();
     let i = 1;
     const error = new Error("Example error");

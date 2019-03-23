@@ -1,67 +1,83 @@
 export interface Buffer<T> {
-  put(value: T): Promise<void>;
-  take(): T | undefined;
+  full: boolean;
+  add(value: T): void;
+  remove(): T | undefined;
+  clear(): void;
 }
 
 export class FixedBuffer<T> implements Buffer<T> {
-  protected resolve?: () => void;
-  protected buffer: T[] = [];
+  protected arr: T[] = [];
   constructor(protected length: number) {}
-  async put(value: T): Promise<void> {
-    if (this.buffer.length < this.length) {
-      this.buffer.push(value);
-    }
-    if (this.buffer.length < this.length) {
-      return Promise.resolve();
-    } else if (this.resolve != null) {
-      return Promise.reject(new Error("Full buffer"));
-    }
-    return new Promise((resolve) => (this.resolve = resolve));
+
+  get full(): boolean {
+    return this.arr.length >= this.length;
   }
 
-  take(): T | undefined {
-    const result = this.buffer.shift();
-    if (this.resolve != null) {
-      this.resolve();
-      delete this.resolve;
+  add(value: T): void {
+    if (this.arr.length < this.length) {
+      this.arr.push(value);
+    } else {
+      throw new Error("Buffer full");
     }
-    return result;
+  }
+
+  remove(): T | undefined {
+    return this.arr.shift();
+  }
+
+  clear(): void {
+    this.arr = [];
   }
 }
 
+// TODO: use a circular buffer
 export class SlidingBuffer<T> implements Buffer<T> {
-  protected buffer: T[] = [];
+  readonly full = false;
+  protected arr: T[] = [];
   constructor(protected length: number) {}
-  async put(value: T): Promise<void> {
-    if (this.buffer.length >= this.length) {
-      this.buffer.shift();
+
+  add(value: T): void {
+    while (this.arr.length >= this.length) {
+      this.arr.shift();
     }
-    this.buffer.push(value);
+    this.arr.push(value);
   }
 
-  take(): T | undefined {
-    return this.buffer.shift();
+  remove(): T | undefined {
+    return this.arr.shift();
+  }
+
+  clear(): void {
+    this.arr = [];
   }
 }
 
 export class DroppingBuffer<T> implements Buffer<T> {
-  protected buffer: T[] = [];
+  readonly full = false;
+  protected arr: T[] = [];
+
   constructor(protected length: number) {}
-  async put(value: T): Promise<void> {
-    if (this.buffer.length < this.length) {
-      this.buffer.push(value);
+
+  add(value: T): void {
+    if (this.arr.length < this.length) {
+      this.arr.push(value);
     }
   }
 
-  take(): T | undefined {
-    return this.buffer.shift();
+  remove(): T | undefined {
+    return this.arr.shift();
+  }
+
+  clear(): void {
+    this.arr = [];
   }
 }
 
 export class Channel<T> implements AsyncIterableIterator<T> {
   onclose?: (this: this) => void;
   public closed = false;
-  protected resolve?: (value: IteratorResult<T>) => void;
+  protected onresult?: (result: IteratorResult<T>) => void;
+  protected onready?: () => void;
   protected readonly done: IteratorResult<T> = {
     value: (undefined as unknown) as T,
     done: true,
@@ -72,38 +88,55 @@ export class Channel<T> implements AsyncIterableIterator<T> {
   put(value: T): Promise<void> {
     if (this.closed) {
       return Promise.reject(new Error("Cannot put to closed channel"));
-    } else if (this.resolve != null) {
-      this.resolve({ value, done: false });
-      delete this.resolve;
+    } else if (this.onresult != null) {
+      this.onresult({ value, done: false });
+      delete this.onresult;
       return Promise.resolve();
     }
-    return this.buffer.put(value);
+    try {
+      this.buffer.add(value);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    if (!this.buffer.full) {
+      return Promise.resolve();
+    }
+    return new Promise((onready) => (this.onready = onready));
   }
 
   close(): void {
     this.closed = true;
-    if (this.resolve != null) {
-      this.resolve({ ...this.done });
-      delete this.resolve;
+    if (this.onresult != null) {
+      this.onresult({ ...this.done });
+      delete this.onresult;
     }
     if (this.onclose != null) {
       this.onclose();
       delete this.onclose;
     }
+    if (this.onready != null) {
+      this.onready();
+      delete this.onready;
+    }
+    this.buffer.clear();
   }
 
   next(): Promise<IteratorResult<T>> {
     if (this.closed) {
       return Promise.resolve({ ...this.done });
-    } else if (this.resolve != null) {
-      return Promise.reject(new Error("Already taking value from iterator"));
+    } else if (this.onresult != null) {
+      return Promise.reject(new Error("Already pulling value from iterator"));
     }
-    const value = this.buffer.take();
-    return new Promise((resolve) => {
+    const value = this.buffer.remove();
+    if (this.onready != null) {
+      this.onready();
+      delete this.onready;
+    }
+    return new Promise((onresult) => {
       if (value == null) {
-        this.resolve = resolve;
+        this.onresult = onresult;
       } else {
-        resolve({ value, done: false });
+        onresult({ value, done: false });
       }
     });
   }
@@ -122,5 +155,3 @@ export class Channel<T> implements AsyncIterableIterator<T> {
     return this;
   }
 }
-
-export default Channel;
