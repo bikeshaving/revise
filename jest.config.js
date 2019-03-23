@@ -57,7 +57,10 @@ module.exports = {
   // A set of global variables that need to be available in all test environments
   globals: {
     "ts-jest": {
-      "tsConfig": "tsconfig.json"
+      tsConfig: "tsconfig.json",
+      diagnostics: {
+        ignoreCodes: [151001],
+      },
     }
   },
 
@@ -69,7 +72,7 @@ module.exports = {
   // An array of file extensions your modules use
   moduleFileExtensions: [
     "ts",
-    "tsx",
+    //"tsx",
     "js"
   ],
 
