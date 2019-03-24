@@ -164,6 +164,7 @@ export class Replica {
       (rev1) => rev1.client === rev.client,
     );
     [rev] = rebase(rev, revisions);
+    // TODO: do we need to dedupe here?
     const [rev1, revisions1] = rebase(
       rev,
       this.revisions.slice(this.latest + 1),

@@ -85,7 +85,7 @@ export class Client {
           local: replica.local + i,
           latest: replica.latest,
         }))
-        .slice(0, replica.local + pending.length - item.sent);
+        .slice(0, replica.local - item.sent + pending.length);
       item.sent = messages[messages.length - 1].local;
       item.inflight = this.connection.sendMessages(id, messages);
     }
