@@ -1,4 +1,4 @@
-import { Channel, FixedBuffer } from "../channel";
+import { Channel, FixedBuffer } from "@collabjs/channel";
 import { Connection, Message, Milestone } from "../connection";
 
 export class WebSocketConnection implements Connection {
@@ -21,7 +21,7 @@ export class WebSocketConnection implements Connection {
     return Promise.resolve();
   }
 
-  subscribe(): Promise<AsyncIterableIterator<Message[]>> {
+  subscribe(): Promise<AsyncIterable<Message[]>> {
     const channel = new Channel(new FixedBuffer<Message[]>(100));
     return Promise.resolve(channel);
   }

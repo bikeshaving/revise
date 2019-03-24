@@ -3,7 +3,7 @@ import {
   SlidingBuffer,
   DroppingBuffer,
   Channel,
-} from "../channel";
+} from "../index";
 
 describe("FixedBuffer", () => {
   test("simple", () => {

@@ -1,4 +1,4 @@
-import { Channel, FixedBuffer } from "../channel";
+import { Channel, FixedBuffer } from "@collabjs/channel";
 import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 
