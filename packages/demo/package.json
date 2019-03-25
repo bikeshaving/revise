@@ -3,22 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "develop": "next",
     "build": "next build",
+    "develop": "ts-node server/index.ts",
     "start": "next start",
-    "type-check": "tsc"
+    "type-check": "tsc",
+    "watch": "nodemon --ext ts --watch server --exec"
   },
   "dependencies": {
+    "@collabjs/collab": "*",
     "@zeit/next-typescript": "^1.1.1",
+    "fastify": "^2.1.0",
+    "fastify-plugin": "^1.5.0",
     "next": "^8.0.3",
     "react": "^16.8.5",
     "react-dom": "^16.8.5",
-    "@collabjs/collab": "*"
+    "uuid": "^3.3.2",
+    "ws": "^6.2.0"
   },
   "devDependencies": {
-    "@types/next": "^7.0.6",
+    "@types/next": "^8.0.3",
     "@types/react": "^16.4.16",
     "@types/react-dom": "16.0.11",
+    "@types/ws": "^6.0.1",
+    "nodemon": "^1.18.10",
+    "ts-node": "^8.0.3",
     "typescript": "3.2.4"
   }
 }
