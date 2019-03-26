@@ -145,11 +145,11 @@ export function meld(patch1: Patch, patch2: Patch): Patch {
   } = factor(patch2);
   let hiddenSeq = subseq.expand(deleteSeq1, insertSeq1);
   deleteSeq2 = subseq.expand(deleteSeq2, hiddenSeq, { union: true });
-  let reviveSeq = subseq.intersection(insertSeq1, deleteSeq2);
+  let erasedSeq = subseq.intersection(insertSeq1, deleteSeq2);
   // TODO: reorder this so it’s not so disjointed
   deleteSeq2 = subseq.shrink(deleteSeq2, insertSeq1);
   [, insertSeq2] = subseq.interleave(hiddenSeq, insertSeq2);
-  reviveSeq = subseq.expand(reviveSeq, insertSeq2);
+  erasedSeq = subseq.expand(erasedSeq, insertSeq2);
   insertSeq1 = subseq.expand(insertSeq1, insertSeq2);
   [inserted2, insertSeq2] = subseq.unify(
     inserted1,
@@ -157,8 +157,8 @@ export function meld(patch1: Patch, patch2: Patch): Patch {
     insertSeq1,
     insertSeq2,
   );
-  inserted2 = subseq.erase(inserted2, insertSeq2, reviveSeq);
-  insertSeq2 = subseq.shrink(insertSeq2, reviveSeq);
+  inserted2 = subseq.erase(inserted2, insertSeq2, erasedSeq);
+  insertSeq2 = subseq.shrink(insertSeq2, erasedSeq);
   return synthesize({
     inserted: inserted2,
     insertSeq: insertSeq2,

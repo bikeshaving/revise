@@ -2,8 +2,10 @@ import { Channel, FixedBuffer } from "@collabjs/channel";
 import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 
+type PutCallback = (messages: Message[]) => Promise<void>;
 interface InMemoryConnectionItem {
   channels: Set<Channel<Message[]>>;
+  callbacks: WeakMap<Channel<Message[]>, PutCallback>;
   clients: Record<string, number>;
   messages: Message[];
   milestones: Milestone[];
@@ -11,7 +13,8 @@ interface InMemoryConnectionItem {
 
 function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
   return {
-    channels: new Set(item.channels),
+    channels: item.channels,
+    callbacks: item.callbacks,
     clients: { ...item.clients },
     messages: item.messages.slice(),
     milestones: item.milestones.slice(),
@@ -67,6 +70,7 @@ export class InMemoryConnection implements Connection {
     if (item == null) {
       item = {
         channels: new Set(),
+        callbacks: new WeakMap(),
         clients: {},
         messages: [],
         milestones: [],
@@ -95,8 +99,8 @@ export class InMemoryConnection implements Connection {
     return Promise.all(
       Array.from(item.channels).map(async (channel) => {
         try {
-          await channel.put(item.messages.slice(start));
-        } catch {
+          item.callbacks.get(channel)!(item.messages.slice(start));
+        } catch (err) {
           channel.close();
         }
       }),
@@ -108,17 +112,22 @@ export class InMemoryConnection implements Connection {
     if (item == null) {
       item = this.items[id] = {
         channels: new Set(),
+        callbacks: new WeakMap(),
         clients: {},
         messages: [],
         milestones: [],
       };
     }
-    const channel = new Channel(new FixedBuffer<Message[]>(100));
-    const messages = item.messages.slice(start);
-    if (messages.length) {
-      channel.put(messages);
-    }
+    let callback: PutCallback;
+    const channel = new Channel((put) => {
+      const messages = item.messages.slice(start);
+      if (messages.length) {
+        put(messages);
+      }
+      callback = put;
+    }, new FixedBuffer<Message[]>(100));
     item.channels.add(channel);
+    item.callbacks.set(channel, callback!);
     channel.onclose = () => {
       item.channels.delete(channel);
     };
