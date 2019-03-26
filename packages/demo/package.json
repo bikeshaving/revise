@@ -4,16 +4,16 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "develop": "ts-node server/index.ts",
+    "develop": "nodemon --ext ts --ignore pages --exec ts-node server/index.ts",
     "start": "next start",
-    "type-check": "tsc",
-    "watch": "nodemon --ext ts --watch server --exec"
+    "type-check": "tsc"
   },
   "dependencies": {
     "@collabjs/collab": "*",
     "@zeit/next-typescript": "^1.1.1",
     "fastify": "^2.1.0",
     "fastify-plugin": "^1.5.0",
+    "fork-ts-checker-webpack-plugin": "^1.0.0",
     "next": "^8.0.3",
     "react": "^16.8.5",
     "react-dom": "^16.8.5",

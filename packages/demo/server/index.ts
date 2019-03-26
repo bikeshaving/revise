@@ -2,10 +2,12 @@ import * as createFastify from "fastify";
 import * as plugin from "fastify-plugin";
 import * as ws from "ws";
 import * as next from "next";
+import { InMemoryConnection } from "@collabjs/collab/lib/connection/in-memory";
+import { proxy } from "../websocket/proxy";
 
 declare module "fastify" {
   export interface FastifyInstance {
-    ws: ws.Server;
+    wss: ws.Server;
     next: next.Server;
   }
 }
@@ -18,9 +20,9 @@ const fastify = createFastify({
 
 fastify.register(plugin((fastify) => {
   const wss = new ws.Server({ server: fastify.server });
-  fastify.decorate("ws", wss);
+  fastify.decorate("wss", wss);
   fastify.addHook("onClose", (fastify, done) => {
-    fastify.ws.close(done);
+    fastify.wss.close(done);
   });
   return Promise.resolve();
 }));
@@ -52,21 +54,9 @@ fastify.ready((err) => {
   if (err) {
     throw err;
   }
-  fastify.ws.on("connection", (socket: WebSocket) => {
-    socket.addEventListener("message", (ev) => {
-      try {
-        socket.send(ev.data);
-      } catch (err) {
-        fastify.log.error(err);
-        socket.close();
-      }
-    });
-    try {
-      socket.send("😎");
-    } catch (err) {
-      fastify.log.error(err);
-      socket.close();
-    }
+  const conn = new InMemoryConnection();
+  fastify.wss.on("connection", (socket: WebSocket) => {
+    proxy(conn, socket);
   });
 });
 
