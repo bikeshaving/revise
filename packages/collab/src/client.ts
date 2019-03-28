@@ -3,6 +3,7 @@ import { Replica } from "./replica";
 
 export interface ClientItem {
   replica: Promise<Replica>;
+  // TODO: maybe move sent to replica to replica.
   sent: number;
   inflight?: Promise<void>;
 }
@@ -22,6 +23,7 @@ export class Client {
     const milestone = await this.connection.fetchMilestone(id);
     let replica: Replica;
     let version: number;
+    // TODO: put replica instantiation in a callback or something
     if (milestone == null) {
       replica = new Replica(this.id);
       version = -1;
@@ -49,6 +51,7 @@ export class Client {
       id,
       replica.latest + 1,
     );
+    // TODO: Preemptively cancel by calling this.return if it’s defined. This will probably mean we have to return AsyncIterableIterator from connection.subscribe, or maybe I’ll just return channel I dunno.
     let cancelled = false;
     cancel && cancel.then(() => (cancelled = true));
     for await (const messages of subscription) {
@@ -71,13 +74,14 @@ export class Client {
     }
   }
 
+  // TODO: rename to save because sync implies we’re pulling remote changes.
   // TODO: send milestones!!!
   // TODO: freeze sent revisions
   async sync(id: string): Promise<void> {
     const replica = await this.getReplica(id);
     const item = this.items[id];
     const pending = replica.pending;
-    if (replica.local + pending.length - 1 > item.sent) {
+    if (replica.local + pending.length > item.sent + 1) {
       const messages: Message[] = replica.pending
         .map((revision, i) => ({
           revision,
@@ -85,10 +89,10 @@ export class Client {
           local: replica.local + i,
           latest: replica.latest,
         }))
-        .slice(0, replica.local - item.sent + pending.length);
+        .slice(item.sent + 1 - replica.local);
       item.sent = messages[messages.length - 1].local;
       item.inflight = this.connection.sendMessages(id, messages);
     }
-    return item.inflight;
+    return item.inflight || Promise.resolve();
   }
 }

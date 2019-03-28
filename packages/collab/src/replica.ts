@@ -149,14 +149,14 @@ export class Replica {
     return rev;
   }
 
-  ingest(rev: Revision, version: number): Revision {
+  ingest(rev: Revision, version: number): Revision | undefined {
     if (version < -1 || version > this.latest) {
       throw new RangeError("version out of range");
     }
     if (rev.client === this.client) {
       this.local++;
       this.latest++;
-      return this.revisions[this.latest];
+      return;
     }
     // TODO: cache the rearranged/rebased somewhere
     const revisions = rearrange(

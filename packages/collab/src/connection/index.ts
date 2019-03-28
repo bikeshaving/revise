@@ -1,4 +1,5 @@
 export interface Message {
+  // TODO: rename to data, remove client from revision and construct revision from message
   revision: any;
   client: string;
   local: number;
