@@ -18,32 +18,36 @@ const fastify = createFastify({
   logger: { level: "error" },
 });
 
-fastify.register(plugin((fastify) => {
-  const wss = new ws.Server({ server: fastify.server });
-  fastify.decorate("wss", wss);
-  fastify.addHook("onClose", (fastify, done) => {
-    fastify.wss.close(done);
-  });
-  return Promise.resolve();
-}));
+fastify.register(
+  plugin((fastify) => {
+    const wss = new ws.Server({ server: fastify.server });
+    fastify.decorate("wss", wss);
+    fastify.addHook("onClose", (fastify, done) => {
+      fastify.wss.close(done);
+    });
+    return Promise.resolve();
+  }),
+);
 
-fastify.register(plugin(async (fastify) => {
-  const app = next({ dev });
-  await app.prepare();
-  fastify.decorate("next", app);
+fastify.register(
+  plugin(async (fastify) => {
+    const app = next({ dev });
+    await app.prepare();
+    fastify.decorate("next", app);
 
-  if (dev) {
-    fastify.get("/_next/*", async (req, rep) => {
-      await fastify.next.handleRequest(req.req, rep.res);
+    if (dev) {
+      fastify.get("/_next/*", async (req, rep) => {
+        await fastify.next.handleRequest(req.req, rep.res);
+        rep.sent = true;
+      });
+    }
+
+    fastify.setNotFoundHandler(async (req, rep) => {
+      await fastify.next.render404(req.req, rep.res);
       rep.sent = true;
     });
-  }
-
-  fastify.setNotFoundHandler(async (req, rep) => {
-    await fastify.next.render404(req.req, rep.res);
-    rep.sent = true;
-  });
-}));
+  }),
+);
 
 fastify.get("/", async (req, rep) => {
   await fastify.next.handleRequest(req.req, rep.res);
@@ -70,10 +74,12 @@ fastify.listen(port, (err) => {
 
 process.on("uncaughtException", (err) => {
   fastify.log.error(err);
+  throw err;
 });
 
 process.on("unhandledRejection", (reason) => {
   if (reason) {
     fastify.log.error(reason);
+    throw reason;
   }
 });

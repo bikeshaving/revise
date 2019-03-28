@@ -3,7 +3,7 @@ import { Message, Milestone } from "@collabjs/collab/lib/connection";
 export interface AbstractAction {
   type: string;
   id: string;
-  requestId: number;
+  reqId: number;
 }
 
 export interface FetchMilestone extends AbstractAction {

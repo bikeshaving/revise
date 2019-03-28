@@ -37,10 +37,10 @@ export class WebSocketConnection implements Connection {
       console.error(err);
       return;
     }
-    switch (message.action) {
+    switch (message.type) {
       case "sendMessages": {
-        const request = this.requests[message.requestId];
-        delete this.requests[message.requestId];
+        const request = this.requests[message.reqId];
+        delete this.requests[message.reqId];
         if (!request) {
           return;
         }
@@ -49,8 +49,8 @@ export class WebSocketConnection implements Connection {
         break;
       }
       case "sendMilestone": {
-        const request = this.requests[message.requestId];
-        delete this.requests[message.requestId];
+        const request = this.requests[message.reqId];
+        delete this.requests[message.reqId];
         if (!request) {
           return;
         }
@@ -59,8 +59,8 @@ export class WebSocketConnection implements Connection {
         break;
       }
       case "acknowledge": {
-        const request = this.requests[message.requestId];
-        delete this.requests[message.requestId];
+        const request = this.requests[message.reqId];
+        delete this.requests[message.reqId];
         if (!request) {
           return;
         }
@@ -90,11 +90,11 @@ export class WebSocketConnection implements Connection {
       type: "fetchMilestone",
       id,
       start,
-      requestId: this.nextRequestId++,
+      reqId: this.nextRequestId++,
     };
     this.send(action);
     return new Promise((resolve, reject) => {
-      this.requests[action.requestId] = [resolve, reject];
+      this.requests[action.reqId] = [resolve, reject];
     });
   }
 
@@ -109,11 +109,11 @@ export class WebSocketConnection implements Connection {
       id,
       start,
       end,
-      requestId: this.nextRequestId++,
+      reqId: this.nextRequestId++,
     };
     this.send(action);
     return new Promise((resolve, reject) => {
-      this.requests[action.requestId] = [resolve, reject];
+      this.requests[action.reqId] = [resolve, reject];
     });
   }
 
@@ -122,11 +122,11 @@ export class WebSocketConnection implements Connection {
       type: "sendMilestone",
       id,
       milestone,
-      requestId: this.nextRequestId++,
+      reqId: this.nextRequestId++,
     };
     this.send(action);
     return new Promise((resolve, reject) => {
-      this.requests[action.requestId] = [resolve, reject];
+      this.requests[action.reqId] = [resolve, reject];
     });
   }
 
@@ -135,11 +135,11 @@ export class WebSocketConnection implements Connection {
       type: "sendMessages",
       id,
       messages,
-      requestId: this.nextRequestId++,
+      reqId: this.nextRequestId++,
     };
     this.send(action);
     return new Promise((resolve, reject) => {
-      this.requests[action.requestId] = [resolve, reject];
+      this.requests[action.reqId] = [resolve, reject];
     });
   }
 
@@ -147,11 +147,11 @@ export class WebSocketConnection implements Connection {
     const action: Action = {
       type: "subscribe",
       id,
-      requestId: this.nextRequestId++,
+      reqId: this.nextRequestId++,
     };
     this.send(action);
     return new Promise((resolve, reject) => {
-      this.requests[action.requestId] = [resolve, reject];
+      this.requests[action.reqId] = [resolve, reject];
     });
   }
 }
