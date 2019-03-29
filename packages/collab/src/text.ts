@@ -15,9 +15,6 @@ export class CollabText {
       .listen(id)
       .then(() => {
         this.close();
-      })
-      .catch((err) => {
-        this.error(err);
       });
   }
 
