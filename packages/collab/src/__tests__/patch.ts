@@ -1,5 +1,12 @@
 import * as subseq from "../subseq";
-import { apply, factor, Patch, PatchBuilder, synthesize } from "../patch";
+import {
+  apply,
+  factor,
+  operations,
+  Patch,
+  PatchBuilder,
+  synthesize,
+} from "../patch";
 describe("patch", () => {
   const text = "hello world";
   const p0: Patch = [0, 1, "era", 9, 11];
@@ -13,6 +20,35 @@ describe("patch", () => {
       expect(apply(text, p1)).toEqual("jello");
       expect(apply(text, p2)).toEqual("hell on Earth");
       expect(apply(text, p3)).toEqual("hello buddy");
+    });
+  });
+
+  describe("operations", () => {
+    test("operations", () => {
+      expect(Array.from(operations(p0))).toEqual([
+        { type: "retain", start: 0, end: 1 },
+        { type: "insert", start: 1, inserted: "era" },
+        { type: "delete", start: 1, end: 9 },
+        { type: "retain", start: 9, end: 11 },
+      ]);
+      expect(Array.from(operations(p1))).toEqual([
+        { type: "insert", start: 0, inserted: "je" },
+        { type: "delete", start: 0, end: 2 },
+        { type: "retain", start: 2, end: 5 },
+        { type: "delete", start: 5, end: 11 },
+      ]);
+      expect(Array.from(operations(p2))).toEqual([
+        { type: "retain", start: 0, end: 4 },
+        { type: "insert", start: 4, inserted: " " },
+        { type: "retain", start: 4, end: 5 },
+        { type: "insert", start: 5, inserted: "n Earth" },
+        { type: "delete", start: 5, end: 11 },
+      ]);
+      expect(Array.from(operations(p3))).toEqual([
+        { type: "retain", start: 0, end: 6 },
+        { type: "insert", start: 6, inserted: "buddy" },
+        { type: "delete", start: 6, end: 11 },
+      ]);
     });
   });
 
@@ -117,22 +153,22 @@ describe("patch", () => {
       ).toEqual(result);
     });
   });
-});
 
-describe("PatchBuilder", () => {
-  describe("replace", () => {
-    test("comprehensive", () => {
-      const builder = new PatchBuilder(11);
-      builder.replace(5, 6, "__");
-      expect(builder.patch).toEqual([0, 5, "__", 6, 11]);
-      builder.replace(0, 5, "Hi");
-      expect(builder.patch).toEqual(["Hi__", 6, 11]);
-      builder.replace(0, 4, "");
-      expect(builder.patch).toEqual([6, 11]);
-      builder.replace(3, 5, "m");
-      expect(builder.patch).toEqual([6, 9, "m", 11]);
-      builder.replace(0, 0, "goodbye ");
-      expect(builder.patch).toEqual(["goodbye ", 6, 9, "m", 11]);
+  describe("PatchBuilder", () => {
+    describe("replace", () => {
+      test("comprehensive", () => {
+        const builder = new PatchBuilder(11);
+        builder.replace(5, 6, "__");
+        expect(builder.patch).toEqual([0, 5, "__", 6, 11]);
+        builder.replace(0, 5, "Hi");
+        expect(builder.patch).toEqual(["Hi__", 6, 11]);
+        builder.replace(0, 4, "");
+        expect(builder.patch).toEqual([6, 11]);
+        builder.replace(3, 5, "m");
+        expect(builder.patch).toEqual([6, 9, "m", 11]);
+        builder.replace(0, 0, "goodbye ");
+        expect(builder.patch).toEqual(["goodbye ", 6, 9, "m", 11]);
+      });
     });
   });
 });

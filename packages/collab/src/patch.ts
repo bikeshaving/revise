@@ -39,6 +39,58 @@ export function apply(text: string, patch: Patch): string {
   return subseq.merge(inserted, text, insertSeq);
 }
 
+export interface InsertOperation {
+  type: "insert";
+  start: number;
+  inserted: string;
+}
+
+export interface RetainOperation {
+  type: "retain";
+  start: number;
+  end: number;
+}
+
+export interface DeleteOperation {
+  type: "delete";
+  start: number;
+  end: number;
+}
+
+type Operation = InsertOperation | RetainOperation | DeleteOperation;
+
+export function* operations(patch: Patch): IterableIterator<Operation> {
+  const length = patch[patch.length - 1];
+  if (typeof length !== "number") {
+    throw new Error("Malformed patch");
+  }
+  let start = 0;
+  let retaining = false;
+  for (const p of patch) {
+    if (retaining) {
+      if (typeof p !== "number" || p <= start || p > length) {
+        throw new Error("Malformed patch");
+      }
+      yield { type: "retain", start, end: p };
+      start = p;
+      retaining = false;
+    } else if (typeof p === "number") {
+      if (p < start) {
+        throw new Error("Malformed patch");
+      } else if (p > start) {
+        yield { type: "delete", start, end: p };
+      }
+      start = p;
+      retaining = true;
+    } else {
+      yield { type: "insert", start, inserted: p };
+    }
+  }
+  if (length > start) {
+    yield { type: "delete", start, end: length };
+  }
+}
+
 // TODO: add moves interface
 // export interface Moves {
 //   [to: number]: Subseq;
@@ -60,32 +112,25 @@ export function factor(patch: Patch): FactoredPatch {
   let inserted = "";
   const insertSeq: Subseq = [];
   const deleteSeq: Subseq = [];
-  let consumed = 0;
-  let start: number | undefined;
-  for (const p of patch) {
-    if (start != null) {
-      if (typeof p !== "number" || p <= consumed || p > length) {
-        throw new Error("Malformed patch");
+  for (const op of operations(patch)) {
+    switch (op.type) {
+      case "retain": {
+        subseq.push(insertSeq, op.end - op.start, false);
+        subseq.push(deleteSeq, op.end - op.start, false);
+        break;
       }
-      subseq.push(insertSeq, p - start, false);
-      subseq.push(deleteSeq, p - start, false);
-      consumed = p;
-      start = undefined;
-    } else if (typeof p === "number") {
-      if (p < consumed) {
-        throw new Error("Malformed patch");
+      case "delete": {
+        subseq.push(insertSeq, op.end - op.start, false);
+        subseq.push(deleteSeq, op.end - op.start, true);
+        break;
       }
-      subseq.push(insertSeq, p - consumed, false);
-      subseq.push(deleteSeq, p - consumed, true);
-      consumed = p;
-      start = p;
-    } else {
-      subseq.push(insertSeq, p.length, true);
-      inserted += p;
+      case "insert": {
+        subseq.push(insertSeq, op.inserted.length, true);
+        inserted += op.inserted;
+        break;
+      }
     }
   }
-  subseq.push(insertSeq, length - consumed, false);
-  subseq.push(deleteSeq, length - consumed, true);
   return { inserted, insertSeq, deleteSeq };
 }
 
@@ -171,8 +216,10 @@ export class PatchBuilder {
   constructor(protected length: number) {}
 
   replace(start: number, end: number, inserted: string): void {
-    if (end < start) {
-      throw new Error("end cannot be less than start");
+    if (this.length < end) {
+      throw new RangeError("length cannot be less than end");
+    } else if (end < start) {
+      throw new RangeError("end cannot be less than start");
     }
     let deleteSeq: Subseq = [];
     subseq.push(deleteSeq, start, false);
