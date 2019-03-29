@@ -1,5 +1,4 @@
 import * as React from "react";
-
 import * as uuid from "uuid/v4";
 import { WebSocketConnection } from "../websocket/connection";
 import { Client } from "@collabjs/collab/lib/client";

@@ -3,7 +3,7 @@ import * as plugin from "fastify-plugin";
 import * as ws from "ws";
 import * as next from "next";
 import { InMemoryConnection } from "@collabjs/collab/lib/connection/in-memory";
-import { proxy } from "../websocket/proxy";
+import { link } from "../websocket/link";
 
 declare module "fastify" {
   export interface FastifyInstance {
@@ -59,9 +59,7 @@ fastify.ready((err) => {
     throw err;
   }
   const conn = new InMemoryConnection();
-  fastify.wss.on("connection", (socket: WebSocket) => {
-    proxy(conn, socket);
-  });
+  fastify.wss.on("connection", (socket: WebSocket) => link(conn, socket));
 });
 
 const port = parseInt(process.env.PORT || "3000", 10);

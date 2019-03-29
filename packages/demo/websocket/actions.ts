@@ -19,12 +19,16 @@ export interface FetchMessages extends AbstractAction {
 
 export interface SendMilestone extends AbstractAction {
   type: "sendMilestone";
-  milestone: Milestone | undefined;
+  milestone: Milestone;
 }
 
 export interface SendMessages extends AbstractAction {
   type: "sendMessages";
-  messages: Message[] | undefined;
+  messages: Message[];
+}
+
+export interface SendNothing extends AbstractAction {
+  type: "sendNothing";
 }
 
 export interface Acknowledge extends AbstractAction {
@@ -33,6 +37,7 @@ export interface Acknowledge extends AbstractAction {
 
 export interface Subscribe extends AbstractAction {
   type: "subscribe";
+  start: number;
 }
 
 export type Action =
@@ -40,5 +45,6 @@ export type Action =
   | FetchMessages
   | SendMilestone
   | SendMessages
+  | SendNothing
   | Acknowledge
   | Subscribe;

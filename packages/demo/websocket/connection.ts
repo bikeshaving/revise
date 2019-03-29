@@ -3,11 +3,18 @@ import {
   Message,
   Milestone,
 } from "@collabjs/collab/lib/connection";
+import { Channel, FixedBuffer } from "@collabjs/channel";
 import { Action } from "./actions";
+
+interface Request {
+  resolve(value?: any): void;
+  reject(reason: any): void;
+  persist?: boolean;
+}
 
 export class WebSocketConnection implements Connection {
   protected buffer: Action[] = [];
-  protected requests: [(value?: any) => void, (reason: any) => void][] = [];
+  protected requests: Request[] = [];
   protected nextRequestId = 0;
   constructor(protected socket: WebSocket) {
     socket.onopen = this.handleOpen.bind(this);
@@ -37,52 +44,60 @@ export class WebSocketConnection implements Connection {
       console.error(err);
       return;
     }
+    const request = this.requests[message.reqId];
+    if (request == null) {
+      return;
+    } else if (!request.persist) {
+      delete this.requests[message.reqId];
+    }
     switch (message.type) {
+      case "sendNothing": {
+        request.resolve();
+        break;
+      }
       case "sendMessages": {
-        const request = this.requests[message.reqId];
-        delete this.requests[message.reqId];
-        if (!request) {
-          return;
-        }
-        const [resolve] = request;
-        resolve(message.messages);
+        request.resolve(message.messages);
         break;
       }
       case "sendMilestone": {
-        const request = this.requests[message.reqId];
-        delete this.requests[message.reqId];
-        if (!request) {
-          return;
-        }
-        const [resolve] = request;
-        resolve(message.milestone);
+        request.resolve(message.milestone);
         break;
       }
       case "acknowledge": {
-        const request = this.requests[message.reqId];
-        delete this.requests[message.reqId];
-        if (!request) {
-          return;
-        }
-        const [resolve] = request;
-        resolve();
+        request.resolve();
         break;
+      }
+      case "subscribe": {
+        const channel: Channel<Message[]> = new Channel((resolve, reject) => {
+          this.requests[message.reqId] = { resolve, reject, persist: true };
+        }, new FixedBuffer(1024));
+        request.resolve(channel);
+        break;
+      }
+      default: {
+        throw new Error(`Unknown action type: ${message.type}`);
       }
     }
   }
 
-  protected send(action: Action): void {
+  protected send(action: Action): Promise<any> {
     if (this.socket.readyState === WebSocket.CONNECTING) {
       this.buffer.push(action);
-      return;
     } else if (
       this.socket.readyState === WebSocket.CLOSING ||
       this.socket.readyState === WebSocket.CLOSED
     ) {
       throw new Error("WebSocket is closed or closing 🤮");
+    } else {
+      const serialized = JSON.stringify(action);
+      this.socket.send(serialized);
     }
-    const serialized = JSON.stringify(action);
-    this.socket.send(serialized);
+    if (this.requests[action.reqId] != null) {
+      return Promise.resolve();
+    }
+    return new Promise(
+      (resolve, reject) => (this.requests[action.reqId] = { resolve, reject }),
+    );
   }
 
   fetchMilestone(id: string, start?: number): Promise<Milestone | undefined> {
@@ -92,10 +107,7 @@ export class WebSocketConnection implements Connection {
       start,
       reqId: this.nextRequestId++,
     };
-    this.send(action);
-    return new Promise((resolve, reject) => {
-      this.requests[action.reqId] = [resolve, reject];
-    });
+    return this.send(action);
   }
 
   // TODO: handle negative indexes?
@@ -111,10 +123,7 @@ export class WebSocketConnection implements Connection {
       end,
       reqId: this.nextRequestId++,
     };
-    this.send(action);
-    return new Promise((resolve, reject) => {
-      this.requests[action.reqId] = [resolve, reject];
-    });
+    return this.send(action);
   }
 
   sendMilestone(id: string, milestone: Milestone): Promise<void> {
@@ -124,10 +133,7 @@ export class WebSocketConnection implements Connection {
       milestone,
       reqId: this.nextRequestId++,
     };
-    this.send(action);
-    return new Promise((resolve, reject) => {
-      this.requests[action.reqId] = [resolve, reject];
-    });
+    return this.send(action);
   }
 
   sendMessages(id: string, messages: Message[]): Promise<void> {
@@ -137,21 +143,16 @@ export class WebSocketConnection implements Connection {
       messages,
       reqId: this.nextRequestId++,
     };
-    this.send(action);
-    return new Promise((resolve, reject) => {
-      this.requests[action.reqId] = [resolve, reject];
-    });
+    return this.send(action);
   }
 
-  subscribe(id: string): Promise<AsyncIterable<Message[]>> {
+  subscribe(id: string, start: number): Promise<AsyncIterable<Message[]>> {
     const action: Action = {
       type: "subscribe",
       id,
       reqId: this.nextRequestId++,
+      start,
     };
-    this.send(action);
-    return new Promise((resolve, reject) => {
-      this.requests[action.reqId] = [resolve, reject];
-    });
+    return this.send(action);
   }
 }
