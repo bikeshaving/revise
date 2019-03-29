@@ -21,12 +21,10 @@ describe("CollabText", () => {
     const connection = new InMemoryConnection();
     const client1 = new Client("client1", connection);
     const doc1 = await CollabText.initialize("doc", client1);
-    client1.listen("doc");
     doc1.replace(0, 0, "hi");
     await client1.sync("doc");
     const client2 = new Client("client2", connection);
     const doc2 = await CollabText.initialize("doc", client2);
-    client2.listen("doc");
     expect(doc2.text).toEqual(doc1.text);
     expect(doc2.text).toEqual("hi");
     doc2.replace(2, 2, " world");
@@ -43,12 +41,10 @@ describe("CollabText", () => {
     const connection = new InMemoryConnection();
     const client1 = new Client("client1", connection);
     const doc1 = await CollabText.initialize("doc", client1);
-    client1.listen("doc");
     doc1.replace(0, 0, "hi");
     await client1.sync("doc");
     const client2 = new Client("client2", connection);
     const doc2 = await CollabText.initialize("doc", client2);
-    client2.listen("doc");
     expect(doc2.text).toEqual(doc1.text);
     expect(doc2.text).toEqual("hi");
     doc2.replace(2, 2, " world");

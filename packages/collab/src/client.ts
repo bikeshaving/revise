@@ -1,4 +1,5 @@
 import { Connection, Message } from "./connection";
+// TODO: parameterize this or something
 import { Replica } from "./replica";
 
 export interface ClientItem {
@@ -45,7 +46,10 @@ export class Client {
     return this.items[id].replica;
   }
 
-  async listen(id: string, cancel?: Promise<any>): Promise<void> {
+  async *subscribe(
+    id: string,
+    cancel?: Promise<any>,
+  ): AsyncIterableIterator<any> {
     const replica = await this.getReplica(id);
     const subscription = await this.connection.subscribe(
       id,
@@ -58,7 +62,7 @@ export class Client {
       if (cancelled) {
         break;
       }
-      for (const message of messages) {
+      for (let message of messages) {
         // TODO: consider the following cases
         // message.latest > replica.latest
         // message.latest > message.global
@@ -69,7 +73,11 @@ export class Client {
         } else if (message.global < replica.latest + 1) {
           continue;
         }
-        replica.ingest(message.revision, message.latest);
+        yield {
+          ...message,
+          latest: replica.latest - 1,
+          revision: replica.ingest(message.revision, message.latest),
+        };
       }
     }
   }
