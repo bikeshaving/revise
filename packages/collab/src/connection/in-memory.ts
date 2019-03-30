@@ -2,7 +2,7 @@ import { Channel, FixedBuffer } from "@collabjs/channel";
 import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 
-type PutCallback = (messages: Message[]) => Promise<void>;
+type PutCallback = (messages: Message[]) => Promise<IteratorResult<Message[]>>;
 interface InMemoryConnectionItem {
   channels: Set<Channel<Message[]>>;
   callbacks: WeakMap<Channel<Message[]>, PutCallback>;
@@ -96,10 +96,11 @@ export class InMemoryConnection implements Connection {
       });
     }
     this.items[id] = item;
+    messages = item.messages.slice(start);
     return Promise.all(
       Array.from(item.channels).map(async (channel) => {
         try {
-          item.callbacks.get(channel)!(item.messages.slice(start));
+          item.callbacks.get(channel)!(messages);
         } catch (err) {
           channel.close();
         }
