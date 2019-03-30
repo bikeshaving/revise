@@ -26,9 +26,7 @@ function Editor() {
       cm: CodeMirror.Doc,
       change: CodeMirror.EditorChangeCancellable,
     ): void {
-      if (change.origin === "setValue") {
-        return;
-      } else if (change.origin === "collab") {
+      if (change.origin === "setValue" || change.origin === "collab") {
         return;
       }
       const start = cm.indexFromPos(change.from);
@@ -36,15 +34,18 @@ function Editor() {
       const inserted = change.text.join("\n");
       text.replace(start, end, inserted);
     }
+    console.time("initialize");
     CollabText.initialize("doc1", client).then(async (text1) => {
+      console.timeEnd("initialize");
+      console.log(text1["replica"].revisions.length);
       text = text1;
       cm.setValue(text.text);
       cm.on("beforeChange", handleBeforeChange);
       cm.setOption("readOnly", false);
-      for await (const revision of text.subscribe()) {
+      for await (const rev of text.subscribe()) {
         cm.operation(() => {
-          if (revision.client !== client.id) {
-            for (const op of operations(revision.patch)) {
+          if (rev.client !== client.id) {
+            for (const op of operations(rev.patch)) {
               switch (op.type) {
                 case "delete": {
                   const start = cm.posFromIndex(op.start);
