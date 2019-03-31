@@ -1,11 +1,8 @@
-import { Channel, FixedBuffer } from "@collabjs/channel";
+import { InMemoryPubSub, PubSub } from "@collabjs/channel";
 import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 
-type PutCallback = (messages: Message[]) => Promise<IteratorResult<Message[]>>;
 interface InMemoryConnectionItem {
-  channels: Set<Channel<Message[]>>;
-  callbacks: WeakMap<Channel<Message[]>, PutCallback>;
   clients: Record<string, number>;
   messages: Message[];
   milestones: Milestone[];
@@ -13,8 +10,6 @@ interface InMemoryConnectionItem {
 
 function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
   return {
-    channels: item.channels,
-    callbacks: item.callbacks,
     clients: { ...item.clients },
     messages: item.messages.slice(),
     milestones: item.milestones.slice(),
@@ -22,6 +17,7 @@ function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
 }
 
 export class InMemoryConnection implements Connection {
+  protected pubsub: PubSub<Message[]> = new InMemoryPubSub();
   protected items: Record<string, InMemoryConnectionItem> = {};
 
   fetchMilestone(id: string, before?: number): Promise<Milestone | undefined> {
@@ -69,8 +65,6 @@ export class InMemoryConnection implements Connection {
     let item = this.items[id];
     if (item == null) {
       item = {
-        channels: new Set(),
-        callbacks: new WeakMap(),
         clients: {},
         messages: [],
         milestones: [],
@@ -97,41 +91,20 @@ export class InMemoryConnection implements Connection {
     }
     this.items[id] = item;
     messages = item.messages.slice(start);
-    return Promise.all(
-      Array.from(item.channels).map(async (channel) => {
-        try {
-          item.callbacks.get(channel)!(messages);
-        } catch (err) {
-          channel.close();
-        }
-      }),
-    ).then(() => {});
+    if (messages.length) {
+      return this.pubsub.publish(id, messages);
+    }
+    return Promise.resolve();
   }
 
-  subscribe(id: string, start: number): Promise<AsyncIterable<Message[]>> {
-    let item = this.items[id];
-    if (item == null) {
-      item = this.items[id] = {
-        channels: new Set(),
-        callbacks: new WeakMap(),
-        clients: {},
-        messages: [],
-        milestones: [],
-      };
+  async subscribe(
+    id: string,
+    start: number,
+  ): Promise<AsyncIterable<Message[]>> {
+    const messages = await this.fetchMessages(id, start);
+    if (messages != null && messages.length) {
+      return this.pubsub.subscribe(id, messages);
     }
-    let callback: PutCallback;
-    const channel = new Channel((put) => {
-      const messages = item.messages.slice(start);
-      if (messages.length) {
-        put(messages);
-      }
-      callback = put;
-    }, new FixedBuffer<Message[]>(100));
-    item.channels.add(channel);
-    item.callbacks.set(channel, callback!);
-    channel.onclose = () => {
-      item.channels.delete(channel);
-    };
-    return Promise.resolve(channel);
+    return this.pubsub.subscribe(id);
   }
 }
