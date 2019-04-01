@@ -34,10 +34,7 @@ function Editor() {
       const inserted = change.text.join("\n");
       text.replace(start, end, inserted);
     }
-    console.time("initialize");
     CollabText.initialize("doc1", client).then(async (text1) => {
-      console.timeEnd("initialize");
-      console.log(text1["replica"].revisions.length);
       text = text1;
       cm.setValue(text.text);
       cm.on("beforeChange", handleBeforeChange);
@@ -45,17 +42,20 @@ function Editor() {
       for await (const rev of text.subscribe()) {
         cm.operation(() => {
           if (rev.client !== client.id) {
+            let tally = 0;
             for (const op of operations(rev.patch)) {
               switch (op.type) {
-                case "delete": {
-                  const start = cm.posFromIndex(op.start);
-                  const end = cm.posFromIndex(op.end);
-                  cm.replaceRange("", start, end, "collab");
+                case "insert": {
+                  const start = cm.posFromIndex(op.start + tally);
+                  cm.replaceRange(op.inserted, start, null, "collab");
+                  tally += op.inserted.length;
                   break;
                 }
-                case "insert": {
-                  const start = cm.posFromIndex(op.start);
-                  cm.replaceRange(op.inserted, start, null, "collab");
+                case "delete": {
+                  const start = cm.posFromIndex(op.start + tally);
+                  const end = cm.posFromIndex(op.end + tally);
+                  cm.replaceRange("", start, end, "collab");
+                  tally -= op.end - op.start;
                   break;
                 }
               }

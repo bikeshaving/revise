@@ -18,12 +18,10 @@ export class WebSocketConnection implements Connection {
   protected nextRequestId = 0;
   constructor(protected socket: WebSocket) {
     socket.onopen = this.handleOpen.bind(this);
-    socket.onclose = (ev) => {
-      console.log("close", ev);
-    };
-    socket.onerror = (ev) => {
-      console.log("error", ev);
-    };
+    // TODO: what do we do if the socket is closed?
+    socket.onclose = (ev) => console.log("close", ev);
+    // TODO: what do we do if there is an error?
+    socket.onerror = (ev) => console.log("error", ev);
     socket.onmessage = this.handleMessage.bind(this);
   }
 
@@ -51,6 +49,7 @@ export class WebSocketConnection implements Connection {
       delete this.requests[message.reqId];
     }
     switch (message.type) {
+      case "acknowledge":
       case "sendNothing": {
         request.resolve();
         break;
@@ -63,24 +62,22 @@ export class WebSocketConnection implements Connection {
         request.resolve(message.milestone);
         break;
       }
-      case "acknowledge": {
-        request.resolve();
-        break;
-      }
       case "subscribe": {
         const channel: Channel<Message[]> = new Channel((resolve, reject) => {
           this.requests[message.reqId] = { resolve, reject, persist: true };
         }, new FixedBuffer(1024));
+        channel.onclose = () => delete this.requests[message.reqId];
         request.resolve(channel);
         break;
       }
       default: {
-        throw new Error(`Unknown action type: ${message.type}`);
+        request.reject(Error(`Unknown action type: ${message.type}`));
+        break;
       }
     }
   }
 
-  protected send(action: Action): Promise<any> {
+  protected async send(action: Action): Promise<any> {
     if (this.socket.readyState === WebSocket.CONNECTING) {
       this.buffer.push(action);
     } else if (
@@ -93,7 +90,8 @@ export class WebSocketConnection implements Connection {
       this.socket.send(serialized);
     }
     if (this.requests[action.reqId] != null) {
-      return Promise.resolve();
+      // if there is a request under action.reqId that means send is being called by handleOpen so we can ignore the returned Promise.
+      return;
     }
     return new Promise(
       (resolve, reject) => (this.requests[action.reqId] = { resolve, reject }),

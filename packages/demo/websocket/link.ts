@@ -3,8 +3,7 @@ import { Connection } from "@collabjs/collab/lib/connection";
 
 // TODO: return a more useful value, maybe make this a class.
 export function link(conn: Connection, socket: WebSocket): void {
-  // TODO: error handling
-  socket.addEventListener("message", async (ev) => {
+  async function handleMessage(ev: MessageEvent) {
     let message: Action = JSON.parse(ev.data);
     switch (message.type) {
       case "fetchMilestone": {
@@ -80,8 +79,8 @@ export function link(conn: Connection, socket: WebSocket): void {
           start: message.start,
         };
         socket.send(JSON.stringify(action));
-        for await (const messages of subscription) {
-          try {
+        try {
+          for await (const messages of subscription) {
             const action: Action = {
               type: "sendMessages",
               id: message.id,
@@ -89,12 +88,15 @@ export function link(conn: Connection, socket: WebSocket): void {
               messages,
             };
             socket.send(JSON.stringify(action));
-          } catch (err) {
-            break;
           }
+        } catch (err) {
+          break;
         }
         break;
       }
     }
-  });
+  }
+  // TODO: error handling
+  socket.addEventListener("message", handleMessage);
+  socket.onclose = () => socket.removeEventListener("message", handleMessage);
 }
