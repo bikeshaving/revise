@@ -2,37 +2,24 @@ import { Client } from "./client";
 import { PatchBuilder } from "./patch";
 import { Replica } from "./replica";
 import { Revision } from "./revision";
-import { Channel, FixedBuffer } from "@collabjs/channel";
 
-// TODO: call client.sync and client.listen and create a lifecycle
 export class CollabText {
-  protected puts: ((rev: Revision) => Promise<void>)[] = [];
   constructor(
     public readonly id: string,
     protected readonly client: Client,
     protected readonly replica: Replica,
-  ) {
-    this.listen();
-  }
+  ) {}
 
   static async initialize(id: string, client: Client): Promise<CollabText> {
     const replica = await client.getReplica(id);
     return new CollabText(id, client, replica);
   }
 
-  async listen(): Promise<void> {
+  async *subscribe(): AsyncIterableIterator<Revision> {
     for await (const message of this.client.subscribe(this.id)) {
       const patch = this.replica.patchAt(message.global!);
-      for (const put of this.puts) {
-        put({ ...message.revision, patch });
-      }
+      yield { ...message.revision, patch };
     }
-  }
-
-  subscribe(): AsyncIterableIterator<Revision> {
-    return new Channel<Revision>((put) => {
-      this.puts.push(put);
-    }, new FixedBuffer(1024));
   }
 
   get text(): string {
