@@ -185,13 +185,13 @@ describe("Replica", () => {
     test("simple 1", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["hello world", 0]);
-      const [rev1] = replica1.pending;
+      const [rev1] = replica1.pending();
       replica1.ingest(rev1, -1);
       const replica2 = replica1.clone("client2");
       replica1.edit(["goodbye", 5, 11]);
       replica1.edit([0, 13, "s", 13]);
       replica2.edit([0, 5, "_", 6, 11]);
-      const [rev2] = replica2.pending;
+      const [rev2] = replica2.pending();
       replica1.ingest(rev2, 0);
       expect(replica1.snapshot).toEqual({
         visible: "goodbye_worlds",
@@ -204,15 +204,15 @@ describe("Replica", () => {
     test("simple 2", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["hello world", 0]);
-      const [rev1] = replica1.pending;
+      const [rev1] = replica1.pending();
       replica1.ingest(rev1, -1);
       const replica2 = replica1.clone("client2");
       replica1.edit(["goodbye", 5, 11]);
-      const [rev2] = replica1.pending;
+      const [rev2] = replica1.pending();
       replica1.ingest(rev2, 0);
       replica2.ingest(rev2, 0);
       replica2.edit([0, 7, "hello", 7, 13]);
-      const [rev3] = replica2.pending;
+      const [rev3] = replica2.pending();
       replica1.ingest(rev3, 1);
       expect(replica1.snapshot).toEqual({
         visible: "goodbyehello world",
@@ -225,15 +225,15 @@ describe("Replica", () => {
     test("concurrent 1", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["hello world", 0]);
-      const [rev1] = replica1.pending;
+      const [rev1] = replica1.pending();
       replica1.ingest(rev1, -1);
       const replica2 = replica1.clone("client2");
       replica1.edit(["H", 1, 6, "W", 7, 11]);
       replica1.edit([0, 5, 6, 11]);
       replica2.edit([0, 5, "_", 6, 11, "!", 11]);
       replica2.edit([0, 11, 12]);
-      const pending1 = replica1.pending;
-      const pending2 = replica2.pending;
+      const pending1 = replica1.pending();
+      const pending2 = replica2.pending();
       for (const rev of pending1) {
         replica1.ingest(rev, 0);
         replica2.ingest(rev, 0);
@@ -249,15 +249,15 @@ describe("Replica", () => {
     test("concurrent 2", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["hello world", 0]);
-      const [rev1] = replica1.pending;
+      const [rev1] = replica1.pending();
       replica1.ingest(rev1, -1);
       const replica2 = replica1.clone("client2");
       replica1.edit(["H", 1, 6, "W", 7, 11]);
       replica1.edit([0, 5, 6, 11]);
       replica2.edit([0, 5, "_", 6, 11, "!", 11]);
       replica2.edit([0, 11, 12]);
-      const pending1 = replica1.pending;
-      const pending2 = replica2.pending;
+      const pending1 = replica1.pending();
+      const pending2 = replica2.pending();
       for (const rev of pending2) {
         replica1.ingest(rev, 0);
         replica2.ingest(rev, 0);
@@ -273,15 +273,15 @@ describe("Replica", () => {
     test("concurrent 3", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["hello world", 0]);
-      const [rev1] = replica1.pending;
+      const [rev1] = replica1.pending();
       replica1.ingest(rev1, -1);
       const replica2 = replica1.clone("client2");
       replica1.edit(["H", 1, 6, "W", 7, 11]);
       replica1.edit([0, 5, "-", 6, 11]);
       replica2.edit([0, 5, "__", 6, 11, "!", 11]);
       replica2.edit(["hey", 6, 13]);
-      const pending1 = replica1.pending;
-      const pending2 = replica2.pending;
+      const pending1 = replica1.pending();
+      const pending2 = replica2.pending();
       for (const rev of pending1) {
         replica1.ingest(rev, 0);
         replica2.ingest(rev, 0);
@@ -297,15 +297,15 @@ describe("Replica", () => {
     test("concurrent 4", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["hello world", 0]);
-      const [rev1] = replica1.pending;
+      const [rev1] = replica1.pending();
       replica1.ingest(rev1, -1);
       const replica2 = replica1.clone("client2");
       replica1.edit(["H", 1, 6, "W", 7, 11]);
       replica1.edit([0, 5, "-", 6, 11]);
       replica2.edit([0, 5, "__", 6, 11, "!", 11]);
       replica2.edit(["hey", 6, 13]);
-      const pending1 = replica1.pending;
-      const pending2 = replica2.pending;
+      const pending1 = replica1.pending();
+      const pending2 = replica2.pending();
       for (const rev of pending2) {
         replica1.ingest(rev, 0);
         replica2.ingest(rev, 0);
@@ -321,15 +321,15 @@ describe("Replica", () => {
     test("concurrent 5", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["abij", 0]);
-      for (const rev of replica1.pending) {
+      for (const rev of replica1.pending()) {
         replica1.ingest(rev, -1);
       }
       const replica2 = replica1.clone("client2");
       replica1.edit([0, 2, "d", 2, 4]);
       replica1.edit([0, 2, "c", 2, 5]);
       replica2.edit([0, 2, "efgh", 2, 4]);
-      const pending1 = replica1.pending;
-      const pending2 = replica2.pending;
+      const pending1 = replica1.pending();
+      const pending2 = replica2.pending();
       for (const rev of pending1) {
         replica1.ingest(rev, 0);
         replica2.ingest(rev, 0);
@@ -346,15 +346,15 @@ describe("Replica", () => {
     test("concurrent 6", () => {
       const replica1 = new Replica("client1");
       replica1.edit(["abij", 0]);
-      for (const rev of replica1.pending) {
+      for (const rev of replica1.pending()) {
         replica1.ingest(rev, -1);
       }
       const replica2 = replica1.clone("client2");
       replica1.edit([0, 2, "d", 2, 4]);
       replica1.edit([0, 2, "c", 2, 5]);
       replica2.edit([0, 2, "efgh", 2, 4]);
-      const pending1 = replica1.pending;
-      const pending2 = replica2.pending;
+      const pending1 = replica1.pending();
+      const pending2 = replica2.pending();
       for (const rev of pending2) {
         replica1.ingest(rev, 0);
         replica2.ingest(rev, 0);

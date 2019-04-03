@@ -13,6 +13,12 @@ import {
 import { invert } from "./utils";
 
 export class Replica {
+  // global revisions    local revisions
+  // ####################*********************+++++++++++++++
+  //                    ^ replica.received   ^ replica.received + replica.sent?
+  // # = accepted revisions
+  // * = sent revisions
+  // + = pending revisions
   constructor(
     public client: string,
     public snapshot: Snapshot = INITIAL_SNAPSHOT,
@@ -23,7 +29,7 @@ export class Replica {
   ) {}
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
-  get pending(): Revision[] {
+  pending(): Revision[] {
     return this.revisions.slice(this.latest + 1);
   }
 

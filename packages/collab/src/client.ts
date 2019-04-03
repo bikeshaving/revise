@@ -46,22 +46,13 @@ export class Client {
     return this.items[id].replica;
   }
 
-  async *subscribe(
-    id: string,
-    cancel?: Promise<any>,
-  ): AsyncIterableIterator<any> {
+  async *subscribe(id: string): AsyncIterableIterator<Message> {
     const replica = await this.getReplica(id);
     const subscription = await this.connection.subscribe(
       id,
       replica.latest + 1,
     );
-    // TODO: Preemptively cancel by calling this.return if it’s defined. This will probably mean we have to return AsyncIterableIterator from connection.subscribe, or maybe I’ll just return channel I dunno.
-    let cancelled = false;
-    cancel && cancel.then(() => (cancelled = true));
     for await (const messages of subscription) {
-      if (cancelled) {
-        break;
-      }
       for (let message of messages) {
         // TODO: consider the following cases
         // message.latest > replica.latest
@@ -75,6 +66,7 @@ export class Client {
         }
         yield {
           ...message,
+          // TODO: figure out why I made this replica.latest - 1
           latest: replica.latest - 1,
           revision: replica.ingest(message.revision, message.latest),
         };
@@ -82,15 +74,14 @@ export class Client {
     }
   }
 
-  // TODO: rename to save because sync implies we’re pulling remote changes.
   // TODO: send milestones!!!
   // TODO: freeze sent revisions
-  async sync(id: string): Promise<void> {
+  async save(id: string): Promise<void> {
     const replica = await this.getReplica(id);
     const item = this.items[id];
-    const pending = replica.pending;
+    const pending = replica.pending();
     if (replica.local + pending.length > item.sent + 1) {
-      const messages: Message[] = replica.pending
+      const messages: Message[] = pending
         .map((revision, i) => ({
           revision,
           client: this.id,

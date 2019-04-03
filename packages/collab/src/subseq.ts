@@ -1,5 +1,5 @@
 // TODO: stop using flags and just have the first segment be false
-// TODO: cache true/false/total counts on Subseq as object properties
+// TODO: cache true/false/total counts on Subseq as properties
 // [flag, ...lengths[]]
 export type Subseq = number[];
 

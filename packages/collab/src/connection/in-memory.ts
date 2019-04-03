@@ -58,7 +58,7 @@ export class InMemoryConnection implements Connection {
     // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
     item.milestones.push(milestone);
     item.milestones.sort((a, b) => a.version - b.version);
-    return Promise.resolve(undefined);
+    return Promise.resolve();
   }
 
   sendMessages(id: string, messages: Message[]): Promise<void> {
@@ -102,9 +102,10 @@ export class InMemoryConnection implements Connection {
     start: number,
   ): Promise<AsyncIterable<Message[]>> {
     const messages = await this.fetchMessages(id, start);
+    const subscription = this.pubsub.subscribe(id);
     if (messages != null && messages.length) {
-      return this.pubsub.subscribe(id, messages);
+      await this.pubsub.publish(id, messages);
     }
-    return this.pubsub.subscribe(id);
+    return subscription;
   }
 }

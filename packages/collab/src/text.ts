@@ -22,7 +22,7 @@ export class CollabText {
 
   async listen(): Promise<void> {
     for await (const message of this.client.subscribe(this.id)) {
-      const patch = this.replica.patchAt(message.global);
+      const patch = this.replica.patchAt(message.global!);
       for (const put of this.puts) {
         put({ ...message.revision, patch });
       }
@@ -43,6 +43,6 @@ export class CollabText {
     const builder = new PatchBuilder(this.text.length);
     builder.replace(start, end, inserted);
     this.replica.edit(builder.patch!);
-    this.client.sync(this.id);
+    this.client.save(this.id);
   }
 }

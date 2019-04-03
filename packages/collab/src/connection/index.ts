@@ -1,5 +1,5 @@
 export interface Message {
-  // TODO: rename to data, remove client from revision and construct revision from message
+  // TODO: rename "revision" to "data", remove client from revision and construct revision from message
   revision: any;
   client: string;
   local: number;
@@ -7,6 +7,7 @@ export interface Message {
   global?: number;
 }
 
+// TODO: rename to checkpoint maybe
 export interface Milestone {
   snapshot: any;
   version: number;
