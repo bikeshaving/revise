@@ -1,5 +1,5 @@
 import { Client } from "./client";
-import { PatchBuilder } from "./patch";
+import { build } from "./patch";
 import { Replica } from "./replica";
 import { Revision } from "./revision";
 
@@ -27,9 +27,9 @@ export class CollabText {
   }
 
   replace(start: number, end: number, inserted: string): void {
-    const builder = new PatchBuilder(this.text.length);
-    builder.replace(start, end, inserted);
-    this.replica.edit(builder.patch!);
+    const patch = build(start, end, inserted, this.text.length);
+    this.replica.edit(patch);
+    // TODO: how do we throttle this call
     this.client.save(this.id);
   }
 }

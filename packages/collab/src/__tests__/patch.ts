@@ -1,10 +1,11 @@
 import * as subseq from "../subseq";
 import {
   apply,
+  build,
   factor,
+  meld,
   operations,
   Patch,
-  PatchBuilder,
   synthesize,
 } from "../patch";
 describe("patch", () => {
@@ -154,21 +155,18 @@ describe("patch", () => {
     });
   });
 
-  describe("PatchBuilder", () => {
-    describe("replace", () => {
-      test("comprehensive", () => {
-        const builder = new PatchBuilder(11);
-        builder.replace(5, 6, "__");
-        expect(builder.patch).toEqual([0, 5, "__", 6, 11]);
-        builder.replace(0, 5, "Hi");
-        expect(builder.patch).toEqual(["Hi__", 6, 11]);
-        builder.replace(0, 4, "");
-        expect(builder.patch).toEqual([6, 11]);
-        builder.replace(3, 5, "m");
-        expect(builder.patch).toEqual([6, 9, "m", 11]);
-        builder.replace(0, 0, "goodbye ");
-        expect(builder.patch).toEqual(["goodbye ", 6, 9, "m", 11]);
-      });
+  describe("build/meld", () => {
+    test("comprehensive", () => {
+      let patch = build(5, 6, "__", 11);
+      expect(patch).toEqual([0, 5, "__", 6, 11]);
+      patch = meld(patch, build(0, 5, "Hi", 12));
+      expect(patch).toEqual(["Hi__", 6, 11]);
+      patch = meld(patch, build(0, 4, "", 9));
+      expect(patch).toEqual([6, 11]);
+      patch = meld(patch, build(3, 5, "m", 5));
+      expect(patch).toEqual([6, 9, "m", 11]);
+      patch = meld(patch, build(0, 0, "goodbye ", 4));
+      expect(patch).toEqual(["goodbye ", 6, 9, "m", 11]);
     });
   });
 });

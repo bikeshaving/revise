@@ -211,26 +211,24 @@ export function meld(patch1: Patch, patch2: Patch): Patch {
   });
 }
 
-export class PatchBuilder {
-  public patch: Patch | undefined;
-  constructor(protected length: number) {}
-
-  replace(start: number, end: number, inserted: string): void {
-    if (this.length < end) {
-      throw new RangeError("length cannot be less than end");
-    } else if (end < start) {
-      throw new RangeError("end cannot be less than start");
-    }
-    let deleteSeq: Subseq = [];
-    subseq.push(deleteSeq, start, false);
-    subseq.push(deleteSeq, end - start, true);
-    subseq.push(deleteSeq, this.length - end, false);
-    let insertSeq: Subseq = [];
-    subseq.push(insertSeq, start, false);
-    subseq.push(insertSeq, inserted.length, true);
-    subseq.push(insertSeq, this.length - start, false);
-    const patch = synthesize({ inserted, insertSeq, deleteSeq });
-    this.patch = this.patch == null ? patch : meld(this.patch, patch);
-    this.length += inserted.length - (end - start);
+export function build(
+  start: number,
+  end: number,
+  inserted: string,
+  length: number,
+): Patch {
+  if (length < end) {
+    throw new RangeError("length cannot be less than end");
+  } else if (end < start) {
+    throw new RangeError("end cannot be less than start");
   }
+  let deleteSeq: Subseq = [];
+  subseq.push(deleteSeq, start, false);
+  subseq.push(deleteSeq, end - start, true);
+  subseq.push(deleteSeq, length - end, false);
+  let insertSeq: Subseq = [];
+  subseq.push(insertSeq, start, false);
+  subseq.push(insertSeq, inserted.length, true);
+  subseq.push(insertSeq, length - start, false);
+  return synthesize({ inserted, insertSeq, deleteSeq });
 }
