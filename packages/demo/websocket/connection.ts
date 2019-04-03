@@ -3,7 +3,7 @@ import {
   Message,
   Milestone,
 } from "@collabjs/collab/lib/connection";
-import { Channel, FixedBuffer } from "@collabjs/channel";
+import { Channel, DroppingBuffer } from "@collabjs/channel";
 import { Action } from "./actions";
 
 interface Request {
@@ -63,11 +63,15 @@ export class WebSocketConnection implements Connection {
         break;
       }
       case "subscribe": {
-        const channel: Channel<Message[]> = new Channel((resolve, reject) => {
-          this.requests[message.reqId] = { resolve, reject, persist: true };
-        }, new FixedBuffer(1024));
-        channel.onclose = () => delete this.requests[message.reqId];
-        request.resolve(channel);
+        const chan: Channel<Message[]> = new Channel(
+          async (resolve, reject, _, close) => {
+            this.requests[message.reqId] = { resolve, reject, persist: true };
+            await close;
+            delete this.requests[message.reqId];
+          },
+          new DroppingBuffer(2048),
+        );
+        request.resolve(chan);
         break;
       }
       default: {
