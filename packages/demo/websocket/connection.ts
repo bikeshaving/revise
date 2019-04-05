@@ -62,18 +62,6 @@ export class WebSocketConnection implements Connection {
         request.resolve(message.milestone);
         break;
       }
-      case "subscribe": {
-        const chan: Channel<Message[]> = new Channel(
-          async (resolve, reject, _, close) => {
-            this.requests[message.reqId] = { resolve, reject, persist: true };
-            await close;
-            delete this.requests[message.reqId];
-          },
-          new DroppingBuffer(2048),
-        );
-        request.resolve(chan);
-        break;
-      }
       default: {
         request.reject(Error(`Unknown action type: ${message.type}`));
         break;
@@ -148,13 +136,23 @@ export class WebSocketConnection implements Connection {
     return this.send(action);
   }
 
-  subscribe(id: string, start: number): Promise<AsyncIterable<Message[]>> {
-    const action: Action = {
-      type: "subscribe",
-      id,
-      reqId: this.nextRequestId++,
-      start,
-    };
-    return this.send(action);
+  subscribe(id: string, latest: number): AsyncIterableIterator<Message[]> {
+    return new Channel<Message[]>(async (resolve, reject, start, stop) => {
+      await start;
+      const action: Action = {
+        type: "subscribe",
+        id,
+        start: latest,
+        reqId: this.nextRequestId++,
+      };
+      let stopped = false;
+      stop.then(() => void (stopped = true));
+      await Promise.race([stop, this.send(action)]);
+      if (!stopped) {
+        this.requests[action.reqId] = { resolve, reject, persist: true };
+      }
+      await stop;
+      delete this.requests[action.reqId];
+    }, new DroppingBuffer(1000));
   }
 }

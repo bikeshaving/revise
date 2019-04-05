@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "develop": "nodemon --ext ts --ignore pages --exec ts-node server/index.ts | pino-pretty",
+    "develop-client": "ts-node server/index.ts | pino-pretty",
+    "develop-server": "nodemon --ext ts --ignore pages --exec yarn run develop-client",
     "start": "next start",
     "lint": "eslint --ext js,ts,tsx server websocket pages",
     "type-check": "tsc --noEmit"

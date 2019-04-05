@@ -71,14 +71,13 @@ export function link(conn: Connection, socket: WebSocket): void {
         break;
       }
       case "subscribe": {
-        const subscription = await conn.subscribe(message.id, message.start);
         const action: Action = {
-          type: "subscribe",
+          type: "acknowledge",
           id: message.id,
           reqId: message.reqId,
-          start: message.start,
         };
         socket.send(JSON.stringify(action));
+        const subscription = conn.subscribe(message.id, message.start);
         try {
           for await (const messages of subscription) {
             const action: Action = {
@@ -90,6 +89,8 @@ export function link(conn: Connection, socket: WebSocket): void {
             socket.send(JSON.stringify(action));
           }
         } catch (err) {
+          console.error(err);
+          // TODO: what do we do here?
           break;
         }
         break;
