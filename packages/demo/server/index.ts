@@ -12,8 +12,6 @@ declare module "fastify" {
   }
 }
 
-const dev = process.env.NODE_ENV !== "production";
-
 const fastify = createFastify({
   logger: { level: "error" },
 });
@@ -29,6 +27,7 @@ fastify.register(
   }),
 );
 
+const dev = process.env.NODE_ENV !== "production";
 fastify.register(
   plugin(async (fastify) => {
     const app = next({ dev });
@@ -59,7 +58,9 @@ fastify.ready((err) => {
     throw err;
   }
   const conn = new InMemoryConnection();
-  fastify.wss.on("connection", (socket: WebSocket) => link(conn, socket));
+  fastify.wss.on("connection", (socket: WebSocket) => {
+    link(conn, socket);
+  });
 });
 
 const port = parseInt(process.env.PORT || "3000", 10);

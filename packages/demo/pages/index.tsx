@@ -12,12 +12,12 @@ if (typeof window !== "undefined") {
 }
 
 function Editor() {
-  const editorNode = React.useRef(null);
+  const editor = React.useRef(null);
   React.useEffect(() => {
     const socket = new WebSocket("ws://localhost:3000/collab");
     const conn = new WebSocketConnection(socket);
     const client = new Client(uuid(), conn);
-    const cm = CodeMirror(editorNode.current, {
+    const cm = CodeMirror(editor.current, {
       readOnly: true,
       lineWrapping: true,
     });
@@ -30,7 +30,7 @@ function Editor() {
         return;
       }
       const start = cm.indexFromPos(change.from);
-      const end = start + cm.getRange(change.from, change.to).length;
+      const end = cm.indexFromPos(change.to);
       const inserted = change.text.join("\n");
       text.replace(start, end, inserted);
     }
@@ -47,7 +47,7 @@ function Editor() {
               switch (op.type) {
                 case "insert": {
                   const start = cm.posFromIndex(op.start + tally);
-                  cm.replaceRange(op.inserted, start, null, "collab");
+                  cm.replaceRange(op.inserted, start, start, "collab");
                   tally += op.inserted.length;
                   break;
                 }
@@ -66,7 +66,7 @@ function Editor() {
     });
     return () => cm.off("beforeChange", handleBeforeChange);
   }, []);
-  return <div ref={editorNode} />;
+  return <div ref={editor} />;
 }
 
 export default function IndexPage() {
