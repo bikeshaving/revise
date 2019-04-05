@@ -10,8 +10,7 @@ describe("Client", () => {
       const replica = await client.getReplica("doc1");
       replica.edit(["hello world", 0]);
       replica.edit([0, 11, "!", 11]);
-      await client.save("doc1");
-      await client.save("doc1");
+      await client.save("doc1", { force: true });
       replica.edit([0, 5, 6, 12]);
       replica.edit([11]);
       await client.save("doc1");
@@ -29,6 +28,7 @@ describe("Client", () => {
         latest: -1,
       }));
       expect(sendMessages).nthCalledWith(2, "doc1", messages2);
+      client.close();
     });
 
     test("syncing and ingesting messages", async () => {
@@ -40,15 +40,14 @@ describe("Client", () => {
       replica.edit(["hello world", 0]);
       replica.edit([0, 11, "!", 11]);
       replica.edit([0, 5, 6, 12]);
-      await client.save("doc1");
-      await client.save("doc1");
+      await client.save("doc1", { force: true });
       const messages = await conn.fetchMessages("doc1");
       for (const message of messages!) {
         replica.ingest(message.revision, message.latest);
       }
-      await client.save("doc1");
+      await client.save("doc1", { force: true });
       replica.edit([11]);
-      await client.save("doc1");
+      await client.save("doc1", { force: true });
       const messages1 = replica.revisions.slice(0, 3).map((revision, i) => ({
         revision,
         client: "id1",
@@ -63,6 +62,7 @@ describe("Client", () => {
         latest: 2,
       }));
       expect(sendMessages).nthCalledWith(2, "doc1", messages2);
+      client.close();
     });
   });
 });

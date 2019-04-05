@@ -30,6 +30,6 @@ export class CollabText {
     const patch = build(start, end, inserted, this.text.length);
     this.replica.edit(patch);
     // TODO: how do we throttle this call
-    this.client.save(this.id);
+    this.client.enqueueSave(this.id);
   }
 }

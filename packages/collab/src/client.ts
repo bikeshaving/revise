@@ -1,21 +1,31 @@
+import { InMemoryPubSub, TimerToken, throttler } from "@collabjs/channel";
 import { Connection, Message } from "./connection";
 // TODO: parameterize this or something
 import { Replica } from "./replica";
 
 export interface ClientItem {
   replica: Promise<Replica>;
-  // TODO: maybe move sent to replica to replica.
+  // TODO: move sent to replica.
   sent: number;
+  subscription?: AsyncIterator<Message[]>;
   inflight?: Promise<void>;
 }
 
 export class Client {
   protected items: Record<string, ClientItem> = {};
+  protected pubsub = new InMemoryPubSub<Message>();
+  protected tokens: AsyncIterableIterator<TimerToken>;
+  protected closed = false;
 
+  // TODO: allow clients to be populated with replicas which have been persisted locally
   constructor(
     public readonly id: string,
     protected readonly connection: Connection,
-  ) {}
+    options: { wait?: number } = {},
+  ) {
+    const { wait = 3000 } = options;
+    this.tokens = throttler(wait);
+  }
 
   protected async fetchReplica(id: string): Promise<Replica> {
     if (this.items[id]) {
@@ -41,42 +51,75 @@ export class Client {
 
   getReplica(id: string): Promise<Replica> {
     if (this.items[id] == null) {
-      this.items[id] = { replica: this.fetchReplica(id), sent: -1 };
+      this.items[id] = {
+        replica: this.fetchReplica(id),
+        sent: -1,
+      };
     }
     return this.items[id].replica;
   }
 
-  async *subscribe(id: string): AsyncIterableIterator<Message> {
-    const replica = await this.getReplica(id);
-    const subscription = await this.connection.subscribe(
-      id,
-      replica.latest + 1,
-    );
-    for await (const messages of subscription) {
-      for (let message of messages) {
-        // TODO: consider the following cases
-        // message.latest > replica.latest
-        // message.latest > message.global
-        if (message.global == null) {
-          throw new Error("message missing global version");
-        } else if (message.global > replica.latest + 1) {
-          throw new Error("TODO: attempt repair");
-        } else if (message.global < replica.latest + 1) {
-          continue;
+  async connect(id: string): Promise<void> {
+    if (this.items[id] != null && this.items[id].subscription != null) {
+      throw new Error("Unknown id");
+    }
+    try {
+      const replica = await this.getReplica(id);
+      const subscription = this.connection.subscribe(id, replica.latest + 1);
+      this.items[id].subscription = subscription;
+      for await (const messages of subscription) {
+        for (let message of messages) {
+          // TODO: consider the following cases
+          // message.latest > replica.latest
+          // message.latest > message.global
+          if (message.global == null) {
+            throw new Error("message missing global version");
+          } else if (message.global > replica.latest + 1) {
+            throw new Error("TODO: attempt repair");
+          } else if (message.global < replica.latest + 1) {
+            continue;
+          }
+          const revision = replica.ingest(message.revision, message.latest);
+          this.pubsub.publish(id, {
+            ...message,
+            latest: replica.latest - 1,
+            revision,
+          });
         }
-        yield {
-          ...message,
-          // TODO: figure out why I made this replica.latest - 1
-          latest: replica.latest - 1,
-          revision: replica.ingest(message.revision, message.latest),
-        };
       }
+    } catch (err) {
+      this.disconnect(id, err);
     }
   }
 
+  disconnect(id: string, reason?: any): void {
+    this.pubsub.unpublish(id, reason);
+    if (this.items[id] == null || this.items[id].subscription == null) {
+      return;
+    }
+    this.items[id].subscription!.return!();
+    delete this.items[id].subscription;
+  }
+
+  subscribe(id: string): AsyncIterableIterator<Message> {
+    this.connect(id);
+    return this.pubsub.subscribe(id);
+  }
+
+  enqueueSave(id: string): void {
+    if (this.closed) {
+      throw new Error("Client is closed");
+    }
+    this.save(id);
+  }
+
   // TODO: send milestones!!!
-  // TODO: freeze sent revisions
-  async save(id: string): Promise<void> {
+  async save(id: string, options: { force?: boolean } = {}): Promise<void> {
+    if (this.closed) {
+      throw new Error("Client is closed");
+    } else if (!options.force) {
+      await this.tokens.next();
+    }
     const replica = await this.getReplica(id);
     const item = this.items[id];
     const pending = replica.pending();
@@ -92,6 +135,13 @@ export class Client {
       item.sent = messages[messages.length - 1].local;
       item.inflight = this.connection.sendMessages(id, messages);
     }
-    return item.inflight || Promise.resolve();
+    return item.inflight;
+  }
+
+  // TODO: reopen clients?
+  close(reason?: any): void {
+    this.closed = true;
+    this.pubsub.close(reason);
+    this.tokens.return!();
   }
 }

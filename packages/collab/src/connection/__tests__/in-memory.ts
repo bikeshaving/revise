@@ -73,7 +73,7 @@ describe("InMemoryConnection", () => {
 
   test("subscribe", async () => {
     const connection = new InMemoryConnection();
-    const subscription = await connection.subscribe("doc", 0);
+    const subscription = connection.subscribe("doc", 0);
     const messages: Promise<Message[]> = (async () => {
       let messages: Message[] = [];
       for await (const messages1 of subscription) {

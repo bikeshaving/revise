@@ -1,4 +1,4 @@
-import { InMemoryPubSub, PubSub } from "@collabjs/channel";
+import { InMemoryPubSub } from "@collabjs/channel";
 import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 
@@ -17,7 +17,7 @@ function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
 }
 
 export class InMemoryConnection implements Connection {
-  protected pubsub: PubSub<Message[]> = new InMemoryPubSub();
+  protected pubsub = new InMemoryPubSub<number>();
   protected items: Record<string, InMemoryConnectionItem> = {};
 
   fetchMilestone(id: string, before?: number): Promise<Milestone | undefined> {
@@ -33,7 +33,6 @@ export class InMemoryConnection implements Connection {
     );
   }
 
-  // TODO: handle negative indexes?
   fetchMessages(
     id: string,
     start?: number,
@@ -42,6 +41,10 @@ export class InMemoryConnection implements Connection {
     const item = this.items[id];
     if (item == null) {
       return Promise.resolve(undefined);
+    } else if (start != null && start < 0) {
+      throw new RangeError("start cannot be negative");
+    } else if (end != null && end < 0) {
+      throw new RangeError("end cannot be negative");
     }
     return Promise.resolve(item.messages.slice(start, end));
   }
@@ -72,7 +75,8 @@ export class InMemoryConnection implements Connection {
     } else {
       item = cloneItem(item);
     }
-    const start = item.messages.length;
+    this.items[id] = item;
+    let global: number | undefined;
     for (const message of messages) {
       const expected =
         (item.clients[message.client] == null
@@ -84,28 +88,30 @@ export class InMemoryConnection implements Connection {
         continue;
       }
       item.clients[message.client] = message.local;
-      item.messages.push({
-        ...message,
-        global: item.messages.length,
-      });
+      global = item.messages.length;
+      item.messages.push({ ...message, global });
     }
-    this.items[id] = item;
-    messages = item.messages.slice(start);
-    if (messages.length) {
-      return this.pubsub.publish(id, messages);
+    if (global != null) {
+      return this.pubsub.publish(id, global);
     }
     return Promise.resolve();
   }
 
-  async subscribe(
+  async *subscribe(
     id: string,
-    start: number,
-  ): Promise<AsyncIterable<Message[]>> {
-    const messages = await this.fetchMessages(id, start);
-    const subscription = this.pubsub.subscribe(id);
-    if (messages != null && messages.length) {
-      await this.pubsub.publish(id, messages);
+    start: number = 0,
+  ): AsyncIterableIterator<Message[]> {
+    if (start < 0) {
+      throw new RangeError("start cannot be less than 0");
     }
-    return subscription;
+    for await (const latest of this.pubsub.subscribe(id)) {
+      if (latest + 1 > start) {
+        const messages = await this.fetchMessages(id, start, latest + 1);
+        if (messages != null && messages.length) {
+          yield messages;
+        }
+        start = latest + 1;
+      }
+    }
   }
 }

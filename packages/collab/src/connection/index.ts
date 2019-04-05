@@ -22,5 +22,5 @@ export interface Connection {
   ): Promise<Message[] | undefined>;
   sendMilestone(id: string, milestone: Milestone): Promise<void>;
   sendMessages(id: string, messages: Message[]): Promise<void>;
-  subscribe(id: string, start: number): Promise<AsyncIterable<Message[]>>;
+  subscribe(id: string, start: number): AsyncIterableIterator<Message[]>;
 }
