@@ -15,7 +15,7 @@ export interface ClientItem {
 export class Client {
   protected items: Record<string, ClientItem> = {};
   protected pubsub = new InMemoryPubSub<Message>();
-  protected tokens: AsyncIterableIterator<Token>;
+  protected throttle: AsyncIterableIterator<Token>;
   protected closed = false;
 
   // TODO: allow clients to be populated with replicas which have been persisted locally
@@ -25,7 +25,7 @@ export class Client {
     options: { wait?: number } = {},
   ) {
     const { wait = 3000 } = options;
-    this.tokens = throttler(wait);
+    this.throttle = throttler(wait);
   }
 
   protected async fetchReplica(id: string): Promise<Replica> {
@@ -119,7 +119,7 @@ export class Client {
     if (this.closed) {
       throw new Error("Client is closed");
     } else if (!options.force) {
-      await this.tokens.next();
+      await this.throttle.next();
     }
     const replica = await this.getReplica(id);
     const item = this.items[id];
@@ -139,10 +139,9 @@ export class Client {
     return item.inflight;
   }
 
-  // TODO: reopen clients?
   close(reason?: any): void {
     this.closed = true;
     this.pubsub.close(reason);
-    this.tokens.return!();
+    this.throttle.return!();
   }
 }

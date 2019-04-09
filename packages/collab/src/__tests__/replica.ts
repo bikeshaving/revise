@@ -170,17 +170,6 @@ describe("Replica", () => {
     });
   });
 
-  describe("Replica.revert", () => {
-    test("simple", () => {
-      const replica = new Replica("client1");
-      replica.edit(["hello world", 0]);
-      replica.edit(["goodbye", 5, 11]);
-      replica.edit([0, 13, "s", 13]);
-      replica.revert(1);
-      expect(replica.snapshot.visible).toEqual("hello worlds");
-    });
-  });
-
   describe("Replica.ingest", () => {
     test("simple 1", () => {
       const replica1 = new Replica("client1");

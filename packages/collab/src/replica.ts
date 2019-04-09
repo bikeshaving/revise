@@ -91,7 +91,7 @@ export class Replica {
     return synthesize({ inserted, insertSeq, deleteSeq });
   }
 
-  dedupe(rev: Revision, version = this.revisions.length): Revision {
+  normalize(rev: Revision, version = this.revisions.length): Revision {
     const { inserted, insertSeq, deleteSeq } = factor(rev.patch);
     const hiddenSeq = this.hiddenSeqAt(version);
     return {
@@ -122,34 +122,7 @@ export class Replica {
       priority,
     };
     [rev] = rebase(rev, this.revisions.slice(version));
-    rev = this.dedupe(rev);
-    this.snapshot = apply(this.snapshot, rev.patch);
-    this.revisions.push(rev);
-    return rev;
-  }
-
-  revert(version: number): Revision {
-    if (version < 0 || version > this.revisions.length - 1) {
-      throw new RangeError("version out of range");
-    }
-    let rev: Revision = this.revisions[version];
-    if (rev == null) {
-      throw new Error("revision not found");
-    }
-    let { insertSeq: deleteSeq, deleteSeq: insertSeq } = factor(rev.patch);
-    insertSeq = expand(insertSeq, deleteSeq);
-    if (version <= this.revisions.length - 1) {
-      const insertSeq1 = summarize(this.revisions.slice(version + 1));
-      deleteSeq = expand(deleteSeq, insertSeq1);
-      insertSeq = expand(insertSeq, insertSeq1);
-    }
-    const { visible, hidden, hiddenSeq } = this.snapshot;
-    const [inserted] = split(merge(hidden, visible, hiddenSeq), insertSeq);
-    [, insertSeq] = interleave(insertSeq, insertSeq);
-    rev = {
-      patch: synthesize({ inserted, insertSeq, deleteSeq }),
-      client: this.client,
-    };
+    rev = this.normalize(rev);
     this.snapshot = apply(this.snapshot, rev.patch);
     this.revisions.push(rev);
     return rev;
@@ -171,7 +144,7 @@ export class Replica {
       (rev1) => rev1.client === rev.client,
     );
     [rev] = rebase(rev, revisions);
-    // TODO: do we need to dedupe here?
+    rev = this.normalize(rev, this.latest + 1);
     const [rev1, revisions1] = rebase(
       rev,
       this.revisions.slice(this.latest + 1),
