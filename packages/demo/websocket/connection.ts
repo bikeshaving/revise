@@ -3,7 +3,7 @@ import {
   Message,
   Milestone,
 } from "@collabjs/collab/lib/connection";
-import { Channel, DroppingBuffer } from "@collabjs/channel";
+import { Channel, DroppingBuffer } from "@channel/channel";
 import { Action } from "./actions";
 
 interface Request {
@@ -136,17 +136,16 @@ export class WebSocketConnection implements Connection {
     return this.send(action);
   }
 
-  subscribe(id: string, latest: number): AsyncIterableIterator<Message[]> {
-    return new Channel<Message[]>(async (resolve, reject, start, stop) => {
-      await start;
+  subscribe(id: string, start: number): AsyncIterableIterator<Message[]> {
+    return new Channel<Message[]>(async (resolve, reject, stop) => {
       const action: Action = {
         type: "subscribe",
         id,
-        start: latest,
+        start,
         reqId: this.nextRequestId++,
       };
       let stopped = false;
-      stop.then(() => void (stopped = true));
+      stop.then(() => (stopped = true));
       await Promise.race([stop, this.send(action)]);
       if (!stopped) {
         this.requests[action.reqId] = { resolve, reject, persist: true };

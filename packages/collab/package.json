@@ -12,9 +12,6 @@
     "test": "jest --verbose",
     "lint": "eslint --ext js,ts src"
   },
-  "dependencies": {
-    "@collabjs/channel": "^0.1.0"
-  },
   "devDependencies": {
     "@types/jest": "^24.0.11",
     "@typescript-eslint/eslint-plugin": "^1.5.0",
@@ -29,5 +26,9 @@
     "shx": "^0.3.2",
     "ts-jest": "^24.0.0",
     "typescript": "^3.3.4000"
+  },
+  "dependencies": {
+    "@channel/limiters": "^0.1.0-alpha.0",
+    "@channel/pubsub": "^0.1.0"
   }
 }

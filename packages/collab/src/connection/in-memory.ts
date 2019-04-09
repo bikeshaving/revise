@@ -1,4 +1,4 @@
-import { InMemoryPubSub } from "@collabjs/channel";
+import { InMemoryPubSub } from "@channel/pubsub";
 import { Connection, Message, Milestone } from "../connection";
 import { findLast } from "../utils";
 

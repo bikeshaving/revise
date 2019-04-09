@@ -1,4 +1,5 @@
-import { InMemoryPubSub, TimerToken, throttler } from "@collabjs/channel";
+import { InMemoryPubSub } from "@channel/pubsub";
+import { throttler, Token } from "@channel/limiters";
 import { Connection, Message } from "./connection";
 // TODO: parameterize this or something
 import { Replica } from "./replica";
@@ -14,7 +15,7 @@ export interface ClientItem {
 export class Client {
   protected items: Record<string, ClientItem> = {};
   protected pubsub = new InMemoryPubSub<Message>();
-  protected tokens: AsyncIterableIterator<TimerToken>;
+  protected tokens: AsyncIterableIterator<Token>;
   protected closed = false;
 
   // TODO: allow clients to be populated with replicas which have been persisted locally
