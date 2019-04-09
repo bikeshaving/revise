@@ -34,16 +34,16 @@ export class Client {
     }
     const milestone = await this.connection.fetchMilestone(id);
     let replica: Replica;
-    let version: number;
     // TODO: put replica instantiation in a callback or something
     if (milestone == null) {
       replica = new Replica(this.id);
-      version = -1;
     } else {
-      replica = new Replica(this.id, milestone.snapshot, [], milestone.version);
-      version = milestone.version;
+      replica = new Replica(this.id, milestone.version, milestone.snapshot);
     }
-    const messages = await this.connection.fetchMessages(id, version + 1);
+    const messages = await this.connection.fetchMessages(
+      id,
+      replica.latest + 1,
+    );
     for (const message of messages || []) {
       replica.ingest(message.revision, message.latest);
     }

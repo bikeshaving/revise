@@ -13,6 +13,7 @@ import {
 import { invert } from "./utils";
 
 export class Replica {
+  public local = 0;
   // global revisions    local revisions
   // ####################*********************+++++++++++++++
   //                    ^ replica.received   ^ replica.received + replica.sent?
@@ -21,11 +22,10 @@ export class Replica {
   // + = pending revisions
   constructor(
     public client: string,
+    public latest: number = -1,
     public snapshot: Snapshot = INITIAL_SNAPSHOT,
     // TODO: allow revisions to be a sparse array
     public revisions: Revision[] = [],
-    public latest: number = -1,
-    public local: number = 0,
   ) {}
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
@@ -39,9 +39,9 @@ export class Replica {
     }
     return new Replica(
       client,
+      this.latest,
       { ...this.snapshot },
       this.revisions.slice(),
-      this.latest,
     );
   }
 
