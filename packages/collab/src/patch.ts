@@ -177,7 +177,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   return result;
 }
 
-export function meld(patch1: Patch, patch2: Patch): Patch {
+export function squash(patch1: Patch, patch2: Patch): Patch {
   let {
     inserted: inserted1,
     insertSeq: insertSeq1,

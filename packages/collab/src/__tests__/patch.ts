@@ -3,9 +3,9 @@ import {
   apply,
   build,
   factor,
-  meld,
   operations,
   Patch,
+  squash,
   synthesize,
 } from "../patch";
 describe("patch", () => {
@@ -155,26 +155,26 @@ describe("patch", () => {
     });
   });
 
-  describe("build/meld", () => {
+  describe("build/squash", () => {
     test("comprehensive", () => {
       let patch = build(5, 6, "__", 11);
       let patch1: Patch;
       expect(patch).toEqual([0, 5, "__", 6, 11]);
       patch1 = build(0, 5, "Hi", 12);
       expect(patch1).toEqual(["Hi", 5, 12]);
-      patch = meld(patch, patch1);
+      patch = squash(patch, patch1);
       expect(patch).toEqual(["Hi__", 6, 11]);
       patch1 = build(0, 4, "", 9);
       expect(patch1).toEqual([4, 9]);
-      patch = meld(patch, patch1);
+      patch = squash(patch, patch1);
       expect(patch).toEqual([6, 11]);
       patch1 = build(3, 5, "m", 5);
       expect(patch1).toEqual([0, 3, "m", 5]);
-      patch = meld(patch, patch1);
+      patch = squash(patch, patch1);
       expect(patch).toEqual([6, 9, "m", 11]);
       patch1 = build(0, 0, "goodbye ", 4);
       expect(patch1).toEqual(["goodbye ", 0, 4]);
-      patch = meld(patch, patch1);
+      patch = squash(patch, patch1);
       expect(patch).toEqual(["goodbye ", 6, 9, "m", 11]);
     });
   });
