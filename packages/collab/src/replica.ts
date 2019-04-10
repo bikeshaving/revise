@@ -15,9 +15,10 @@ import { invert } from "./utils";
 
 export class Replica {
   protected local = 0;
-  // global revisions    local revisions
-  // ####################*********************+++++++++++++++
-  //                    ^ replica.received   ^ replica.received + replica.sent?
+  protected sent = 0;
+  // revisions
+  // ###########************+++++++++++++++
+  //           ^ received  ^ received + sent?
   // # = accepted revisions
   // * = sent revisions
   // + = pending revisions
@@ -26,12 +27,13 @@ export class Replica {
     public received: number = -1,
     public snapshot: Snapshot = INITIAL_SNAPSHOT,
     // TODO: allow revisions to be a sparse array
-    public revisions: Revision[] = [],
+    protected revisions: Revision[] = [],
   ) {}
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
   pending(): Message[] {
-    return this.revisions.slice(this.received + 1).map((rev, i) => ({
+    const revisions = this.revisions.slice(this.received + this.sent + 1);
+    return revisions.map((rev, i) => ({
       data: rev,
       client: this.client,
       local: this.local + i,
@@ -134,7 +136,7 @@ export class Replica {
     return rev;
   }
 
-  ingest(message: Message): Revision {
+  ingest(message: Message): Message {
     let rev = message.data;
     if (message.received < -1 || message.received > this.received) {
       throw new RangeError("message.received out of range");
@@ -145,23 +147,23 @@ export class Replica {
       this.local++;
       this.received++;
       // TODO: integrity check??
-      return this.revisions[this.received];
+      return message;
     }
     // TODO: cache the rearranged/rebased somewhere
-    const revisions = rearrange(
-      this.revisions.slice(message.received + 1, this.received + 1),
-      (rev1) => rev1.client === rev.client,
+    let revisions = this.revisions.slice(
+      message.received + 1,
+      this.received + 1,
     );
+    revisions = rearrange(revisions, (rev1) => rev1.client === rev.client);
     [rev] = rebase(rev, revisions);
     rev = this.normalize(rev, this.received + 1);
-    const [rev1, revisions1] = rebase(
-      rev,
-      this.revisions.slice(this.received + 1),
-    );
+    let rev1: Revision;
+    let revisions1 = this.revisions.slice(this.received + 1);
+    [rev1, revisions1] = rebase(rev, revisions1);
     this.snapshot = apply(this.snapshot, rev1.patch);
     this.revisions.splice(this.received + 1, revisions1.length, rev);
     this.revisions = this.revisions.concat(revisions1);
     this.received++;
-    return rev1;
+    return { ...message, data: rev1 };
   }
 }

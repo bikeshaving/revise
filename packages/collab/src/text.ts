@@ -16,6 +16,7 @@ export class CollabText {
   }
 
   async *subscribe(): AsyncIterableIterator<Revision> {
+    // TODO: figure out the pipeline
     for await (const message of this.client.subscribe(this.id)) {
       const patch = this.replica.patchAt(message.version!);
       yield { ...message.data, patch };
@@ -29,7 +30,6 @@ export class CollabText {
   replace(start: number, end: number, inserted: string): void {
     const patch = build(start, end, inserted, this.text.length);
     this.replica.edit(patch);
-    // TODO: how do we throttle this call
     this.client.enqueueSave(this.id);
   }
 }

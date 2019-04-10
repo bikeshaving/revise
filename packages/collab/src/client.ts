@@ -34,7 +34,7 @@ export class Client {
     }
     const checkpoint = await this.connection.fetchCheckpoint(id);
     let replica: Replica;
-    // TODO: put replica instantiation in a callback or something
+    // TODO: paramaterize Replica constructor
     if (checkpoint == null) {
       replica = new Replica(this.id);
     } else {
@@ -42,7 +42,7 @@ export class Client {
     }
     const messages = await this.connection.fetchMessages(
       id,
-      replica.received + 1,
+      checkpoint == null ? 0 : checkpoint.version + 1,
     );
     for (const message of messages || []) {
       replica.ingest(message);
@@ -80,8 +80,8 @@ export class Client {
           } else if (message.version < replica.received + 1) {
             continue;
           }
-          const data = replica.ingest(message);
-          this.pubsub.publish(id, { ...message, data });
+          // TODO: figure out what to publish when and where in the pipeline
+          this.pubsub.publish(id, replica.ingest(message));
         }
       }
     } catch (err) {
@@ -117,11 +117,12 @@ export class Client {
     }
     const replica = await this.getReplica(id);
     const item = this.items[id];
+    await item.inflight;
     if (!options.force) {
-      await item.inflight;
       await this.throttle.next();
     }
     const pending = replica.pending();
+    // TODO: move this logic to replicas themselves
     if (pending.length) {
       if (pending[pending.length - 1].local > item.sent) {
         item.inflight = this.connection.sendMessages(
