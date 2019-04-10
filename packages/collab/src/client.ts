@@ -45,7 +45,7 @@ export class Client {
       replica.received + 1,
     );
     for (const message of messages || []) {
-      replica.ingest(message.data, message.received);
+      replica.ingest(message);
     }
     return replica;
   }
@@ -80,7 +80,7 @@ export class Client {
           } else if (message.version < replica.received + 1) {
             continue;
           }
-          const data = replica.ingest(message.data, message.received);
+          const data = replica.ingest(message);
           this.pubsub.publish(id, { ...message, data });
         }
       }
@@ -114,23 +114,22 @@ export class Client {
   async save(id: string, options: { force?: boolean } = {}): Promise<void> {
     if (this.closed) {
       throw new Error("Client is closed");
-    } else if (!options.force) {
-      await this.throttle.next();
     }
     const replica = await this.getReplica(id);
     const item = this.items[id];
+    if (!options.force) {
+      await item.inflight;
+      await this.throttle.next();
+    }
     const pending = replica.pending();
-    if (replica.local + pending.length > item.sent + 1) {
-      const messages: Message[] = pending
-        .map((data, i) => ({
-          data,
-          client: this.id,
-          local: replica.local + i,
-          received: replica.received,
-        }))
-        .slice(item.sent + 1 - replica.local);
-      item.sent = messages[messages.length - 1].local;
-      item.inflight = this.connection.sendMessages(id, messages);
+    if (pending.length) {
+      if (pending[pending.length - 1].local > item.sent) {
+        item.inflight = this.connection.sendMessages(
+          id,
+          pending.slice(item.sent + 1 - pending[0].local),
+        );
+        item.sent = pending[pending.length - 1].local;
+      }
     }
     return item.inflight;
   }

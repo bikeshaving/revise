@@ -1,3 +1,4 @@
+import { Message } from "./connection";
 import { factor, Patch, synthesize } from "./patch";
 import { rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
@@ -13,7 +14,7 @@ import {
 import { invert } from "./utils";
 
 export class Replica {
-  public local = 0;
+  protected local = 0;
   // global revisions    local revisions
   // ####################*********************+++++++++++++++
   //                    ^ replica.received   ^ replica.received + replica.sent?
@@ -29,8 +30,13 @@ export class Replica {
   ) {}
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
-  pending(): Revision[] {
-    return this.revisions.slice(this.received + 1);
+  pending(): Message[] {
+    return this.revisions.slice(this.received + 1).map((rev, i) => ({
+      data: rev,
+      client: this.client,
+      local: this.local + i,
+      received: this.received,
+    }));
   }
 
   clone(client: string): Replica {
@@ -128,9 +134,12 @@ export class Replica {
     return rev;
   }
 
-  ingest(rev: Revision, version: number): Revision {
-    if (version < -1 || version > this.received) {
-      throw new RangeError("version out of range");
+  ingest(message: Message): Revision {
+    let rev = message.data;
+    if (message.received < -1 || message.received > this.received) {
+      throw new RangeError("message.received out of range");
+    } else if (message.version !== this.received + 1) {
+      throw new Error("missing message");
     }
     if (rev.client === this.client) {
       this.local++;
@@ -140,7 +149,7 @@ export class Replica {
     }
     // TODO: cache the rearranged/rebased somewhere
     const revisions = rearrange(
-      this.revisions.slice(version + 1, this.received + 1),
+      this.revisions.slice(message.received + 1, this.received + 1),
       (rev1) => rev1.client === rev.client,
     );
     [rev] = rebase(rev, revisions);

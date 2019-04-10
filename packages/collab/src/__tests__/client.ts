@@ -42,8 +42,9 @@ describe("Client", () => {
       replica.edit([0, 5, 6, 12]);
       await client.save("doc1", { force: true });
       const messages = await conn.fetchMessages("doc1");
+      expect(messages).toBeDefined();
       for (const message of messages!) {
-        replica.ingest(message.data, message.received);
+        replica.ingest(message);
       }
       await client.save("doc1", { force: true });
       replica.edit([11]);
