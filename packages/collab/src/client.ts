@@ -32,20 +32,20 @@ export class Client {
     if (this.items[id]) {
       return this.items[id].replica;
     }
-    const milestone = await this.connection.fetchMilestone(id);
+    const checkpoint = await this.connection.fetchCheckpoint(id);
     let replica: Replica;
     // TODO: put replica instantiation in a callback or something
-    if (milestone == null) {
+    if (checkpoint == null) {
       replica = new Replica(this.id);
     } else {
-      replica = new Replica(this.id, milestone.version, milestone.snapshot);
+      replica = new Replica(this.id, checkpoint.version, checkpoint.data);
     }
     const messages = await this.connection.fetchMessages(
       id,
-      replica.latest + 1,
+      replica.received + 1,
     );
     for (const message of messages || []) {
-      replica.ingest(message.revision, message.latest);
+      replica.ingest(message.data, message.received);
     }
     return replica;
   }
@@ -66,26 +66,22 @@ export class Client {
     }
     try {
       const replica = await this.getReplica(id);
-      const subscription = this.connection.subscribe(id, replica.latest + 1);
+      const subscription = this.connection.subscribe(id, replica.received + 1);
       this.items[id].subscription = subscription;
       for await (const messages of subscription) {
         for (let message of messages) {
           // TODO: consider the following cases
-          // message.latest > replica.latest
-          // message.latest > message.global
-          if (message.global == null) {
-            throw new Error("message missing global version");
-          } else if (message.global > replica.latest + 1) {
+          // message.latest > replica.received
+          // message.latest > message.version
+          if (message.version == null) {
+            throw new Error("message missing version");
+          } else if (message.version > replica.received + 1) {
             throw new Error("TODO: attempt repair");
-          } else if (message.global < replica.latest + 1) {
+          } else if (message.version < replica.received + 1) {
             continue;
           }
-          const revision = replica.ingest(message.revision, message.latest);
-          this.pubsub.publish(id, {
-            ...message,
-            latest: replica.latest - 1,
-            revision,
-          });
+          const data = replica.ingest(message.data, message.received);
+          this.pubsub.publish(id, { ...message, data });
         }
       }
     } catch (err) {
@@ -114,7 +110,7 @@ export class Client {
     this.save(id);
   }
 
-  // TODO: send milestones!!!
+  // TODO: send checkpoints!!!
   async save(id: string, options: { force?: boolean } = {}): Promise<void> {
     if (this.closed) {
       throw new Error("Client is closed");
@@ -126,11 +122,11 @@ export class Client {
     const pending = replica.pending();
     if (replica.local + pending.length > item.sent + 1) {
       const messages: Message[] = pending
-        .map((revision, i) => ({
-          revision,
+        .map((data, i) => ({
+          data,
           client: this.id,
           local: replica.local + i,
-          latest: replica.latest,
+          received: replica.received,
         }))
         .slice(item.sent + 1 - replica.local);
       item.sent = messages[messages.length - 1].local;

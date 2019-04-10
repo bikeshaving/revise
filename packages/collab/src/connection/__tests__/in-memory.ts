@@ -1,74 +1,51 @@
-import { Message, Milestone } from "../../connection";
+import { Checkpoint, Message } from "../../connection";
 import { InMemoryConnection } from "../in-memory";
 
 describe("InMemoryConnection", () => {
-  test("send and fetch revisions", async () => {
+  test("send and fetch messages", async () => {
     const connection = new InMemoryConnection();
     const messages: Message[] = [
-      {
-        revision: "a",
-        local: 0,
-        latest: -1,
-        client: "client1",
-      },
-      {
-        revision: "b",
-        local: 1,
-        latest: -1,
-        client: "client1",
-      },
-      {
-        revision: "c",
-        local: 2,
-        latest: -1,
-        client: "client1",
-      },
+      { data: "a", client: "client1", local: 0, received: -1 },
+      { data: "b", client: "client1", local: 1, received: -1 },
+      { data: "c", client: "client1", local: 2, received: -1 },
     ];
     await connection.sendMessages("doc1", messages);
     const messages1 = await connection.fetchMessages("doc1");
-    const messages2 = messages.map((message, global) => ({
+    const messages2 = messages.map((message, version) => ({
       ...message,
-      global,
+      version,
     }));
     expect(messages1).toEqual(messages2);
   });
 
-  // TODO: we shouldn’t be allowed to send milestones whose version is higher than the total number of messages in the connection
-  test("send and fetch snapshots", async () => {
+  test("send and fetch checkpoints", async () => {
     const connection = new InMemoryConnection();
     await connection.sendMessages("doc1", [
-      { revision: "hi", client: "client1", local: 0, latest: -1 },
-      { revision: "hi", client: "client1", local: 1, latest: -1 },
+      { data: "hi", client: "client1", local: 0, received: -1 },
+      { data: "hi", client: "client1", local: 1, received: -1 },
     ]);
-    const milestoneA: Milestone = {
-      snapshot: "hi",
-      version: 2,
-    };
-    await connection.sendMilestone("doc1", milestoneA);
-    const milestoneB: Milestone = {
-      snapshot: "hello",
-      version: 3,
-    };
+    const checkpointA: Checkpoint = { data: "hi", version: 2 };
+    await connection.sendCheckpoint("doc1", checkpointA);
+    const checkpointB: Checkpoint = { data: "hello", version: 3 };
     await expect(
-      connection.sendMilestone("doc1", milestoneB),
+      connection.sendCheckpoint("doc1", checkpointB),
     ).rejects.toBeDefined();
 
     await connection.sendMessages("doc1", [
-      { revision: "hello", client: "client1", local: 2, latest: 2 },
+      { data: "hello", client: "client1", local: 2, received: 2 },
     ]);
-    await connection.sendMilestone("doc1", milestoneB);
-    const milestoneC: Milestone = {
-      snapshot: "uhhh",
-      version: 1,
-    };
-    await connection.sendMilestone("doc1", milestoneC);
-    const milestoneA1 = await connection.fetchMilestone("doc1", 2);
-    const milestoneB1 = await connection.fetchMilestone("doc1");
-    const milestoneC1 = await connection.fetchMilestone("doc1", 1);
-    expect(milestoneA).toEqual(milestoneA1);
-    expect(milestoneB).toEqual(milestoneB1);
-    expect(milestoneC).toEqual(milestoneC1);
-    await expect(connection.fetchMilestone("doc1", 0)).resolves.toBeUndefined();
+    await connection.sendCheckpoint("doc1", checkpointB);
+    const checkpointC: Checkpoint = { data: "uhhh", version: 1 };
+    await connection.sendCheckpoint("doc1", checkpointC);
+    const checkpointA1 = await connection.fetchCheckpoint("doc1", 2);
+    const checkpointB1 = await connection.fetchCheckpoint("doc1");
+    const checkpointC1 = await connection.fetchCheckpoint("doc1", 1);
+    expect(checkpointA).toEqual(checkpointA1);
+    expect(checkpointB).toEqual(checkpointB1);
+    expect(checkpointC).toEqual(checkpointC1);
+    await expect(
+      connection.fetchCheckpoint("doc1", 0),
+    ).resolves.toBeUndefined();
   });
 
   test("subscribe", async () => {
@@ -85,32 +62,17 @@ describe("InMemoryConnection", () => {
       return messages;
     })();
     const messages1 = [
-      {
-        revision: "a",
-        local: 0,
-        latest: -1,
-        client: "client1",
-      },
-      {
-        revision: "b",
-        local: 1,
-        latest: -1,
-        client: "client1",
-      },
+      { data: "a", client: "client1", local: 0, received: -1 },
+      { data: "b", client: "client1", local: 1, received: -1 },
     ];
     await connection.sendMessages("doc", messages1);
     const messages2 = [
-      {
-        revision: "c",
-        local: 2,
-        latest: -1,
-        client: "client1",
-      },
+      { data: "c", client: "client1", local: 2, received: -1 },
     ];
     await connection.sendMessages("doc", messages2);
     const messages3 = messages1
       .concat(messages2)
-      .map((message, global) => ({ ...message, global }));
+      .map((message, version) => ({ ...message, version }));
     await expect(messages).resolves.toEqual(messages3);
   });
 });

@@ -17,7 +17,7 @@ export class CollabText {
 
   async *subscribe(): AsyncIterableIterator<Revision> {
     for await (const message of this.client.subscribe(this.id)) {
-      const patch = this.replica.patchAt(message.global!);
+      const patch = this.replica.patchAt(message.version!);
       yield { ...message.revision, patch };
     }
   }

@@ -1,26 +1,24 @@
 export interface Message {
-  // TODO: rename "revision" to "data", remove client from revision and construct revision from message
-  revision: any;
+  data: any;
   client: string;
   local: number;
-  latest: number;
-  global?: number;
+  received: number;
+  version?: number;
 }
 
-// TODO: rename to checkpoint maybe
-export interface Milestone {
-  snapshot: any;
+export interface Checkpoint {
+  data: any;
   version: number;
 }
 
 export interface Connection {
-  fetchMilestone(id: string, start?: number): Promise<Milestone | undefined>;
   fetchMessages(
     id: string,
     start?: number,
     end?: number,
   ): Promise<Message[] | undefined>;
-  sendMilestone(id: string, milestone: Milestone): Promise<void>;
   sendMessages(id: string, messages: Message[]): Promise<void>;
-  subscribe(id: string, start: number): AsyncIterableIterator<Message[]>;
+  fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined>;
+  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void>;
+  subscribe(id: string, start?: number): AsyncIterableIterator<Message[]>;
 }

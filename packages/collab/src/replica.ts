@@ -22,7 +22,7 @@ export class Replica {
   // + = pending revisions
   constructor(
     public client: string,
-    public latest: number = -1,
+    public received: number = -1,
     public snapshot: Snapshot = INITIAL_SNAPSHOT,
     // TODO: allow revisions to be a sparse array
     public revisions: Revision[] = [],
@@ -30,7 +30,7 @@ export class Replica {
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
   pending(): Revision[] {
-    return this.revisions.slice(this.latest + 1);
+    return this.revisions.slice(this.received + 1);
   }
 
   clone(client: string): Replica {
@@ -39,7 +39,7 @@ export class Replica {
     }
     return new Replica(
       client,
-      this.latest,
+      this.received,
       { ...this.snapshot },
       this.revisions.slice(),
     );
@@ -129,30 +129,30 @@ export class Replica {
   }
 
   ingest(rev: Revision, version: number): Revision {
-    if (version < -1 || version > this.latest) {
+    if (version < -1 || version > this.received) {
       throw new RangeError("version out of range");
     }
     if (rev.client === this.client) {
       this.local++;
-      this.latest++;
+      this.received++;
       // TODO: integrity check??
-      return this.revisions[this.latest];
+      return this.revisions[this.received];
     }
     // TODO: cache the rearranged/rebased somewhere
     const revisions = rearrange(
-      this.revisions.slice(version + 1, this.latest + 1),
+      this.revisions.slice(version + 1, this.received + 1),
       (rev1) => rev1.client === rev.client,
     );
     [rev] = rebase(rev, revisions);
-    rev = this.normalize(rev, this.latest + 1);
+    rev = this.normalize(rev, this.received + 1);
     const [rev1, revisions1] = rebase(
       rev,
-      this.revisions.slice(this.latest + 1),
+      this.revisions.slice(this.received + 1),
     );
     this.snapshot = apply(this.snapshot, rev1.patch);
-    this.revisions.splice(this.latest + 1, revisions1.length, rev);
+    this.revisions.splice(this.received + 1, revisions1.length, rev);
     this.revisions = this.revisions.concat(revisions1);
-    this.latest++;
+    this.received++;
     return rev1;
   }
 }

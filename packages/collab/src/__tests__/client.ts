@@ -14,18 +14,18 @@ describe("Client", () => {
       replica.edit([0, 5, 6, 12]);
       replica.edit([11]);
       await client.save("doc1");
-      const messages1 = replica.revisions.slice(0, 2).map((revision, i) => ({
-        revision,
+      const messages1 = replica.revisions.slice(0, 2).map((data, i) => ({
+        data,
         client: "id1",
         local: 0 + i,
-        latest: -1,
+        received: -1,
       }));
       expect(sendMessages).nthCalledWith(1, "doc1", messages1);
-      const messages2 = replica.revisions.slice(2).map((revision, i) => ({
-        revision,
+      const messages2 = replica.revisions.slice(2).map((data, i) => ({
+        data,
         client: "id1",
         local: 2 + i,
-        latest: -1,
+        received: -1,
       }));
       expect(sendMessages).nthCalledWith(2, "doc1", messages2);
       client.close();
@@ -43,23 +43,23 @@ describe("Client", () => {
       await client.save("doc1", { force: true });
       const messages = await conn.fetchMessages("doc1");
       for (const message of messages!) {
-        replica.ingest(message.revision, message.latest);
+        replica.ingest(message.data, message.received);
       }
       await client.save("doc1", { force: true });
       replica.edit([11]);
       await client.save("doc1", { force: true });
-      const messages1 = replica.revisions.slice(0, 3).map((revision, i) => ({
-        revision,
+      const messages1 = replica.revisions.slice(0, 3).map((data, i) => ({
+        data,
         client: "id1",
         local: 0 + i,
-        latest: -1,
+        received: -1,
       }));
       expect(sendMessages).nthCalledWith(1, "doc1", messages1);
-      const messages2 = replica.revisions.slice(3).map((revision, i) => ({
-        revision,
+      const messages2 = replica.revisions.slice(3).map((data, i) => ({
+        data,
         client: "id1",
         local: 3 + i,
-        latest: 2,
+        received: 2,
       }));
       expect(sendMessages).nthCalledWith(2, "doc1", messages2);
       client.close();
