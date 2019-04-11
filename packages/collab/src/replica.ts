@@ -16,12 +16,6 @@ import { invert } from "./utils";
 export class Replica {
   protected local = 0;
   protected sent = 0;
-  // revisions
-  // ###########************+++++++++++++++
-  //           ^ received  ^ received + sent?
-  // # = accepted revisions
-  // * = sent revisions
-  // + = pending revisions
   constructor(
     public client: string,
     public received: number = -1,
@@ -32,13 +26,16 @@ export class Replica {
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
   pending(): Message[] {
-    const revisions = this.revisions.slice(this.received + this.sent + 1);
-    return revisions.map((rev, i) => ({
-      data: rev,
-      client: this.client,
-      local: this.local + i,
-      received: this.received,
-    }));
+    const revisions = this.revisions
+      .slice(this.received + this.sent + 1)
+      .map((rev, i) => ({
+        data: rev,
+        client: this.client,
+        local: this.local + this.sent + i,
+        received: this.received,
+      }));
+    this.sent += revisions.length;
+    return revisions;
   }
 
   clone(client: string): Replica {
@@ -145,6 +142,7 @@ export class Replica {
     }
     if (rev.client === this.client) {
       this.local++;
+      this.sent--;
       this.received++;
       // TODO: integrity check??
       return message;
@@ -154,7 +152,7 @@ export class Replica {
       message.received + 1,
       this.received + 1,
     );
-    revisions = rearrange(revisions, (rev1) => rev1.client === rev.client);
+    revisions = rearrange(revisions, (rev1) => rev.client === rev1.client);
     [rev] = rebase(rev, revisions);
     rev = this.normalize(rev, this.received + 1);
     let rev1: Revision;

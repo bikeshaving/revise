@@ -48,7 +48,7 @@ describe("Replica", () => {
     });
   });
 
-  describe("patchAt", () => {
+  describe("Replica.patchAt", () => {
     test("comprehensive", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
@@ -59,6 +59,43 @@ describe("Replica", () => {
       expect(replica.patchAt(1)).toEqual([0, 11, "!", 11]);
       expect(replica.patchAt(2)).toEqual([0, 5, "_", 6, 12]);
       expect(replica.patchAt(3)).toEqual([0, 11, 12]);
+    });
+  });
+
+  describe("Replica.pending", () => {
+    test("simple", () => {
+      const replica = new Replica("client1");
+      replica.edit(["a", 0]);
+      replica.edit(["b", 0, 1]);
+      expect(replica.pending().length).toEqual(2);
+      expect(replica.pending().length).toEqual(0);
+      replica.edit(["c", 0, 2]);
+      replica.edit(["d", 0, 3]);
+      expect(replica.pending().length).toEqual(2);
+      expect(replica.pending().length).toEqual(0);
+    });
+
+    test("ingest", () => {
+      let version = 0;
+      const replica = new Replica("client1");
+      replica.edit(["a", 0]);
+      let messages = replica.pending();
+      expect(messages.length).toEqual(1);
+      for (const message of messages) {
+        replica.ingest({ ...message, version });
+        version++;
+      }
+      replica.edit(["b", 0, 1]);
+      replica.edit(["c", 0, 2]);
+      messages = replica.pending();
+      expect(messages.length).toEqual(2);
+      replica.ingest({ ...messages[0], version });
+      version++;
+      replica.edit(["d", 0, 3]);
+      expect(replica.pending().length).toEqual(1);
+      replica.ingest({ ...messages[1], version });
+      version++;
+      expect(replica.pending().length).toEqual(0);
     });
   });
 

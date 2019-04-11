@@ -6,8 +6,6 @@ import { Replica } from "./replica";
 
 export interface ClientItem {
   replica: Promise<Replica>;
-  // TODO: move sent to replica.
-  sent: number;
   subscription?: AsyncIterator<Message[]>;
   inflight?: Promise<void>;
 }
@@ -52,10 +50,7 @@ export class Client {
 
   getReplica(id: string): Promise<Replica> {
     if (this.items[id] == null) {
-      this.items[id] = {
-        replica: this.fetchReplica(id),
-        sent: -1,
-      };
+      this.items[id] = { replica: this.fetchReplica(id) };
     }
     return this.items[id].replica;
   }
@@ -122,15 +117,8 @@ export class Client {
       await this.throttle.next();
     }
     const pending = replica.pending();
-    // TODO: move this logic to replicas themselves
     if (pending.length) {
-      if (pending[pending.length - 1].local > item.sent) {
-        item.inflight = this.connection.sendMessages(
-          id,
-          pending.slice(item.sent + 1 - pending[0].local),
-        );
-        item.sent = pending[pending.length - 1].local;
-      }
+      item.inflight = this.connection.sendMessages(id, pending);
     }
     return item.inflight;
   }
