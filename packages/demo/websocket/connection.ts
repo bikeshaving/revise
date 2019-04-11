@@ -1,7 +1,7 @@
 import {
+  Checkpoint,
   Connection,
   Message,
-  Milestone,
 } from "@collabjs/collab/lib/connection";
 import { Channel, DroppingBuffer } from "@channel/channel";
 import { Action } from "./actions";
@@ -58,8 +58,8 @@ export class WebSocketConnection implements Connection {
         request.resolve(message.messages);
         break;
       }
-      case "sendMilestone": {
-        request.resolve(message.milestone);
+      case "sendCheckpoint": {
+        request.resolve(message.checkpoint);
         break;
       }
       default: {
@@ -90,16 +90,6 @@ export class WebSocketConnection implements Connection {
     );
   }
 
-  fetchMilestone(id: string, start?: number): Promise<Milestone | undefined> {
-    const action: Action = {
-      type: "fetchMilestone",
-      id,
-      start,
-      reqId: this.nextRequestId++,
-    };
-    return this.send(action);
-  }
-
   // TODO: handle negative indexes?
   fetchMessages(
     id: string,
@@ -116,21 +106,31 @@ export class WebSocketConnection implements Connection {
     return this.send(action);
   }
 
-  sendMilestone(id: string, milestone: Milestone): Promise<void> {
-    const action: Action = {
-      type: "sendMilestone",
-      id,
-      milestone,
-      reqId: this.nextRequestId++,
-    };
-    return this.send(action);
-  }
-
   sendMessages(id: string, messages: Message[]): Promise<void> {
     const action: Action = {
       type: "sendMessages",
       id,
       messages,
+      reqId: this.nextRequestId++,
+    };
+    return this.send(action);
+  }
+
+  fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined> {
+    const action: Action = {
+      type: "fetchCheckpoint",
+      id,
+      start,
+      reqId: this.nextRequestId++,
+    };
+    return this.send(action);
+  }
+
+  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
+    const action: Action = {
+      type: "sendCheckpoint",
+      id,
+      checkpoint,
       reqId: this.nextRequestId++,
     };
     return this.send(action);

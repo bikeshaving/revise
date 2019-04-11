@@ -7,10 +7,13 @@ export function link(conn: Connection, socket: WebSocket): void {
     let message: Action = JSON.parse(ev.data);
     try {
       switch (message.type) {
-        case "fetchMilestone": {
-          const milestone = await conn.fetchMilestone(message.id, message.start);
+        case "fetchCheckpoint": {
+          const checkpoint = await conn.fetchCheckpoint(
+            message.id,
+            message.start,
+          );
           let action: Action;
-          if (milestone == null) {
+          if (checkpoint == null) {
             action = {
               type: "sendNothing",
               id: message.id,
@@ -18,10 +21,10 @@ export function link(conn: Connection, socket: WebSocket): void {
             };
           } else {
             action = {
-              type: "sendMilestone",
+              type: "sendCheckpoint",
               id: message.id,
               reqId: message.reqId,
-              milestone,
+              checkpoint,
             };
           }
           socket.send(JSON.stringify(action));
@@ -51,8 +54,8 @@ export function link(conn: Connection, socket: WebSocket): void {
           socket.send(JSON.stringify(action));
           break;
         }
-        case "sendMilestone": {
-          await conn.sendMilestone(message.id, message.milestone!);
+        case "sendCheckpoint": {
+          await conn.sendCheckpoint(message.id, message.checkpoint!);
           const action: Action = {
             type: "acknowledge",
             id: message.id,

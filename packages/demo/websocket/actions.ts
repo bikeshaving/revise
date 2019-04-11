@@ -1,14 +1,9 @@
-import { Message, Milestone } from "@collabjs/collab/lib/connection";
+import { Checkpoint, Message } from "@collabjs/collab/lib/connection";
 
 export interface AbstractAction {
   type: string;
   id: string;
   reqId: number;
-}
-
-export interface FetchMilestone extends AbstractAction {
-  type: "fetchMilestone";
-  start?: number;
 }
 
 export interface FetchMessages extends AbstractAction {
@@ -17,14 +12,19 @@ export interface FetchMessages extends AbstractAction {
   end?: number;
 }
 
-export interface SendMilestone extends AbstractAction {
-  type: "sendMilestone";
-  milestone: Milestone;
-}
-
 export interface SendMessages extends AbstractAction {
   type: "sendMessages";
   messages: Message[];
+}
+
+export interface FetchCheckpoint extends AbstractAction {
+  type: "fetchCheckpoint";
+  start?: number;
+}
+
+export interface SendCheckpoint extends AbstractAction {
+  type: "sendCheckpoint";
+  checkpoint: Checkpoint;
 }
 
 export interface SendNothing extends AbstractAction {
@@ -41,10 +41,10 @@ export interface Subscribe extends AbstractAction {
 }
 
 export type Action =
-  | FetchMilestone
   | FetchMessages
-  | SendMilestone
   | SendMessages
+  | FetchCheckpoint
+  | SendCheckpoint
   | SendNothing
   | Acknowledge
   | Subscribe;
