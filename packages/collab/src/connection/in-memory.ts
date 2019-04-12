@@ -118,7 +118,7 @@ export class InMemoryConnection implements Connection {
         if (messages != null && messages.length) {
           yield messages;
         }
-        start = version;
+        start = version + 1;
       }
     }
   }
