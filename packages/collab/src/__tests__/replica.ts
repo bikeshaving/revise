@@ -207,6 +207,7 @@ describe("Replica", () => {
     });
   });
 
+  // TODO: use fastcheck commands or something to make testing more obvious
   describe("Replica.ingest", () => {
     test("simple 1", () => {
       const replica1 = new Replica("client1");
@@ -392,7 +393,28 @@ describe("Replica", () => {
       expect(replica1.hiddenSeqAt(1)).toEqual([0, 4]);
     });
 
+    test("concurrent 7", () => {
+      const replica1 = new Replica("client1");
+      const replica2 = new Replica("client2");
+      replica1.edit(["a", 0]);
+      const a = { ...replica1.pending()[0], version: 0 };
+      replica1.edit([0, 1, "s", 1]);
+      const s = { ...replica1.pending()[0], version: 2 };
+      replica2.edit(["d", 0]);
+      const d = { ...replica2.pending()[0], version: 1 };
+      replica1.ingest(a);
+      replica2.ingest(a);
+      replica2.edit([0, 2, "f", 2]);
+      const f = { ...replica2.pending()[0], version: 3 };
+      replica1.ingest(d);
+      replica2.ingest(d);
+      replica1.ingest(s);
+      replica2.ingest(s);
+      replica1.ingest(f);
+      replica2.ingest(f);
+      expect(replica1.snapshot).toEqual(replica2.snapshot);
+    });
+
     // TODO: add tests which tests ingest between more than two clients
-    // TODO: add tests which edit replicas and ingest revisions in a different order
   });
 });
