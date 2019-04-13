@@ -34,7 +34,7 @@ export class WebSocketConnection implements Connection {
     }
   }
 
-  protected handleMessage(ev: MessageEvent): void {
+  protected async handleMessage(ev: MessageEvent): Promise<void> {
     let message: any;
     try {
       message = JSON.parse(ev.data);

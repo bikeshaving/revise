@@ -1,5 +1,6 @@
 import { Action } from "./actions";
 import { Connection } from "@collabjs/collab/lib/connection";
+import { delay } from "@channel/timers";
 
 // TODO: return a more useful value, maybe make this a class.
 export function link(conn: Connection, socket: WebSocket): void {
@@ -83,6 +84,7 @@ export function link(conn: Connection, socket: WebSocket): void {
           socket.send(JSON.stringify(action));
           const subscription = conn.subscribe(message.id, message.start);
           for await (const messages of subscription) {
+            await delay(4000).next();
             const action: Action = {
               type: "sendMessages",
               id: message.id,
@@ -95,7 +97,7 @@ export function link(conn: Connection, socket: WebSocket): void {
         }
       }
     } catch (err) {
-      console.log(err);
+      console.error(err);
       socket.close();
     }
   }

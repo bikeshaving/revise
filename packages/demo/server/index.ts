@@ -79,6 +79,6 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   if (reason) {
     fastify.log.error(reason);
-    throw reason;
   }
+  throw reason;
 });

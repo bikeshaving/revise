@@ -36,28 +36,28 @@ function Editor() {
     }
     CollabText.initialize("doc1", client).then(async (text1) => {
       text = text1;
+      console.log(text);
       cm.setValue(text.text);
       cm.on("beforeChange", handleBeforeChange);
       cm.setOption("readOnly", false);
-      for await (const rev of text.subscribe()) {
+      for await (const patch of text.remote()) {
+        console.log(patch);
         cm.operation(() => {
-          if (rev.client !== client.id) {
-            let tally = 0;
-            for (const op of operations(rev.patch)) {
-              switch (op.type) {
-                case "insert": {
-                  const start = cm.posFromIndex(op.start + tally);
-                  cm.replaceRange(op.inserted, start, start, "collab");
-                  tally += op.inserted.length;
-                  break;
-                }
-                case "delete": {
-                  const start = cm.posFromIndex(op.start + tally);
-                  const end = cm.posFromIndex(op.end + tally);
-                  cm.replaceRange("", start, end, "collab");
-                  tally -= op.end - op.start;
-                  break;
-                }
+          let tally = 0;
+          for (const op of operations(patch)) {
+            switch (op.type) {
+              case "insert": {
+                const start = cm.posFromIndex(op.start + tally);
+                cm.replaceRange(op.inserted, start, start, "collab");
+                tally += op.inserted.length;
+                break;
+              }
+              case "delete": {
+                const start = cm.posFromIndex(op.start + tally);
+                const end = cm.posFromIndex(op.end + tally);
+                cm.replaceRange("", start, end, "collab");
+                tally -= op.end - op.start;
+                break;
               }
             }
           }
