@@ -274,7 +274,6 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
       }
     }
   }
-
   if (!it1.done) {
     const [length1, flag1] = it1.value;
     if (!flag1 || !iter1.next().done) {
@@ -282,9 +281,7 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
     }
     push(result1, length1, true);
     push(result2, length1, false);
-  }
-
-  if (!it2.done) {
+  } else if (!it2.done) {
     const [length2, flag2] = it2.value;
     if (!flag2 || !iter2.next().done) {
       throw new Error("Length mismatch");
@@ -292,10 +289,10 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
     push(result1, length2, false);
     push(result2, length2, true);
   }
-
   return [result1, result2];
 }
 
+// TODO: reverse order to false result, true reseut
 export function split(text: string, subseq: Subseq): [string, string] {
   let consumed = 0;
   let result1 = "";
@@ -311,6 +308,7 @@ export function split(text: string, subseq: Subseq): [string, string] {
   return [result1, result2];
 }
 
+// TODO: reverse order falseText, trueText
 export function merge(text1: string, text2: string, subseq: Subseq): string {
   let result = "";
   let consumed1 = 0;
@@ -327,6 +325,7 @@ export function merge(text1: string, text2: string, subseq: Subseq): string {
   return result;
 }
 
+// TODO: reverse order of shuffle to falseSubseq, trueSubseq
 export function shuffle(
   text1: string,
   text2: string,
@@ -342,27 +341,28 @@ export function unify(
   subseq1: Subseq,
   subseq2: Subseq,
 ): [string, Subseq] {
-  let text = "";
+  let result = text1.slice(0, 0);
   const subseq: Subseq = [];
   let consumed1 = 0;
   let consumed2 = 0;
   for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
-    if (flag1) {
-      text += text1.slice(consumed1, consumed1 + length);
+    if (flag1 && flag2) {
+      throw new Error("cannot unify overlapping subseqs");
+    } else if (flag1) {
+      result += text1.slice(consumed1, consumed1 + length);
       consumed1 += length;
-    }
-    if (flag2) {
-      text += text2.slice(consumed2, consumed2 + length);
+    } else if (flag2) {
+      result += text2.slice(consumed2, consumed2 + length);
       consumed2 += length;
     }
     push(subseq, length, flag1 || flag2);
   }
-  return [text, subseq];
+  return [result, subseq];
 }
 
-// TODO: rename
+// TODO: rename this function, maybe disunify or tie it to difference???
 export function erase(text: string, subseq1: Subseq, subseq2: Subseq): string {
-  let result = "";
+  let result = text.slice(0, 0);
   let consumed = 0;
   for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
     if (flag1) {
