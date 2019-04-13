@@ -25,8 +25,7 @@ describe("CollabText", () => {
     const connection = new InMemoryConnection();
     const client1 = new Client("client1", connection);
     const doc1 = await CollabText.initialize("doc", client1);
-    const sub1 = doc1.subscribe();
-    sub1.next(); // we have to prime the subscription to avoid a deadlock
+    const sub1 = doc1.remote();
     doc1.replace(0, 0, "hi");
     await client1.save("doc", { force: true });
     const client2 = new Client("client2", connection);
@@ -53,8 +52,7 @@ describe("CollabText", () => {
     const connection = new InMemoryConnection();
     const client1 = new Client("client1", connection);
     const doc1 = await CollabText.initialize("doc", client1);
-    const sub1 = doc1.subscribe();
-    sub1.next(); // we have to prime the subscription to avoid deadlocks
+    const sub1 = doc1.remote();
     doc1.replace(0, 0, "hi");
     await client1.save("doc", { force: true });
     const client2 = new Client("client2", connection);

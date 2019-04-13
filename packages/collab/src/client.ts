@@ -64,7 +64,7 @@ export class Client {
       const subscription = this.connection.subscribe(id, replica.received + 1);
       this.items[id].subscription = subscription;
       for await (const messages of subscription) {
-        for (let message of messages) {
+        for (const message of messages) {
           // TODO: consider the following cases
           // message.latest > replica.received
           // message.latest > message.version
@@ -75,8 +75,10 @@ export class Client {
           } else if (message.version < replica.received + 1) {
             continue;
           }
-          // TODO: figure out what to publish when and where in the pipeline
-          this.pubsub.publish(id, replica.ingest(message));
+          // TODO: this won’t work the way we want it to because replicas ingest messages synchronously while the pubsub publishes asynchronously
+          // we need to one, switch to an EventEmitter implementation which calls callbacks synchronously or two, make sure all consumers keep track of version numbers
+          replica.ingest(message);
+          this.pubsub.publish(id, message);
         }
       }
     } catch (err) {
@@ -102,18 +104,19 @@ export class Client {
     if (this.closed) {
       throw new Error("Client is closed");
     }
-    this.save(id);
+    this.save(id).catch((err) => this.disconnect(id, err));
   }
 
-  // TODO: send checkpoints!!!
+  // TODO: send checkpoint
   async save(id: string, options: { force?: boolean } = {}): Promise<void> {
     if (this.closed) {
       throw new Error("Client is closed");
     }
+    const { force = false } = options;
     const replica = await this.getReplica(id);
     const item = this.items[id];
     await item.inflight;
-    if (!options.force) {
+    if (!force) {
       await this.throttle.next();
     }
     const pending = replica.pending();

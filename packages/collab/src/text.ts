@@ -1,7 +1,7 @@
 import { Client } from "./client";
-import { build } from "./patch";
+import { build, Patch } from "./patch";
 import { Replica } from "./replica";
-import { Revision } from "./revision";
+// import { Revision } from "./revision";
 
 export class CollabText {
   constructor(
@@ -15,11 +15,14 @@ export class CollabText {
     return new CollabText(id, client, replica);
   }
 
-  async *subscribe(): AsyncIterableIterator<Revision> {
-    // TODO: figure out the pipeline
+  async *remote(): AsyncIterableIterator<Patch> {
     for await (const message of this.client.subscribe(this.id)) {
-      const patch = this.replica.patchAt(message.version!);
-      yield { ...message.data, patch };
+      if (message.version == null) {
+        throw new Error("message missing version");
+      } else if (message.client === this.client.id) {
+        continue;
+      }
+      yield message.data.patch;
     }
   }
 

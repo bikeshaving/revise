@@ -48,20 +48,6 @@ describe("Replica", () => {
     });
   });
 
-  describe("Replica.patchAt", () => {
-    test("comprehensive", () => {
-      const replica = new Replica("client1");
-      replica.edit(["hello world", 0]);
-      replica.edit([0, 11, "!", 11]);
-      replica.edit([0, 5, "_", 6, 12]);
-      replica.edit([0, 11, 12]);
-      expect(replica.patchAt(0)).toEqual(["hello world", 0]);
-      expect(replica.patchAt(1)).toEqual([0, 11, "!", 11]);
-      expect(replica.patchAt(2)).toEqual([0, 5, "_", 6, 12]);
-      expect(replica.patchAt(3)).toEqual([0, 11, 12]);
-    });
-  });
-
   describe("Replica.pending", () => {
     test("simple", () => {
       const replica = new Replica("client1");

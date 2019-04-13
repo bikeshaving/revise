@@ -16,13 +16,17 @@ import { invert } from "./utils";
 export class Replica {
   protected local = 0;
   protected sent = 0;
+  protected revisions: Revision[];
   constructor(
     public client: string,
     public received: number = -1,
     public snapshot: Snapshot = INITIAL_SNAPSHOT,
-    // TODO: allow revisions to be a sparse array
-    protected revisions: Revision[] = [],
-  ) {}
+  ) {
+    if (received < -1) {
+      throw new RangeError("received cannot be less than -1");
+    }
+    this.revisions = new Array(received + 1);
+  }
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
   pending(): Message[] {
@@ -42,15 +46,10 @@ export class Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple replicas with the same client id");
     }
-    return new Replica(
-      client,
-      this.received,
-      { ...this.snapshot },
-      this.revisions.slice(),
-    );
+    return new Replica(client, this.received, { ...this.snapshot });
   }
 
-  hiddenSeqAt(version: number): Subseq {
+  hiddenSeqAt(version: number = this.revisions.length): Subseq {
     if (version === 0) {
       return [];
     } else if (version === this.revisions.length) {
@@ -67,7 +66,7 @@ export class Replica {
     return hiddenSeq;
   }
 
-  snapshotAt(version: number): Snapshot {
+  snapshotAt(version: number = this.revisions.length): Snapshot {
     if (version === 0) {
       return INITIAL_SNAPSHOT;
     } else if (version === this.revisions.length) {
@@ -82,18 +81,6 @@ export class Replica {
     hiddenSeq = this.hiddenSeqAt(version);
     [hidden, visible] = split(merged1, hiddenSeq);
     return { visible, hidden, hiddenSeq };
-  }
-
-  patchAt(version: number): Patch {
-    if (version < 0 || version > this.revisions.length - 1) {
-      throw new RangeError("version out of range");
-    }
-    const rev = this.revisions[version];
-    let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-    const hiddenSeq = this.hiddenSeqAt(version);
-    insertSeq = shrink(insertSeq, expand(hiddenSeq, insertSeq));
-    deleteSeq = shrink(deleteSeq, hiddenSeq);
-    return synthesize({ inserted, insertSeq, deleteSeq });
   }
 
   normalize(rev: Revision, version = this.revisions.length): Revision {
@@ -111,9 +98,11 @@ export class Replica {
 
   edit(
     patch: Patch,
+    // TODO: stop using priority in favor a simple boolean and don’t propagate priority to other replicas
+    // options: { received?: number; before?: boolean } = {}
     priority?: number,
     version: number = this.revisions.length,
-  ): Revision {
+  ): void {
     if (version < 0 || version > this.revisions.length) {
       throw new RangeError("version out of range");
     }
@@ -126,26 +115,26 @@ export class Replica {
       client: this.client,
       priority,
     };
-    [rev] = rebase(rev, this.revisions.slice(version));
+    const revisions = this.revisions.slice(version);
+    [rev] = rebase(rev, revisions);
     rev = this.normalize(rev);
     this.snapshot = apply(this.snapshot, rev.patch);
     this.revisions.push(rev);
-    return rev;
   }
 
-  ingest(message: Message): Message {
+  ingest(message: Message): void {
     let rev = message.data;
     if (message.received < -1 || message.received > this.received) {
       throw new RangeError("message.received out of range");
     } else if (message.version !== this.received + 1) {
-      throw new Error("missing message");
-    }
-    if (rev.client === this.client) {
+      // this is handled by client but we add an extra check here
+      throw new Error("unexpected message version");
+    } else if (rev.client === this.client) {
       this.local++;
       this.sent--;
       this.received++;
       // TODO: integrity check??
-      return message;
+      return;
     }
     // TODO: cache the rearranged/rebased somewhere
     let revisions = this.revisions.slice(
@@ -162,6 +151,5 @@ export class Replica {
     this.revisions.splice(this.received + 1, revisions1.length, rev);
     this.revisions = this.revisions.concat(revisions1);
     this.received++;
-    return { ...message, data: rev1 };
   }
 }
