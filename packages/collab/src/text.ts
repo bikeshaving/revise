@@ -1,7 +1,7 @@
+import { Message } from "./connection";
 import { Client } from "./client";
-import { build, Patch } from "./patch";
+import { build } from "./patch";
 import { Replica } from "./replica";
-// import { Revision } from "./revision";
 
 export class CollabText {
   constructor(
@@ -15,18 +15,12 @@ export class CollabText {
     return new CollabText(id, client, replica);
   }
 
-  async *remote(): AsyncIterableIterator<Patch> {
-    for await (const message of this.client.subscribe(this.id)) {
-      if (message.version == null) {
-        throw new Error("message missing version");
-      } else if (message.client === this.client.id) {
-        continue;
-      }
-      yield message.data.patch;
-    }
+  subscribe(): AsyncIterableIterator<Message> {
+    return this.client.subscribe(this.id);
   }
 
   get text(): string {
+    // TODO: respect the law of demeter
     return this.replica.snapshot.visible;
   }
 
