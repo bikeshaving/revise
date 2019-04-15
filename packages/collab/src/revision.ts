@@ -51,13 +51,13 @@ export function rebase(
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
     } = factor(rev1.patch);
-    deleteSeq1 = expand(difference(deleteSeq1, deleteSeq), insertSeq);
-    deleteSeq = expand(deleteSeq, insertSeq1);
     if (priority < 0) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
     } else {
       [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
     }
+    deleteSeq = expand(deleteSeq, insertSeq1);
+    deleteSeq1 = difference(expand(deleteSeq1, insertSeq), deleteSeq);
     return {
       ...rev1,
       patch: synthesize({
@@ -90,9 +90,8 @@ export function rearrange(
       }
     } else {
       if (expandSeq != null) {
-        deleteSeq = expand(expand(deleteSeq, insertSeq), expandSeq);
+        deleteSeq = expand(deleteSeq, expandSeq);
         insertSeq = expand(insertSeq, expandSeq);
-        deleteSeq = shrink(deleteSeq, insertSeq);
         expandSeq = shrink(expandSeq, insertSeq);
         rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
       }

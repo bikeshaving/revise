@@ -60,8 +60,8 @@ export class Replica {
     let hiddenSeq = this.snapshot.hiddenSeq;
     for (const rev of invert(this.revisions.slice(version))) {
       const { insertSeq, deleteSeq } = factor(rev.patch);
-      hiddenSeq = shrink(hiddenSeq, insertSeq);
       hiddenSeq = difference(hiddenSeq, deleteSeq);
+      hiddenSeq = shrink(hiddenSeq, insertSeq);
     }
     return hiddenSeq;
   }
@@ -83,6 +83,7 @@ export class Replica {
     return { visible, hidden, hiddenSeq };
   }
 
+  // TODO: move this somewhere,
   normalize(rev: Revision, version = this.revisions.length): Revision {
     const { inserted, insertSeq, deleteSeq } = factor(rev.patch);
     const hiddenSeq = this.hiddenSeqAt(version);
@@ -91,7 +92,7 @@ export class Replica {
       patch: synthesize({
         inserted,
         insertSeq,
-        deleteSeq: difference(deleteSeq, hiddenSeq),
+        deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
       }),
     };
   }
@@ -107,9 +108,12 @@ export class Replica {
       throw new RangeError("version out of range");
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
-    const hiddenSeq = this.hiddenSeqAt(version);
-    [, insertSeq] = interleave(hiddenSeq, insertSeq);
-    deleteSeq = expand(deleteSeq, hiddenSeq);
+    {
+      let hiddenSeq = this.hiddenSeqAt(version);
+      // TODO: use before to determine interleave order
+      [hiddenSeq, insertSeq] = interleave(hiddenSeq, insertSeq);
+      deleteSeq = expand(deleteSeq, hiddenSeq);
+    }
     let rev: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
       client: this.client,
