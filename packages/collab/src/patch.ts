@@ -1,5 +1,18 @@
-import { Subseq } from "./subseq";
-import * as subseq from "./subseq";
+import {
+  clear,
+  count,
+  difference,
+  expand,
+  interleave,
+  merge,
+  push,
+  shrink,
+  split,
+  Subseq,
+  unify,
+  union,
+  zip,
+} from "./subseq";
 
 /*
 Patches are arrays of strings and numbers which represent changes to text.
@@ -36,10 +49,10 @@ export type Patch = (string | number)[];
 
 export function apply(text: string, patch: Patch): string {
   const factored = factor(patch);
-  const deleteSeq = subseq.shrink(factored.deleteSeq, factored.insertSeq);
-  [, text] = subseq.split(text, deleteSeq);
-  const insertSeq = subseq.difference(factored.insertSeq, factored.deleteSeq);
-  return subseq.merge(factored.inserted, text, insertSeq);
+  const deleteSeq = shrink(factored.deleteSeq, factored.insertSeq);
+  [, text] = split(text, deleteSeq);
+  const insertSeq = difference(factored.insertSeq, factored.deleteSeq);
+  return merge(factored.inserted, text, insertSeq);
 }
 
 export function isNoop(patch: Patch): boolean {
@@ -144,24 +157,24 @@ export function factor(patch: Patch): FactoredPatch {
   for (const op of operations(patch)) {
     switch (op.type) {
       case "retain": {
-        subseq.push(deleteSeq, op.end - op.start, false);
-        subseq.push(insertSeq, op.end - op.start, false);
+        push(deleteSeq, op.end - op.start, false);
+        push(insertSeq, op.end - op.start, false);
         break;
       }
       case "delete": {
-        subseq.push(deleteSeq, op.end - op.start, true);
-        subseq.push(insertSeq, op.end - op.start, false);
+        push(deleteSeq, op.end - op.start, true);
+        push(insertSeq, op.end - op.start, false);
         break;
       }
       case "insert": {
-        subseq.push(deleteSeq, op.inserted.length, false);
-        subseq.push(insertSeq, op.inserted.length, true);
+        push(deleteSeq, op.inserted.length, false);
+        push(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
       case "remove": {
-        subseq.push(deleteSeq, op.inserted.length, true);
-        subseq.push(insertSeq, op.inserted.length, true);
+        push(deleteSeq, op.inserted.length, true);
+        push(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
@@ -172,8 +185,8 @@ export function factor(patch: Patch): FactoredPatch {
 
 export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
   let { inserted = "", insertSeq, deleteSeq } = patch;
-  insertSeq = insertSeq || (deleteSeq && subseq.clear(deleteSeq)) || [];
-  deleteSeq = deleteSeq || (insertSeq && subseq.clear(insertSeq)) || [];
+  insertSeq = insertSeq || (deleteSeq && clear(deleteSeq)) || [];
+  deleteSeq = deleteSeq || (insertSeq && clear(insertSeq)) || [];
   return { inserted, insertSeq, deleteSeq };
 }
 
@@ -182,7 +195,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   const result: Patch = [];
   let insertIndex = 0;
   let retainIndex = 0;
-  for (const [length, iFlag, dFlag] of subseq.zip(insertSeq, deleteSeq)) {
+  for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
       if (dFlag) {
         result.push(-1);
@@ -204,7 +217,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   if (insertIndex !== inserted.length) {
     throw new Error("Length mismatch");
   }
-  const length = subseq.count(insertSeq, false);
+  const length = count(insertSeq, false);
   const last = result[result.length - 1];
   if (typeof last !== "number" || last < length) {
     result.push(length);
@@ -212,46 +225,45 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   return result;
 }
 
-// export function order(patch1: Patch, patch2: Patch): [Patch, Patch] {
-//   let {
-//     inserted: inserted1,
-//     insertSeq: insertSeq1,
-//     deleteSeq: deleteSeq1,
-//   } = factor(patch1);
-//   let {
-//     inserted: inserted2,
-//     insertSeq: insertSeq2,
-//     deleteSeq: deleteSeq2,
-//   } = factor(patch2);
-//   deleteSeq2 = subseq.difference(deleteSeq2, deleteSeq1);
-//   deleteSeq2 = subseq.expand(deleteSeq2, insertSeq1);
-//   deleteSeq1 = subseq.expand(deleteSeq1, insertSeq2);
-//   [insertSeq1, insertSeq2] = subseq.interleave(insertSeq1, insertSeq2);
-//   return [
-//     synthesize({
-//       inserted: inserted1,
-//       insertSeq: insertSeq1,
-//       deleteSeq: deleteSeq1,
-//     }),
-//     synthesize({
-//       inserted: inserted2,
-//       insertSeq: insertSeq2,
-//       deleteSeq: deleteSeq2,
-//     }),
-//   ];
-// }
+export function order(patch1: Patch, patch2: Patch): [Patch, Patch] {
+  let {
+    inserted: inserted1,
+    insertSeq: insertSeq1,
+    deleteSeq: deleteSeq1,
+  } = factor(patch1);
+  let {
+    inserted: inserted2,
+    insertSeq: insertSeq2,
+    deleteSeq: deleteSeq2,
+  } = factor(patch2);
+  [insertSeq1, insertSeq2] = interleave(insertSeq1, insertSeq2);
+  deleteSeq1 = expand(deleteSeq1, insertSeq2);
+  deleteSeq2 = expand(deleteSeq2, insertSeq1);
+  return [
+    synthesize({
+      inserted: inserted1,
+      insertSeq: insertSeq1,
+      deleteSeq: deleteSeq1,
+    }),
+    synthesize({
+      inserted: inserted2,
+      insertSeq: insertSeq2,
+      deleteSeq: deleteSeq2,
+    }),
+  ];
+}
 
 export function squash(patch1: Patch, patch2: Patch): Patch {
   let factored1 = factor(patch1);
   let factored2 = factor(patch2);
-  const [inserted, insertSeq] = subseq.unify(
+  const [inserted, insertSeq] = unify(
     factored1.inserted,
     factored2.inserted,
-    subseq.expand(factored1.insertSeq, factored2.insertSeq),
+    expand(factored1.insertSeq, factored2.insertSeq),
     factored2.insertSeq,
   );
-  const deleteSeq = subseq.union(
-    subseq.expand(factored1.deleteSeq, factored2.insertSeq),
+  const deleteSeq = union(
+    expand(factored1.deleteSeq, factored2.insertSeq),
     factored2.deleteSeq,
   );
   return synthesize({ inserted, insertSeq, deleteSeq });
@@ -269,14 +281,14 @@ export function build(
     throw new RangeError("end cannot be less than start");
   }
   let deleteSeq: Subseq = [];
-  subseq.push(deleteSeq, start, false);
-  subseq.push(deleteSeq, inserted.length, false);
-  subseq.push(deleteSeq, end - start, true);
-  subseq.push(deleteSeq, length - end, false);
+  push(deleteSeq, start, false);
+  push(deleteSeq, inserted.length, false);
+  push(deleteSeq, end - start, true);
+  push(deleteSeq, length - end, false);
   let insertSeq: Subseq = [];
-  subseq.push(insertSeq, start, false);
-  subseq.push(insertSeq, inserted.length, true);
-  subseq.push(insertSeq, length - start, false);
+  push(insertSeq, start, false);
+  push(insertSeq, inserted.length, true);
+  push(insertSeq, length - start, false);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
@@ -285,9 +297,6 @@ export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
   return synthesize({
     inserted,
     insertSeq,
-    deleteSeq: subseq.difference(
-      deleteSeq,
-      subseq.expand(hiddenSeq, insertSeq),
-    ),
+    deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
   });
 }

@@ -78,7 +78,7 @@ export function rearrange(
   if (!revisions.length) {
     return revisions;
   }
-  const revisions1: Revision[] = [];
+  const result: Revision[] = [];
   let expandSeq: Subseq | undefined;
   for (let rev of invert(revisions)) {
     let { inserted, insertSeq, deleteSeq } = factor(rev.patch);
@@ -95,8 +95,8 @@ export function rearrange(
         expandSeq = shrink(expandSeq, insertSeq);
         rev = { ...rev, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
       }
-      revisions1.unshift(rev);
+      result.unshift(rev);
     }
   }
-  return revisions1;
+  return result;
 }
