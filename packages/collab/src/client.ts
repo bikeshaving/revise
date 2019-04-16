@@ -31,13 +31,8 @@ export class Client {
       return this.items[id].replica;
     }
     const checkpoint = await this.connection.fetchCheckpoint(id);
-    let replica: Replica;
     // TODO: paramaterize Replica constructor
-    if (checkpoint == null) {
-      replica = new Replica(this.id);
-    } else {
-      replica = new Replica(this.id, checkpoint.version, checkpoint.data);
-    }
+    const replica = new Replica(this.id, checkpoint);
     const messages = await this.connection.fetchMessages(
       id,
       checkpoint == null ? 0 : checkpoint.version + 1,

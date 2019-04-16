@@ -1,4 +1,4 @@
-import { Message } from "./connection";
+import { Checkpoint, Message } from "./connection";
 import { factor, Patch, synthesize } from "./patch";
 import { rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
@@ -27,15 +27,21 @@ export class Replica {
   protected local = 0;
   protected sent = 0;
   protected revisions: Revision[];
+  public received: number;
+  public snapshot: Snapshot;
   constructor(
     public client: string,
-    public received: number = -1,
-    public snapshot: Snapshot = INITIAL_SNAPSHOT,
+    checkpoint: Checkpoint = { version: -1, data: INITIAL_SNAPSHOT },
   ) {
-    if (received < -1) {
-      throw new RangeError("received cannot be less than -1");
+    if (checkpoint.version < -1) {
+      throw new RangeError(
+        `checkpoint.version ${checkpoint.version} out of range`,
+      );
     }
-    this.revisions = new Array(received + 1);
+    // TODO: delete or compute based on length of this.revisions
+    this.received = checkpoint.version;
+    this.snapshot = checkpoint.data;
+    this.revisions = new Array(checkpoint.version + 1);
   }
 
   // TODO: protect revisions and freeze any revisions that have been seen outside this class
@@ -56,7 +62,10 @@ export class Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple replicas with the same client id");
     }
-    return new Replica(client, this.received, { ...this.snapshot });
+    return new Replica(client, {
+      version: this.received,
+      data: this.snapshotAt(this.received),
+    });
   }
 
   hiddenSeqAt(version: number = this.revisions.length - 1): Subseq {
@@ -82,7 +91,7 @@ export class Replica {
     } else if (version === -1) {
       return INITIAL_SNAPSHOT;
     } else if (version === this.revisions.length - 1) {
-      return this.snapshot;
+      return { ...this.snapshot };
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
     const merged = merge(hidden, visible, hiddenSeq);
@@ -96,7 +105,7 @@ export class Replica {
   edit(
     patch: Patch,
     // TODO: stop using priority in favor a simple boolean and don’t propagate priority to other replicas
-    // options: { received?: number; before?: boolean } = {}
+    // options: { received?: number; before?: boolean } = {},
     priority?: number,
     version: number = this.revisions.length - 1,
   ): void {
