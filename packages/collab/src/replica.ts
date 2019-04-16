@@ -13,6 +13,16 @@ import {
 } from "./subseq";
 import { invert } from "./utils";
 
+// TODO: move this somewhere else?
+function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
+  const { inserted, insertSeq, deleteSeq } = factor(patch);
+  return synthesize({
+    inserted,
+    insertSeq,
+    deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
+  });
+}
+
 export class Replica {
   protected local = 0;
   protected sent = 0;
@@ -49,16 +59,16 @@ export class Replica {
     return new Replica(client, this.received, { ...this.snapshot });
   }
 
-  hiddenSeqAt(version: number = this.revisions.length): Subseq {
-    if (version === 0) {
+  hiddenSeqAt(version: number = this.revisions.length - 1): Subseq {
+    if (version < -1 || version > this.revisions.length - 1) {
+      throw new RangeError(`version ${version} out of range`);
+    } else if (version === -1) {
       return [];
-    } else if (version === this.revisions.length) {
+    } else if (version === this.revisions.length - 1) {
       return this.snapshot.hiddenSeq;
-    } else if (version < 0 || version > this.revisions.length) {
-      throw new RangeError("version out of range");
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
-    for (const rev of invert(this.revisions.slice(version))) {
+    for (const rev of invert(this.revisions.slice(version + 1))) {
       const { insertSeq, deleteSeq } = factor(rev.patch);
       hiddenSeq = difference(hiddenSeq, deleteSeq);
       hiddenSeq = shrink(hiddenSeq, insertSeq);
@@ -66,35 +76,21 @@ export class Replica {
     return hiddenSeq;
   }
 
-  snapshotAt(version: number = this.revisions.length): Snapshot {
-    if (version === 0) {
+  snapshotAt(version: number = this.revisions.length - 1): Snapshot {
+    if (version < -1 || version > this.revisions.length - 1) {
+      throw new RangeError(`version ${version} out of range`);
+    } else if (version === -1) {
       return INITIAL_SNAPSHOT;
-    } else if (version === this.revisions.length) {
+    } else if (version === this.revisions.length - 1) {
       return this.snapshot;
-    } else if (version < 0 || version > this.revisions.length) {
-      throw new RangeError("version out of range");
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
     const merged = merge(hidden, visible, hiddenSeq);
-    const insertSeq = summarize(this.revisions.slice(version));
+    const insertSeq = summarize(this.revisions.slice(version + 1));
     const [, merged1] = split(merged, insertSeq);
     hiddenSeq = this.hiddenSeqAt(version);
     [hidden, visible] = split(merged1, hiddenSeq);
     return { visible, hidden, hiddenSeq };
-  }
-
-  // TODO: move this somewhere,
-  normalize(rev: Revision, version = this.revisions.length): Revision {
-    const { inserted, insertSeq, deleteSeq } = factor(rev.patch);
-    const hiddenSeq = this.hiddenSeqAt(version);
-    return {
-      ...rev,
-      patch: synthesize({
-        inserted,
-        insertSeq,
-        deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
-      }),
-    };
   }
 
   edit(
@@ -102,10 +98,10 @@ export class Replica {
     // TODO: stop using priority in favor a simple boolean and don’t propagate priority to other replicas
     // options: { received?: number; before?: boolean } = {}
     priority?: number,
-    version: number = this.revisions.length,
+    version: number = this.revisions.length - 1,
   ): void {
-    if (version < 0 || version > this.revisions.length) {
-      throw new RangeError("version out of range");
+    if (version < -1 || version > this.revisions.length - 1) {
+      throw new RangeError(`version ${version} out of range`);
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     {
@@ -119,9 +115,12 @@ export class Replica {
       client: this.client,
       priority,
     };
-    const revisions = this.revisions.slice(version);
+    const revisions = this.revisions.slice(version + 1);
     [rev] = rebase(rev, revisions);
-    rev = this.normalize(rev);
+    rev = {
+      ...rev,
+      patch: normalize(rev.patch, this.hiddenSeqAt()),
+    };
     this.snapshot = apply(this.snapshot, rev.patch);
     this.revisions.push(rev);
   }
@@ -129,10 +128,10 @@ export class Replica {
   ingest(message: Message): void {
     let rev = message.data;
     if (message.received < -1 || message.received > this.received) {
-      throw new RangeError("message.received out of range");
+      throw new RangeError(`message.received ${message.received} out of range`);
     } else if (message.version !== this.received + 1) {
       // this is handled by client but we add an extra check here
-      throw new Error("unexpected message version");
+      throw new Error(`unexpected message version ${message.version}`);
     } else if (rev.client === this.client) {
       this.local++;
       this.sent--;
@@ -147,7 +146,10 @@ export class Replica {
     );
     revisions = rearrange(revisions, (rev1) => rev.client === rev1.client);
     [rev] = rebase(rev, revisions);
-    rev = this.normalize(rev, this.received + 1);
+    rev = {
+      ...rev,
+      patch: normalize(rev.patch, this.hiddenSeqAt(this.received)),
+    };
     let rev1: Revision;
     let revisions1 = this.revisions.slice(this.received + 1);
     [rev1, revisions1] = rebase(rev, revisions1);
