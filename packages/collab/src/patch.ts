@@ -279,3 +279,15 @@ export function build(
   subseq.push(insertSeq, length - start, false);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
+
+export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
+  const { inserted, insertSeq, deleteSeq } = factor(patch);
+  return synthesize({
+    inserted,
+    insertSeq,
+    deleteSeq: subseq.difference(
+      deleteSeq,
+      subseq.expand(hiddenSeq, insertSeq),
+    ),
+  });
+}

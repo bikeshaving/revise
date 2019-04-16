@@ -1,5 +1,5 @@
 import { Checkpoint, Message } from "./connection";
-import { factor, Patch, synthesize } from "./patch";
+import { factor, normalize, Patch, synthesize } from "./patch";
 import { rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
 import {
@@ -12,16 +12,6 @@ import {
   Subseq,
 } from "./subseq";
 import { invert } from "./utils";
-
-// TODO: move this somewhere else?
-function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
-  const { inserted, insertSeq, deleteSeq } = factor(patch);
-  return synthesize({
-    inserted,
-    insertSeq,
-    deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
-  });
-}
 
 export class Replica {
   protected local = 0;
