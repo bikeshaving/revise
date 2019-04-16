@@ -84,11 +84,11 @@ export class Replica {
       return { ...this.snapshot };
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
-    const merged = merge(hidden, visible, hiddenSeq);
+    let merged = merge(visible, hidden, hiddenSeq);
     const insertSeq = summarize(this.revisions.slice(version + 1));
-    const [, merged1] = split(merged, insertSeq);
+    [merged] = split(merged, insertSeq);
     hiddenSeq = this.hiddenSeqAt(version);
-    [hidden, visible] = split(merged1, hiddenSeq);
+    [visible, hidden] = split(merged, hiddenSeq);
     return { visible, hidden, hiddenSeq };
   }
 

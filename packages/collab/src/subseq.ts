@@ -292,40 +292,41 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
   return [result1, result2];
 }
 
-// TODO: reverse order to false result, true reseut
 export function split(text: string, subseq: Subseq): [string, string] {
   let consumed = 0;
-  let result1 = "";
-  let result2 = "";
+  let resultFalse = text.slice(0, 0);
+  let resultTrue = text.slice(0, 0);
   for (const [length, flag] of new SegmentIterator(subseq)) {
     if (flag) {
-      result1 += text.slice(consumed, consumed + length);
+      resultTrue += text.slice(consumed, consumed + length);
     } else {
-      result2 += text.slice(consumed, consumed + length);
+      resultFalse += text.slice(consumed, consumed + length);
     }
     consumed += length;
   }
-  return [result1, result2];
+  return [resultFalse, resultTrue];
 }
 
-// TODO: reverse order falseText, trueText
-export function merge(text1: string, text2: string, subseq: Subseq): string {
-  let result = "";
-  let consumed1 = 0;
-  let consumed2 = 0;
+export function merge(
+  textFalse: string,
+  textTrue: string,
+  subseq: Subseq,
+): string {
+  let result = textFalse.slice(0, 0);
+  let consumedTrue = 0;
+  let consumedFalse = 0;
   for (const [length, flag] of new SegmentIterator(subseq)) {
     if (flag) {
-      result += text1.slice(consumed1, consumed1 + length);
-      consumed1 += length;
+      result += textTrue.slice(consumedTrue, consumedTrue + length);
+      consumedTrue += length;
     } else {
-      result += text2.slice(consumed2, consumed2 + length);
-      consumed2 += length;
+      result += textFalse.slice(consumedFalse, consumedFalse + length);
+      consumedFalse += length;
     }
   }
   return result;
 }
 
-// TODO: reverse order of shuffle to falseSubseq, trueSubseq
 export function shuffle(
   text1: string,
   text2: string,

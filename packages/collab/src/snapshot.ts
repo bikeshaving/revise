@@ -19,11 +19,11 @@ export function apply(snapshot: Snapshot, patch: Patch): Snapshot {
   if (inserted.length) {
     hiddenSeq = expand(hiddenSeq, insertSeq);
     const insertSeq1 = shrink(insertSeq, hiddenSeq);
-    visible = merge(inserted, visible, insertSeq1);
+    visible = merge(visible, inserted, insertSeq1);
   }
   if (count(deleteSeq, true) > 0) {
     const hiddenSeq1 = union(hiddenSeq, deleteSeq);
-    [hidden, visible] = shuffle(hidden, visible, hiddenSeq, hiddenSeq1);
+    [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
     hiddenSeq = hiddenSeq1;
   }
   return { visible, hidden, hiddenSeq };

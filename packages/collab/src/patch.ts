@@ -50,9 +50,9 @@ export type Patch = (string | number)[];
 export function apply(text: string, patch: Patch): string {
   const factored = factor(patch);
   const deleteSeq = shrink(factored.deleteSeq, factored.insertSeq);
-  [, text] = split(text, deleteSeq);
+  [text] = split(text, deleteSeq);
   const insertSeq = difference(factored.insertSeq, factored.deleteSeq);
-  return merge(factored.inserted, text, insertSeq);
+  return merge(text, factored.inserted, insertSeq);
 }
 
 export function isNoop(patch: Patch): boolean {
