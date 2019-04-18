@@ -24,6 +24,10 @@ export class Replica {
     return this.commits.length - 1;
   }
 
+  get maxVersion(): number {
+    return this.commits.length + this.changes.length - 1;
+  }
+
   constructor(
     public client: string,
     checkpoint: Checkpoint = { version: -1, data: INITIAL_SNAPSHOT },
@@ -61,17 +65,12 @@ export class Replica {
     });
   }
 
-  hiddenSeqAt(
-    version: number = this.commits.length + this.changes.length - 1,
-  ): Subseq {
-    if (
-      version < -1 ||
-      version > this.commits.length + this.changes.length - 1
-    ) {
+  hiddenSeqAt(version: number = this.maxVersion): Subseq {
+    if (version < -1 || version > this.maxVersion) {
       throw new RangeError(`version (${version}) out of range`);
     } else if (version === -1) {
       return [];
-    } else if (version === this.commits.length + this.changes.length - 1) {
+    } else if (version === this.maxVersion) {
       return this.snapshot.hiddenSeq;
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
@@ -88,17 +87,12 @@ export class Replica {
     return hiddenSeq;
   }
 
-  snapshotAt(
-    version: number = this.commits.length + this.changes.length - 1,
-  ): Snapshot {
-    if (
-      version < -1 ||
-      version > this.commits.length + this.changes.length - 1
-    ) {
+  snapshotAt(version: number = this.maxVersion): Snapshot {
+    if (version < -1 || version > this.maxVersion) {
       throw new RangeError(`version (${version}) out of range`);
     } else if (version === -1) {
       return INITIAL_SNAPSHOT;
-    } else if (version === this.commits.length + this.changes.length - 1) {
+    } else if (version === this.maxVersion) {
       return { ...this.snapshot };
     }
     const commits = this.commits.slice(version + 1);
@@ -122,12 +116,9 @@ export class Replica {
     // TODO: stop using priority in favor a simple boolean and don’t propagate priority to other replicas
     // options: { received?: number; before?: boolean } = {},
     priority?: number,
-    version: number = this.commits.length + this.changes.length - 1,
+    version: number = this.maxVersion,
   ): void {
-    if (
-      version < -1 ||
-      version > this.commits.length + this.changes.length - 1
-    ) {
+    if (version < -1 || version > this.maxVersion) {
       throw new RangeError(`version (${version}) out of range`);
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
@@ -158,7 +149,7 @@ export class Replica {
 
   ingest(message: Message): void {
     let rev = message.data;
-    if (message.received < -1 || message.received > this.commits.length - 1) {
+    if (message.received < -1 || message.received > this.received) {
       throw new RangeError(
         `message.received (${message.received}) out of range`,
       );
@@ -172,6 +163,7 @@ export class Replica {
         throw new Error("missing change");
       }
       this.local++;
+      // TODO: never decrement this.sent
       this.sent--;
       this.commits.push(change);
       return;
