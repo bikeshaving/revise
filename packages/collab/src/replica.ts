@@ -30,7 +30,7 @@ export class Replica {
   ) {
     if (checkpoint.version < -1) {
       throw new RangeError(
-        `checkpoint.version ${checkpoint.version} out of range`,
+        `checkpoint.version (${checkpoint.version}) out of range`,
       );
     }
     // TODO: delete or compute based on length of this.revisions
@@ -68,7 +68,7 @@ export class Replica {
       version < -1 ||
       version > this.commits.length + this.changes.length - 1
     ) {
-      throw new RangeError(`version ${version} out of range`);
+      throw new RangeError(`version (${version}) out of range`);
     } else if (version === -1) {
       return [];
     } else if (version === this.commits.length + this.changes.length - 1) {
@@ -95,7 +95,7 @@ export class Replica {
       version < -1 ||
       version > this.commits.length + this.changes.length - 1
     ) {
-      throw new RangeError(`version ${version} out of range`);
+      throw new RangeError(`version (${version}) out of range`);
     } else if (version === -1) {
       return INITIAL_SNAPSHOT;
     } else if (version === this.commits.length + this.changes.length - 1) {
@@ -128,7 +128,7 @@ export class Replica {
       version < -1 ||
       version > this.commits.length + this.changes.length - 1
     ) {
-      throw new RangeError(`version ${version} out of range`);
+      throw new RangeError(`version (${version}) out of range`);
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     {
@@ -159,10 +159,12 @@ export class Replica {
   ingest(message: Message): void {
     let rev = message.data;
     if (message.received < -1 || message.received > this.commits.length - 1) {
-      throw new RangeError(`message.received ${message.received} out of range`);
+      throw new RangeError(
+        `message.received (${message.received}) out of range`,
+      );
     } else if (message.version !== this.received + 1) {
       // this is handled by client but we add an extra check here
-      throw new Error(`unexpected message version ${message.version}`);
+      throw new Error(`unexpected message version (${message.version})`);
     } else if (rev.client === this.client) {
       // TODO: integrity check??
       const change = this.changes.shift();
@@ -185,8 +187,8 @@ export class Replica {
     let rev1: Revision;
     let changes = this.changes;
     [rev1, changes] = rebase(rev, changes);
-    this.commits.push(rev);
     this.snapshot = apply(this.snapshot, rev1.patch);
+    this.commits.push(rev);
     this.changes = changes;
   }
 }

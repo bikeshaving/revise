@@ -360,18 +360,3 @@ export function unify(
   }
   return [result, subseq];
 }
-
-// TODO: rename this function, maybe disunify or tie it to difference???
-export function erase(text: string, subseq1: Subseq, subseq2: Subseq): string {
-  let result = text.slice(0, 0);
-  let consumed = 0;
-  for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
-    if (flag1) {
-      if (!flag2) {
-        result += text.slice(consumed, consumed + length);
-      }
-      consumed += length;
-    }
-  }
-  return result;
-}

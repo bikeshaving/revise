@@ -269,6 +269,13 @@ export function squash(patch1: Patch, patch2: Patch): Patch {
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
+export function summarize(patches: Patch[]): Patch {
+  if (patches.length === 0) {
+    throw new Error("empty array");
+  }
+  return patches.reduce(squash);
+}
+
 export function build(
   start: number,
   end: number,
