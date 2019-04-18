@@ -25,7 +25,7 @@ export class Replica {
   }
 
   get maxVersion(): number {
-    return this.commits.length + this.changes.length - 1;
+    return this.commits.length + this.changes.length - 1 - this.local;
   }
 
   constructor(
@@ -48,7 +48,7 @@ export class Replica {
     const messages = this.changes.slice(this.sent).map((rev, i) => ({
       data: rev,
       client: this.client,
-      local: this.local + this.sent + i,
+      local: this.sent + i,
       received: this.received,
     }));
     this.sent += messages.length;
@@ -76,7 +76,7 @@ export class Replica {
     let hiddenSeq = this.snapshot.hiddenSeq;
     const commits = this.commits.slice(version + 1);
     const changes = this.changes.slice(
-      Math.max(0, version + 1 - this.commits.length),
+      this.local + Math.max(0, version + 1 - this.commits.length),
     );
     const revisions = commits.concat(changes);
     for (const rev of invert(revisions)) {
@@ -97,7 +97,7 @@ export class Replica {
     }
     const commits = this.commits.slice(version + 1);
     const changes = this.changes.slice(
-      Math.max(0, version + 1 - this.commits.length),
+      this.local + Math.max(0, version + 1 - this.commits.length),
     );
     const revisions = commits.concat(changes);
     const insertSeq = summarize(revisions);
@@ -135,7 +135,7 @@ export class Replica {
     };
     const commits = this.commits.slice(version + 1);
     const changes = this.changes.slice(
-      Math.max(0, version + 1 - this.commits.length),
+      this.local + Math.max(0, version + 1 - this.commits.length),
     );
     const revisions = commits.concat(changes);
     [rev] = rebase(rev, revisions);
@@ -158,13 +158,11 @@ export class Replica {
       throw new Error(`unexpected message version (${message.version})`);
     } else if (rev.client === this.client) {
       // TODO: integrity check??
-      const change = this.changes.shift();
+      const change = this.changes[this.local];
       if (change == null) {
         throw new Error("missing change");
       }
       this.local++;
-      // TODO: never decrement this.sent
-      this.sent--;
       this.commits.push(change);
       return;
     }
@@ -177,10 +175,10 @@ export class Replica {
       patch: normalize(rev.patch, this.hiddenSeqAt(this.received)),
     };
     let rev1: Revision;
-    let changes = this.changes;
+    let changes = this.changes.slice(this.local);
     [rev1, changes] = rebase(rev, changes);
     this.snapshot = apply(this.snapshot, rev1.patch);
     this.commits.push(rev);
-    this.changes = changes;
+    this.changes.splice(this.local, changes.length, ...changes);
   }
 }
