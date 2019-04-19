@@ -313,8 +313,8 @@ export function merge(
   subseq: Subseq,
 ): string {
   let result = textFalse.slice(0, 0);
-  let consumedTrue = 0;
   let consumedFalse = 0;
+  let consumedTrue = 0;
   for (const [length, flag] of new SegmentIterator(subseq)) {
     if (flag) {
       result += textTrue.slice(consumedTrue, consumedTrue + length);

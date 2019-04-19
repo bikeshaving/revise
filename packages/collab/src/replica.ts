@@ -1,6 +1,6 @@
 import { Checkpoint, Message } from "./connection";
-import { factor, normalize, Patch, synthesize } from "./patch";
-import { rearrange, rebase, Revision, summarize } from "./revision";
+import { factor, normalize, Patch, summarize, synthesize } from "./patch";
+import { rearrange, rebase, Revision } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
 import {
   difference,
@@ -15,9 +15,11 @@ import { invert } from "./utils";
 
 export class Replica {
   protected local = 0;
-  protected sent = 0;
   protected commits: Revision[];
   protected changes: Revision[] = [];
+  // TODO: delete sent and use groups
+  protected sent = 0;
+  // protected groups = number[] = [];
   public snapshot: Snapshot;
 
   get received(): number {
@@ -99,8 +101,8 @@ export class Replica {
     const changes = this.changes.slice(
       this.local + Math.max(0, version + 1 - this.commits.length),
     );
-    const revisions = commits.concat(changes);
-    const insertSeq = summarize(revisions);
+    const patches = commits.concat(changes).map((change) => change.patch);
+    const { insertSeq } = factor(summarize(patches));
     let { visible, hidden, hiddenSeq } = this.snapshot;
     {
       let merged = merge(visible, hidden, hiddenSeq);

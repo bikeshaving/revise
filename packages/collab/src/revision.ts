@@ -21,18 +21,6 @@ export function compare(rev1: Revision, rev2: Revision): number {
   return 0;
 }
 
-export function summarize(revisions: Revision[]): Subseq {
-  if (!revisions.length) {
-    throw new Error("Empty revisions");
-  }
-  let { insertSeq: expandSeq } = factor(revisions[0].patch);
-  for (const rev of revisions.slice(1)) {
-    const { insertSeq } = factor(rev.patch);
-    expandSeq = expand(expandSeq, insertSeq, { union: true });
-  }
-  return expandSeq;
-}
-
 export function rebase(
   rev: Revision,
   revisions: Revision[],

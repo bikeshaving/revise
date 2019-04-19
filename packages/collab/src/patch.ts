@@ -55,10 +55,6 @@ export function apply(text: string, patch: Patch): string {
   return merge(text, factored.inserted, insertSeq);
 }
 
-export function isNoop(patch: Patch): boolean {
-  return patch.length === 2 && patch[0] === 0;
-}
-
 export interface RetainOperation {
   type: "retain";
   start: number;
@@ -100,12 +96,19 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
   let removing = false;
   for (const p of patch) {
     if (retaining) {
-      if (typeof p !== "number" || p <= start || p > length) {
+      if (typeof p !== "number") {
         throw new Error("Malformed patch");
+      } else if (p === -1) {
+        retaining = false;
+        removing = true;
+      } else {
+        if (p <= start || p > length) {
+          throw new Error("Malformed patch");
+        }
+        yield { type: "retain", start, end: p };
+        start = p;
+        retaining = false;
       }
-      yield { type: "retain", start, end: p };
-      start = p;
-      retaining = false;
     } else if (removing) {
       if (typeof p !== "string") {
         throw new Error("Malformed patch");
@@ -195,9 +198,13 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   const result: Patch = [];
   let insertIndex = 0;
   let retainIndex = 0;
+  let prevDFlag = false;
   for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
       if (dFlag) {
+        if (prevDFlag) {
+          result.push(retainIndex);
+        }
         result.push(-1);
       }
       const text = inserted.slice(insertIndex, insertIndex + length);
@@ -213,6 +220,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
       }
       retainIndex += length;
     }
+    prevDFlag = dFlag;
   }
   if (insertIndex !== inserted.length) {
     throw new Error("Length mismatch");

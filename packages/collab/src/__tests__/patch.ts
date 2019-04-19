@@ -8,6 +8,7 @@ import {
   squash,
   synthesize,
 } from "../patch";
+
 describe("patch", () => {
   const text = "hello world";
   const p1: Patch = [0, 1, "era", 9, 11];

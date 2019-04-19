@@ -1,4 +1,4 @@
-import { Replica } from "../Replica";
+import { Replica } from "../replica";
 
 describe("Replica", () => {
   describe("Replica.hiddenSeqAt", () => {
