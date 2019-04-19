@@ -239,7 +239,6 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
   let it2 = iter2.next();
   const result1: Subseq = [];
   const result2: Subseq = [];
-
   while (!it1.done && !it2.done) {
     const [length1, flag1] = it1.value;
     const [length2, flag2] = it2.value;

@@ -19,6 +19,7 @@ import { invert } from "./utils";
 Patches are arrays of strings and numbers which represent changes to text.
 Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result. Deletions are represented via omission, i.e. a gap between two copy operations.
 Strings within a patch represent insertions at the current index.
+A -1 before a string indicates the string is added and immediately removed (useful to squash multiple patches without losing information).
 The last element of a patch will always be a number which represent the length of the text being modified.
 */
 
@@ -41,9 +42,9 @@ The last element of a patch will always be a number which represent the length o
 // [
 //   // retain 0 to 5
 //   0, 5,
-//   // move 5 to 8 to 2
+//   // move 5 to 8 back to 2
 //   2, 5, 8,
-//   // move 8 to 11 to 3 and delete
+//   // move 8 to 11 back to 3 and delete
 //   3, 11
 // ]
 export type Patch = (string | number)[];
@@ -128,8 +129,10 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
         start = p;
         retaining = true;
       }
-    } else {
+    } else if (typeof p === "string") {
       yield { type: "insert", start, inserted: p };
+    } else {
+      throw new Error("Malformed patch");
     }
   }
   if (length > start) {
@@ -324,16 +327,16 @@ export interface LabeledPatch {
 export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
   patch: T,
   patches: U[],
-  comparator: (p1: T, p2: U) => number,
+  compare: (p1: T, p2: U) => number,
 ): [T, U[]] {
   if (!patches.length) {
     return [patch, patches];
   }
   let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
   patches = patches.map((patch1) => {
-    const priority = comparator(patch, patch1);
+    const priority = compare(patch, patch1);
     if (priority === 0) {
-      throw new Error("Concurrent edits with same client and priority");
+      throw new Error("compare function identified two patches as equal");
     }
     let {
       inserted: inserted1,

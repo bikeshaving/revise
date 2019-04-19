@@ -128,14 +128,19 @@ export class Replica {
     priority?: number,
     version: number = this.maxVersion,
   ): void {
+    // TODO: pass this in via options
+    const before = false;
     if (version < -1 || version > this.maxVersion) {
       throw new RangeError(`version (${version}) out of range`);
     }
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     {
       let hiddenSeq = this.hiddenSeqAt(version);
-      // TODO: use before to determine interleave order
-      [hiddenSeq, insertSeq] = interleave(hiddenSeq, insertSeq);
+      if (before) {
+        [insertSeq, hiddenSeq] = interleave(insertSeq, hiddenSeq);
+      } else {
+        [hiddenSeq, insertSeq] = interleave(hiddenSeq, insertSeq);
+      }
       deleteSeq = expand(deleteSeq, hiddenSeq);
     }
     let rev: Revision = {
