@@ -13,6 +13,7 @@ import {
   union,
   zip,
 } from "./subseq";
+import { invert } from "./utils";
 
 /*
 Patches are arrays of strings and numbers which represent changes to text.
@@ -314,4 +315,80 @@ export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
     insertSeq,
     deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
   });
+}
+
+export interface LabeledPatch {
+  patch: Patch;
+}
+
+export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
+  patch: T,
+  patches: U[],
+  comparator: (p1: T, p2: U) => number,
+): [T, U[]] {
+  if (!patches.length) {
+    return [patch, patches];
+  }
+  let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
+  patches = patches.map((patch1) => {
+    const priority = comparator(patch, patch1);
+    if (priority === 0) {
+      throw new Error("Concurrent edits with same client and priority");
+    }
+    let {
+      inserted: inserted1,
+      insertSeq: insertSeq1,
+      deleteSeq: deleteSeq1,
+    } = factor(patch1.patch);
+    if (priority < 0) {
+      [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
+    } else {
+      [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
+    }
+    deleteSeq = expand(deleteSeq, insertSeq1);
+    deleteSeq1 = difference(expand(deleteSeq1, insertSeq), deleteSeq);
+    return {
+      ...patch1,
+      patch: synthesize({
+        inserted: inserted1,
+        insertSeq: insertSeq1,
+        deleteSeq: deleteSeq1,
+      }),
+    };
+  });
+  patch = { ...patch, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
+  return [patch, patches];
+}
+
+export function rearrange<T extends LabeledPatch>(
+  patches: T[],
+  test: (patch: T) => boolean,
+): T[] {
+  if (!patches.length) {
+    return patches;
+  }
+  const result: T[] = [];
+  let expandSeq: Subseq | undefined;
+  for (let patch of invert(patches)) {
+    let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
+    if (test(patch)) {
+      if (expandSeq == null) {
+        expandSeq = insertSeq;
+      } else {
+        expandSeq = expand(insertSeq, expandSeq, { union: true });
+      }
+    } else {
+      if (expandSeq != null) {
+        deleteSeq = expand(deleteSeq, expandSeq);
+        insertSeq = expand(insertSeq, expandSeq);
+        expandSeq = shrink(expandSeq, insertSeq);
+        patch = {
+          ...patch,
+          patch: synthesize({ inserted, insertSeq, deleteSeq }),
+        };
+      }
+      result.unshift(patch);
+    }
+  }
+  return result;
 }

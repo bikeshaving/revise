@@ -1,6 +1,14 @@
 import { Checkpoint, Message } from "./connection";
-import { factor, normalize, Patch, summarize, synthesize } from "./patch";
-import { rearrange, rebase, Revision } from "./revision";
+import {
+  factor,
+  normalize,
+  Patch,
+  rearrange,
+  rebase,
+  summarize,
+  synthesize,
+} from "./patch";
+import { compare, Revision } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
 import {
   difference,
@@ -140,7 +148,7 @@ export class Replica {
       this.local + Math.max(0, version + 1 - this.commits.length),
     );
     const revisions = commits.concat(changes);
-    [rev] = rebase(rev, revisions);
+    [rev] = rebase(rev, revisions, compare);
     rev = {
       ...rev,
       patch: normalize(rev.patch, this.hiddenSeqAt()),
@@ -171,14 +179,14 @@ export class Replica {
     // TODO: cache the rearranged/rebased somewhere
     let commits = this.commits.slice(message.received + 1);
     commits = rearrange(commits, (rev1) => rev.client === rev1.client);
-    [rev] = rebase(rev, commits);
+    [rev] = rebase(rev, commits, compare);
     rev = {
       ...rev,
       patch: normalize(rev.patch, this.hiddenSeqAt(this.received)),
     };
     let rev1: Revision;
     let changes = this.changes.slice(this.local);
-    [rev1, changes] = rebase(rev, changes);
+    [rev1, changes] = rebase(rev, changes, compare);
     this.snapshot = apply(this.snapshot, rev1.patch);
     this.commits.push(rev);
     this.changes.splice(this.local, changes.length, ...changes);
