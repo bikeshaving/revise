@@ -8,7 +8,6 @@ import {
   summarize,
   synthesize,
 } from "./patch";
-import { compare, Revision } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
 import {
   difference,
@@ -20,6 +19,20 @@ import {
   Subseq,
 } from "./subseq";
 import { invert } from "./utils";
+
+export interface Revision {
+  patch: Patch;
+  client: string;
+}
+
+export function compare(rev1: Revision, rev2: Revision): number {
+  if (rev1.client < rev2.client) {
+    return -1;
+  } else if (rev1.client > rev2.client) {
+    return 1;
+  }
+  return 0;
+}
 
 export class Replica {
   protected local = 0;
