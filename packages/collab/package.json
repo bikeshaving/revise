@@ -9,7 +9,7 @@
     "build": "tsc",
     "watch": "yarn run build -w",
     "develop": "yarn test --watchAll",
-    "test": "jest --verbose",
+    "test": "jest",
     "lint": "eslint --ext js,ts src"
   },
   "devDependencies": {
