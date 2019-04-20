@@ -312,12 +312,9 @@ export function build(
 }
 
 export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
-  const { inserted, insertSeq, deleteSeq } = factor(patch);
-  return synthesize({
-    inserted,
-    insertSeq,
-    deleteSeq: difference(deleteSeq, expand(hiddenSeq, insertSeq)),
-  });
+  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  deleteSeq = difference(deleteSeq, expand(hiddenSeq, insertSeq));
+  return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
 export interface LabeledPatch {
@@ -334,12 +331,12 @@ export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
   }
   let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
   patches = patches.map((patch1) => {
-    const priority = compare(patch, patch1);
     let {
       inserted: inserted1,
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
     } = factor(patch1.patch);
+    const priority = compare(patch, patch1);
     if (priority < 0) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
     } else if (priority > 0) {

@@ -20,28 +20,24 @@ import {
 } from "./subseq";
 import { invert } from "./utils";
 
-export interface Revision {
+export interface Commit {
   patch: Patch;
   client: string;
 }
 
-export function compare(rev1: Revision, rev2: Revision): number {
-  if (rev1.client < rev2.client) {
-    return -1;
-  } else if (rev1.client > rev2.client) {
-    return 1;
-  }
-  return 0;
+export interface Change {
+  patch: Patch;
+  received: number;
 }
 
 export class Replica {
-  protected local = 0;
-  protected commits: Revision[];
-  protected changes: Revision[] = [];
-  // TODO: delete sent and use groups
-  protected sent = 0;
-  // protected groups = number[] = [];
   public snapshot: Snapshot;
+  protected commits: Commit[];
+  protected changes: Change[] = [];
+  protected local = 0;
+  protected sent = 0;
+  // TODO: summarize patches before sending them using groups
+  // protected groups: number[] = [];
 
   get received(): number {
     return this.commits.length - 1;
@@ -60,16 +56,14 @@ export class Replica {
         `checkpoint.version (${checkpoint.version}) out of range`,
       );
     }
-    // TODO: delete or compute based on length of this.revisions
     this.snapshot = checkpoint.data;
     this.commits = new Array(checkpoint.version + 1);
   }
 
-  // TODO: protect revisions and freeze any revisions that have been seen outside this class
-  // TODO: rollback this.sent on failure
+  // TODO: protect changes and freeze any changes that have been seen outside this class
   pending(): Message[] {
-    const messages = this.changes.slice(this.sent).map((rev, i) => ({
-      data: rev,
+    const messages = this.changes.slice(this.sent).map((change, i) => ({
+      data: change.patch,
       client: this.client,
       local: this.sent + i,
       received: this.received,
@@ -82,10 +76,11 @@ export class Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple replicas with the same client id");
     }
-    return new Replica(client, {
+    const checkpoint: Checkpoint = {
       version: this.received,
       data: this.snapshotAt(this.received),
-    });
+    };
+    return new Replica(client, checkpoint);
   }
 
   hiddenSeqAt(version: number = this.maxVersion): Subseq {
@@ -101,8 +96,7 @@ export class Replica {
     const changes = this.changes.slice(
       this.local + Math.max(0, version + 1 - this.commits.length),
     );
-    const revisions = commits.concat(changes);
-    for (const rev of invert(revisions)) {
+    for (const rev of invert(commits.concat(changes as any))) {
       const { insertSeq, deleteSeq } = factor(rev.patch);
       hiddenSeq = difference(hiddenSeq, deleteSeq);
       hiddenSeq = shrink(hiddenSeq, insertSeq);
@@ -122,7 +116,7 @@ export class Replica {
     const changes = this.changes.slice(
       this.local + Math.max(0, version + 1 - this.commits.length),
     );
-    const patches = commits.concat(changes).map((change) => change.patch);
+    const patches = commits.concat(changes as any).map((c) => c.patch);
     const { insertSeq } = factor(summarize(patches));
     let { visible, hidden, hiddenSeq } = this.snapshot;
     {
@@ -152,57 +146,58 @@ export class Replica {
       }
       deleteSeq = expand(deleteSeq, hiddenSeq);
     }
-    // TODO: we don’t have to tag patches with client id yet
-    let rev: Revision = {
+    let change: Change = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
-      client: this.client,
+      received: this.received,
     };
     const commits = this.commits.slice(version + 1);
-    [rev] = rebase(rev, commits, () => 1);
+    [change] = rebase(change, commits, () => 1);
     const changes = this.changes.slice(
-      this.local + Math.max(0, version + 1 - this.commits.length),
+      this.local + Math.max(0, version - this.received),
     );
-    [rev] = rebase(rev, changes, () => (before ? -1 : 1));
-    rev = {
-      ...rev,
-      patch: normalize(rev.patch, this.hiddenSeqAt()),
-    };
-    this.snapshot = apply(this.snapshot, rev.patch);
-    this.changes.push(rev);
+    [change] = rebase(change, changes, () => (before ? -1 : 1));
+    change.patch = normalize(change.patch, this.hiddenSeqAt());
+    this.snapshot = apply(this.snapshot, change.patch);
+    this.changes.push(change);
   }
 
   ingest(message: Message): void {
-    let rev = message.data;
+    let commit: Commit = { patch: message.data, client: message.client };
     if (message.received < -1 || message.received > this.received) {
       throw new RangeError(
         `message.received (${message.received}) out of range`,
       );
     } else if (message.version !== this.received + 1) {
-      // this is handled by client but we add an extra check here
       throw new Error(`unexpected message.version (${message.version})`);
-    } else if (rev.client === this.client) {
+    } else if (commit.client === this.client) {
       // TODO: integrity check??
       const change = this.changes[this.local];
       if (change == null) {
         throw new Error("missing change");
       }
       this.local++;
-      this.commits.push(change);
+      this.commits.push({ patch: change.patch, client: this.client });
       return;
     }
-    // TODO: cache the rearranged/rebased somewhere
     let commits = this.commits.slice(message.received + 1);
-    commits = rearrange(commits, (rev1) => rev.client === rev1.client);
-    [rev] = rebase(rev, commits, compare);
-    rev = {
-      ...rev,
-      patch: normalize(rev.patch, this.hiddenSeqAt(this.received)),
-    };
-    let rev1: Revision;
-    let changes = this.changes.slice(this.local);
-    [rev1, changes] = rebase(rev, changes, compare);
-    this.snapshot = apply(this.snapshot, rev1.patch);
-    this.commits.push(rev);
-    this.changes.splice(this.local, changes.length, ...changes);
+    // TODO: cache the rearranged/rebased somewhere
+    commits = rearrange(commits, (commit1) => commit.client === commit1.client);
+    [commit] = rebase(commit, commits, (c1, c2) =>
+      c1.client < c2.client ? -1 : c1.client > c2.client ? 1 : 0,
+    );
+    commit.patch = normalize(commit.patch, this.hiddenSeqAt(this.received));
+    const [commit1, changes] = rebase(
+      commit,
+      this.changes.slice(this.local),
+      (c) => (c.client < this.client ? -1 : c.client > this.client ? 1 : 0),
+    );
+    this.snapshot = apply(this.snapshot, commit1.patch);
+    this.commits.push(commit);
+    this.changes = this.changes.slice(0, this.local).concat(
+      changes.map((change) => ({
+        patch: change.patch,
+        received: this.received,
+      })),
+    );
   }
 }
