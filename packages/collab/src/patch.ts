@@ -327,7 +327,7 @@ export interface LabeledPatch {
 export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
   patch: T,
   patches: U[],
-  compare: (p1: T, p2: U) => number,
+  compare: (patch1: T, patch2: U) => number,
 ): [T, U[]] {
   if (!patches.length) {
     return [patch, patches];
@@ -335,9 +335,6 @@ export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
   let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
   patches = patches.map((patch1) => {
     const priority = compare(patch, patch1);
-    if (priority === 0) {
-      throw new Error("compare function identified two patches as equal");
-    }
     let {
       inserted: inserted1,
       insertSeq: insertSeq1,
@@ -345,8 +342,10 @@ export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
     } = factor(patch1.patch);
     if (priority < 0) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
-    } else {
+    } else if (priority > 0) {
       [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
+    } else {
+      throw new Error("compare function identified two patches as equal");
     }
     deleteSeq = expand(deleteSeq, insertSeq1);
     deleteSeq1 = difference(expand(deleteSeq1, insertSeq), deleteSeq);

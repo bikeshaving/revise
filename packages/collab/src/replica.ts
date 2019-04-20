@@ -81,7 +81,7 @@ export class Replica {
     } else if (version === -1) {
       return [];
     } else if (version === this.maxVersion) {
-      return this.snapshot.hiddenSeq;
+      return this.snapshot.hiddenSeq.slice();
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
     const commits = this.commits.slice(version + 1);
@@ -123,13 +123,9 @@ export class Replica {
 
   edit(
     patch: Patch,
-    // TODO: stop using priority in favor a simple boolean and don’t propagate priority to other replicas
-    // options: { received?: number; before?: boolean } = {},
-    priority?: number,
-    version: number = this.maxVersion,
+    options: { version?: number; before?: boolean } = {},
   ): void {
-    // TODO: pass this in via options
-    const before = false;
+    const { version = this.maxVersion, before = false } = options;
     if (version < -1 || version > this.maxVersion) {
       throw new RangeError(`version (${version}) out of range`);
     }
@@ -143,17 +139,17 @@ export class Replica {
       }
       deleteSeq = expand(deleteSeq, hiddenSeq);
     }
+    // TODO: we don’t have to tag patches with client id yet
     let rev: Revision = {
       patch: synthesize({ inserted, insertSeq, deleteSeq }),
       client: this.client,
-      priority,
     };
     const commits = this.commits.slice(version + 1);
+    [rev] = rebase(rev, commits, () => 1);
     const changes = this.changes.slice(
       this.local + Math.max(0, version + 1 - this.commits.length),
     );
-    const revisions = commits.concat(changes);
-    [rev] = rebase(rev, revisions, compare);
+    [rev] = rebase(rev, changes, () => (before ? -1 : 1));
     rev = {
       ...rev,
       patch: normalize(rev.patch, this.hiddenSeqAt()),
@@ -170,7 +166,7 @@ export class Replica {
       );
     } else if (message.version !== this.received + 1) {
       // this is handled by client but we add an extra check here
-      throw new Error(`unexpected message version (${message.version})`);
+      throw new Error(`unexpected message.version (${message.version})`);
     } else if (rev.client === this.client) {
       // TODO: integrity check??
       const change = this.changes[this.local];

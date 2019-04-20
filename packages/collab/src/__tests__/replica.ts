@@ -7,7 +7,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
       replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], 1, 0);
+      replica.edit([0, 5, ", Dr. Evil", 11], { version: 0 });
       expect(replica.hiddenSeqAt(-1)).toEqual([]);
       expect(replica.hiddenSeqAt(0)).toEqual([0, 11]);
       expect(replica.hiddenSeqAt(1)).toEqual([0, 1, 1, 6, 1, 4]);
@@ -23,7 +23,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
       replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], 1, 0);
+      replica.edit([0, 5, ", Dr. Evil", 11], { version: 0 });
       expect(replica.snapshotAt(0)).toEqual({
         visible: "hello world",
         hidden: "",
@@ -118,7 +118,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hello ", 0, 5]);
-      replica.edit(["goodbye ", 6, 11], 1, 0);
+      replica.edit(["goodbye ", 6, 11], { version: 0 });
       expect(replica.snapshot.visible).toEqual("goodbye hello world");
     });
 
@@ -126,7 +126,7 @@ describe("Replica", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit([0, 1, "era", 9, 11]);
-      replica.edit(["Great H", 2, 5, 11], 1, 0);
+      replica.edit(["Great H", 2, 5, 11], { version: 0 });
       expect(replica.snapshot.visible).toEqual("Great Hera");
     });
 
@@ -135,7 +135,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
       replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], 1, 1);
+      replica.edit([0, 5, ", Dr. Evil", 11], { version: 1 });
       expect(replica.snapshot.visible).toEqual("Hello, Brian, Dr. Evil");
     });
 
@@ -144,7 +144,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hey ", 0, 5]);
-      replica.edit(["goodbye ", 6, 11], 1, 0);
+      replica.edit(["goodbye ", 6, 11], { version: 0 });
       expect(replica.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -156,12 +156,12 @@ describe("Replica", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
-      replica.edit(["hey ", 0, 5], 1);
-      replica.edit(["goodbye ", 0, 5], 0, 1);
+      replica.edit(["hey ", 0, 5]);
+      replica.edit(["goodbye ", 0, 5], { version: 1, before: true });
       expect(replica.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
-        hiddenSeq: [1, 6, 17],
+        hiddenSeq: [0, 8, 6, 9],
       });
     });
 
@@ -170,7 +170,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hey ", 0, 5]);
-      replica.edit(["goodbye ", 6, 11], 1, 0);
+      replica.edit(["goodbye ", 6, 11], { version: 0 });
       expect(replica.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -186,7 +186,7 @@ describe("Replica", () => {
       replica.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
       // ++++=====++++++======+
       //"why hello there worlds"
-      replica.edit([0, 11, "star", 11], 1, 0);
+      replica.edit([0, 11, "star", 11], { version: 0 });
       // ======================++++
       //"why hello there worldsstar"
       expect(replica.snapshot.visible).toEqual("why hello there worldsstar");
