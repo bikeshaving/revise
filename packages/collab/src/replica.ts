@@ -162,14 +162,13 @@ export class Replica {
   }
 
   ingest(message: Message): void {
-    let commit: Commit = { patch: message.data, client: message.client };
     if (message.received < -1 || message.received > this.received) {
       throw new RangeError(
         `message.received (${message.received}) out of range`,
       );
     } else if (message.version !== this.received + 1) {
       throw new Error(`unexpected message.version (${message.version})`);
-    } else if (commit.client === this.client) {
+    } else if (message.client === this.client) {
       // TODO: integrity check??
       const change = this.changes[this.local];
       if (change == null) {
@@ -179,6 +178,7 @@ export class Replica {
       this.commits.push({ patch: change.patch, client: this.client });
       return;
     }
+    let commit: Commit = { patch: message.data, client: message.client };
     let commits = this.commits.slice(message.received + 1);
     // TODO: cache the rearranged/rebased somewhere
     commits = rearrange(commits, (commit1) => commit.client === commit1.client);
@@ -186,18 +186,17 @@ export class Replica {
       c1.client < c2.client ? -1 : c1.client > c2.client ? 1 : 0,
     );
     commit.patch = normalize(commit.patch, this.hiddenSeqAt(this.received));
-    const [commit1, changes] = rebase(
+    let [commit1, changes] = rebase(
       commit,
       this.changes.slice(this.local),
       (c) => (c.client < this.client ? -1 : c.client > this.client ? 1 : 0),
     );
+    changes = changes.map((change) => ({
+      patch: change.patch,
+      received: this.received,
+    }));
     this.snapshot = apply(this.snapshot, commit1.patch);
     this.commits.push(commit);
-    this.changes = this.changes.slice(0, this.local).concat(
-      changes.map((change) => ({
-        patch: change.patch,
-        received: this.received,
-      })),
-    );
+    this.changes = this.changes.slice(0, this.local).concat(changes);
   }
 }
