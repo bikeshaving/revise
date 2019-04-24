@@ -8,6 +8,7 @@ import {
   squash,
   synthesize,
 } from "../patch";
+import { apply as snapshotApply, Snapshot } from "../snapshot";
 
 describe("patch", () => {
   const text = "hello world";
@@ -210,9 +211,27 @@ describe("patch", () => {
     });
   });
 
-  describe("build/squash", () => {
+  describe("squash", () => {
+    test("squashed patches produce same result as unsquashed patches", () => {
+      const snapshot: Snapshot = {
+        visible: "a1f",
+        hidden: "",
+        hiddenSeq: [0, 3],
+      };
+      const patches: Patch[] = [[0, 2, "d", 2, 3], [0, 1, "s", 2, 4]];
+      const snapshot1 = patches.reduce(snapshotApply, snapshot);
+      expect(snapshot1).toEqual({
+        visible: "asdf",
+        hidden: "1",
+        hiddenSeq: [0, 2, 1, 2],
+      });
+      const squashed = squash(patches[0], patches[1]);
+      expect(snapshotApply(snapshot, squashed)).toEqual(snapshot1);
+    });
+
     // gotta start keeping track of a hiddenSeq if we want this test to work
-    test.skip("comprehensive", () => {
+    // TODO: unskip
+    test.skip("build", () => {
       let patch = build(5, 6, "__", 11);
       let patch1: Patch;
       expect(patch).toEqual([0, 5, "__", 6, 11]);

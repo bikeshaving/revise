@@ -5,7 +5,7 @@ import {
   expand,
   interleave,
   merge,
-  push,
+  push as pushSegment,
   shrink,
   split,
   Subseq,
@@ -47,7 +47,7 @@ The last element of a patch will always be a number which represent the length o
 //   // move 8 to 11 back to 3 and delete
 //   3, 11
 // ]
-export type Patch = (string | number)[];
+export type Patch = (number | string)[];
 
 export function apply(text: string, patch: Patch): string {
   const factored = factor(patch);
@@ -96,41 +96,42 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
   let start = 0;
   let retaining = false;
   let removing = false;
-  for (const p of patch) {
+  for (const op of patch) {
     if (retaining) {
-      if (typeof p !== "number") {
-        throw new Error("Malformed patch");
-      } else if (p === -1) {
+      if (typeof op === "string") {
+        yield { type: "insert", start, inserted: op };
+        retaining = false;
+      } else if (op === -1) {
         retaining = false;
         removing = true;
       } else {
-        if (p <= start || p > length) {
+        if (op <= start || op > length) {
           throw new Error("Malformed patch");
         }
-        yield { type: "retain", start, end: p };
-        start = p;
+        yield { type: "retain", start, end: op };
+        start = op;
         retaining = false;
       }
     } else if (removing) {
-      if (typeof p !== "string") {
+      if (typeof op !== "string") {
         throw new Error("Malformed patch");
       }
-      yield { type: "remove", start, inserted: p };
+      yield { type: "remove", start, inserted: op };
       removing = false;
-    } else if (typeof p === "number") {
-      if (p === -1) {
+    } else if (typeof op === "number") {
+      if (op === -1) {
         removing = true;
       } else {
-        if (p < start || p > length) {
+        if (op < start || op > length) {
           throw new Error("Malformed patch");
-        } else if (p > start) {
-          yield { type: "delete", start, end: p };
+        } else if (op > start) {
+          yield { type: "delete", start, end: op };
         }
-        start = p;
+        start = op;
         retaining = true;
       }
-    } else if (typeof p === "string") {
-      yield { type: "insert", start, inserted: p };
+    } else if (typeof op === "string") {
+      yield { type: "insert", start, inserted: op };
     } else {
       throw new Error("Malformed patch");
     }
@@ -164,24 +165,24 @@ export function factor(patch: Patch): FactoredPatch {
   for (const op of operations(patch)) {
     switch (op.type) {
       case "retain": {
-        push(deleteSeq, op.end - op.start, false);
-        push(insertSeq, op.end - op.start, false);
+        pushSegment(deleteSeq, op.end - op.start, false);
+        pushSegment(insertSeq, op.end - op.start, false);
         break;
       }
       case "delete": {
-        push(deleteSeq, op.end - op.start, true);
-        push(insertSeq, op.end - op.start, false);
+        pushSegment(deleteSeq, op.end - op.start, true);
+        pushSegment(insertSeq, op.end - op.start, false);
         break;
       }
       case "insert": {
-        push(deleteSeq, op.inserted.length, false);
-        push(insertSeq, op.inserted.length, true);
+        pushSegment(deleteSeq, op.inserted.length, false);
+        pushSegment(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
       case "remove": {
-        push(deleteSeq, op.inserted.length, true);
-        push(insertSeq, op.inserted.length, true);
+        pushSegment(deleteSeq, op.inserted.length, true);
+        pushSegment(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
@@ -197,6 +198,22 @@ export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
   return { inserted, insertSeq, deleteSeq };
 }
 
+export function push(patch: Patch, op: string | number): number {
+  const last = patch[patch.length - 1];
+  if (typeof op === "number") {
+    if (last !== op) {
+      patch.push(op);
+    }
+  } else if (typeof op === "string") {
+    if (typeof last === "string") {
+      patch[patch.length - 1] += op;
+    } else {
+      patch.push(op);
+    }
+  }
+  return patch.length;
+}
+
 export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let { inserted, insertSeq, deleteSeq } = complete(patch);
   const result: Patch = [];
@@ -207,22 +224,21 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
     if (iFlag) {
       if (dFlag) {
         if (prevDFlag) {
-          result.push(retainIndex);
+          push(result, retainIndex);
         }
-        result.push(-1);
+        push(result, -1);
       }
       const text = inserted.slice(insertIndex, insertIndex + length);
-      if (typeof result[result.length - 1] === "string") {
-        result[result.length - 1] += text;
-      } else {
-        result.push(text);
-      }
+      push(result, text);
       insertIndex += length;
     } else {
       if (!dFlag) {
-        result.push(retainIndex, retainIndex + length);
+        push(result, retainIndex);
       }
       retainIndex += length;
+      if (!dFlag || typeof result[result.length - 1] === "string") {
+        push(result, retainIndex);
+      }
     }
     prevDFlag = dFlag;
   }
@@ -230,10 +246,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
     throw new Error("Length mismatch");
   }
   const length = count(insertSeq, false);
-  const last = result[result.length - 1];
-  if (typeof last !== "number" || last < length) {
-    result.push(length);
-  }
+  push(result, length);
   return result;
 }
 
@@ -300,14 +313,14 @@ export function build(
     throw new RangeError("end cannot be less than start");
   }
   let deleteSeq: Subseq = [];
-  push(deleteSeq, start, false);
-  push(deleteSeq, inserted.length, false);
-  push(deleteSeq, end - start, true);
-  push(deleteSeq, length - end, false);
+  pushSegment(deleteSeq, start, false);
+  pushSegment(deleteSeq, inserted.length, false);
+  pushSegment(deleteSeq, end - start, true);
+  pushSegment(deleteSeq, length - end, false);
   let insertSeq: Subseq = [];
-  push(insertSeq, start, false);
-  push(insertSeq, inserted.length, true);
-  push(insertSeq, length - start, false);
+  pushSegment(insertSeq, start, false);
+  pushSegment(insertSeq, inserted.length, true);
+  pushSegment(insertSeq, length - start, false);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
