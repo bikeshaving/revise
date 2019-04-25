@@ -135,17 +135,13 @@ describe("patch", () => {
       }).toThrow();
     });
 
-    test("insertions after deletions are normalized", () => {
+    test("insertions after deletions", () => {
       const inserted = "bro";
       const insertSeq = [0, 11, 3];
       const deleteSeq = [0, 6, 5, 3];
       const patch = synthesize({ inserted, insertSeq, deleteSeq });
-      expect(patch).toEqual([0, 6, "bro", 11]);
-      expect(factor(patch)).toEqual({
-        inserted: "bro",
-        insertSeq: [0, 6, 3, 5],
-        deleteSeq: [0, 9, 5],
-      });
+      expect(patch).toEqual([0, 6, 11, "bro", 11]);
+      expect(factor(patch)).toEqual({ inserted, insertSeq, deleteSeq });
     });
 
     test("empty", () => {
@@ -200,7 +196,7 @@ describe("patch", () => {
           deleteSeq: subseq.complement(deleteSeq),
         }),
       );
-      const result = [0, 1, "ello wor", 4, 6];
+      const result = [0, 1, 4, "ello wor", 4, 6];
       expect(
         synthesize({
           inserted: deleted,
@@ -212,7 +208,7 @@ describe("patch", () => {
   });
 
   describe("squash", () => {
-    test("squashed patches produce same result as unsquashed patches", () => {
+    test("squashed patches produce same result as unsquashed patches 1", () => {
       const snapshot: Snapshot = {
         visible: "a1f",
         hidden: "",
@@ -224,6 +220,23 @@ describe("patch", () => {
         visible: "asdf",
         hidden: "1",
         hiddenSeq: [0, 2, 1, 2],
+      });
+      const squashed = squash(patches[0], patches[1]);
+      expect(snapshotApply(snapshot, squashed)).toEqual(snapshot1);
+    });
+
+    test("squashed patches produce same result as unsquashed patches 2", () => {
+      const snapshot: Snapshot = {
+        visible: "hello world",
+        hidden: "",
+        hiddenSeq: [0, 11],
+      };
+      const patches: Patch[] = [["H", 1, 6, "W", 7, 11], [0, 6, 7, 13]];
+      const snapshot1 = patches.reduce(snapshotApply, snapshot);
+      expect(snapshot1).toEqual({
+        visible: "HelloWorld",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
       });
       const squashed = squash(patches[0], patches[1]);
       expect(snapshotApply(snapshot, squashed)).toEqual(snapshot1);

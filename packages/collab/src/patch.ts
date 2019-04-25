@@ -222,10 +222,10 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let prevDFlag = false;
   for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
+      if (prevDFlag) {
+        push(result, retainIndex);
+      }
       if (dFlag) {
-        if (prevDFlag) {
-          push(result, retainIndex);
-        }
         push(result, -1);
       }
       const text = inserted.slice(insertIndex, insertIndex + length);
