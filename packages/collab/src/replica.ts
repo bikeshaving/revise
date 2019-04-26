@@ -1,5 +1,5 @@
 import { Checkpoint, Message } from "./connection";
-import { factor, Patch, synthesize } from "./patch";
+import { factor, Patch, squash, synthesize } from "./patch";
 import { rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
 import {
@@ -14,6 +14,12 @@ import {
   Subseq,
 } from "./subseq";
 import { invert } from "./utils";
+
+export interface EditUpdate {
+  commit: number;
+  change: number;
+  patch?: Patch;
+}
 
 export class Replica {
   public snapshot: Snapshot;
@@ -112,7 +118,7 @@ export class Replica {
   edit(
     patch: Patch,
     options: { commit?: number; change?: number; before?: boolean } = {},
-  ): void {
+  ): EditUpdate {
     const {
       commit = this.commits.length - 1,
       change = this.changes.length - 1,
@@ -135,7 +141,8 @@ export class Replica {
       deleteSeq,
       revertSeq: clear(insertSeq),
     };
-    [rev] = rebase(rev, this.revisionsSince(commit, change), () =>
+    let revs: Revision[];
+    [rev, revs] = rebase(rev, this.revisionsSince(commit, change), () =>
       before ? -1 : 1,
     );
     const revertSeq = intersection(
@@ -145,6 +152,11 @@ export class Replica {
     this.snapshot = apply(this.snapshot, synthesize(rev));
     rev = { ...rev, revertSeq };
     this.changes.push(rev);
+    return {
+      change: this.commits.length - 1,
+      commit: this.changes.length - 1,
+      patch: revs.length ? revs.map(synthesize).reduce(squash) : undefined,
+    };
   }
 
   ingest(message: Message): void {
