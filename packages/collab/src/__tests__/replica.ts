@@ -2,49 +2,248 @@ import { Replica } from "../replica";
 
 describe("Replica", () => {
   describe("Replica.hiddenSeqAt", () => {
-    test("comprehensive", () => {
+    test("edits", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
       replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], { version: 0 });
-      expect(replica.hiddenSeqAt(-1)).toEqual([]);
-      expect(replica.hiddenSeqAt(0)).toEqual([0, 11]);
-      expect(replica.hiddenSeqAt(1)).toEqual([0, 1, 1, 6, 1, 4]);
-      expect(replica.hiddenSeqAt(2)).toEqual([0, 1, 1, 11, 7]);
-      expect(replica.hiddenSeqAt(3)).toEqual([0, 1, 1, 21, 7]);
-      expect(replica.hiddenSeqAt(3)).toEqual(replica.snapshot.hiddenSeq);
+      replica.edit([0, 5, ", Dr. Evil", 11], { change: 0 });
+      expect(replica.hiddenSeqAt(-1, -1)).toEqual([]);
+      expect(replica.hiddenSeqAt(-1, 0)).toEqual([0, 11]);
+      expect(replica.hiddenSeqAt(-1, 1)).toEqual([0, 1, 1, 6, 1, 4]);
+      expect(replica.hiddenSeqAt(-1, 2)).toEqual([0, 1, 1, 11, 7]);
+      expect(replica.hiddenSeqAt(-1, 3)).toEqual([0, 1, 1, 21, 7]);
+      expect(replica.hiddenSeqAt(-1, 3)).toEqual(replica.snapshot.hiddenSeq);
     });
   });
 
   describe("Replica.snapshotAt", () => {
-    test("comprehensive", () => {
+    test("edits", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
       replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], { version: 0 });
-      expect(replica.snapshotAt(0)).toEqual({
+      replica.edit([0, 5, ", Dr. Evil", 11], { change: 0 });
+      expect(replica.snapshotAt(-1, -1)).toEqual({
+        visible: "",
+        hidden: "",
+        hiddenSeq: [],
+      });
+      expect(replica.snapshotAt(-1, 0)).toEqual({
         visible: "hello world",
         hidden: "",
         hiddenSeq: [0, 11],
       });
-      expect(replica.snapshotAt(1)).toEqual({
+      expect(replica.snapshotAt(-1, 1)).toEqual({
         visible: "Hello World",
         hidden: "hw",
         hiddenSeq: [0, 1, 1, 6, 1, 4],
       });
-      expect(replica.snapshotAt(2)).toEqual({
+      expect(replica.snapshotAt(-1, 2)).toEqual({
         visible: "Hello, Brian",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 11, 7],
       });
-      expect(replica.snapshotAt(3)).toEqual({
+      expect(replica.snapshotAt(-1, 3)).toEqual({
         visible: "Hello, Brian, Dr. Evil",
         hidden: "h Wworld",
         hiddenSeq: [0, 1, 1, 21, 7],
       });
-      expect(replica.snapshotAt(3)).toEqual(replica.snapshot);
+      expect(replica.snapshotAt(-1, 3)).toEqual(replica.snapshot);
+    });
+
+    test("edits and ingests 1", () => {
+      const replica1 = new Replica("client1");
+      const replica2 = new Replica("client2");
+      replica1.edit(["hello world", 0]);
+      let version = 0;
+      for (const message of replica1.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      replica2.edit([0, 5, "_", 6, 11, "!", 11]);
+      replica2.edit([0, 11, 12]);
+      for (const message of replica2.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      replica1.edit(["H", 1, 6, "W", 7, 11], { commit: -1, change: 0 });
+      replica1.edit([0, 5, 6, 11], { commit: 0, change: 1 });
+      for (const message of replica1.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+
+      expect(replica1.snapshotAt(-1, -1)).toEqual({
+        visible: "",
+        hidden: "",
+        hiddenSeq: [],
+      });
+      expect(replica1.snapshotAt(-1, 0)).toEqual({
+        visible: "hello world",
+        hidden: "",
+        hiddenSeq: [0, 11],
+      });
+      expect(replica1.snapshotAt(-1, 1)).toEqual({
+        visible: "Hello World",
+        hidden: "hw",
+        hiddenSeq: [0, 1, 1, 6, 1, 4],
+      });
+      expect(replica1.snapshotAt(-1, 2)).toEqual({
+        visible: "HelloWorld",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
+      });
+      expect(replica1.snapshotAt(0, -1)).toEqual({
+        visible: "hello world",
+        hidden: "",
+        hiddenSeq: [0, 11],
+      });
+      expect(replica1.snapshotAt(0, 0)).toEqual({
+        visible: "hello world",
+        hidden: "",
+        hiddenSeq: [0, 11],
+      });
+      expect(replica1.snapshotAt(0, 1)).toEqual({
+        visible: "Hello World",
+        hidden: "hw",
+        hiddenSeq: [0, 1, 1, 6, 1, 4],
+      });
+      expect(replica1.snapshotAt(0, 2)).toEqual({
+        visible: "HelloWorld",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
+      });
+      expect(replica1.snapshotAt(1, -1)).toEqual({
+        visible: "hello_world!",
+        hidden: " ",
+        hiddenSeq: [0, 6, 1, 6],
+      });
+      expect(replica1.snapshotAt(1, 0)).toEqual({
+        visible: "hello_world!",
+        hidden: " ",
+        hiddenSeq: [0, 6, 1, 6],
+      });
+      expect(replica1.snapshotAt(1, 1)).toEqual({
+        visible: "Hello_World!",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
+      });
+      expect(replica1.snapshotAt(1, 2)).toEqual({
+        visible: "Hello_World!",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
+      });
+      expect(replica1.snapshotAt(2, -1)).toEqual({
+        visible: "hello_world",
+        hidden: " !",
+        hiddenSeq: [0, 6, 1, 5, 1],
+      });
+      expect(replica1.snapshotAt(2, 0)).toEqual({
+        visible: "hello_world",
+        hidden: " !",
+        hiddenSeq: [0, 6, 1, 5, 1],
+      });
+      expect(replica1.snapshotAt(2, 1)).toEqual({
+        visible: "Hello_World",
+        hidden: "h w!",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
+      });
+      expect(replica1.snapshotAt(2, 2)).toEqual({
+        visible: "Hello_World",
+        hidden: "h w!",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
+      });
+    });
+
+    test("edits and ingests 2", () => {
+      const replica1 = new Replica("client1");
+      const replica2 = new Replica("client2");
+      replica2.edit(["hello world", 0]);
+      let version = 0;
+      for (const message of replica2.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      replica2.edit([0, 5, "_", 6, 11, "!", 11]);
+      replica2.edit([0, 11, 12]);
+      for (const message of replica2.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      replica1.edit(["H", 1, 6, "W", 7, 11], { commit: 0, change: -1 });
+      replica1.edit([0, 5, 6, 11], { commit: 0, change: 0 });
+      for (const message of replica1.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+
+      expect(replica1.snapshotAt(-1, -1)).toEqual({
+        visible: "",
+        hidden: "",
+        hiddenSeq: [],
+      });
+      expect(replica1.snapshotAt(-1, 0)).toEqual({
+        visible: "HW",
+        hidden: "",
+        hiddenSeq: [0, 2],
+      });
+      expect(replica1.snapshotAt(-1, 1)).toEqual({
+        visible: "HW",
+        hidden: "",
+        hiddenSeq: [0, 2],
+      });
+      expect(replica1.snapshotAt(0, -1)).toEqual({
+        visible: "hello world",
+        hidden: "",
+        hiddenSeq: [0, 11],
+      });
+      expect(replica1.snapshotAt(0, 0)).toEqual({
+        visible: "Hello World",
+        hidden: "hw",
+        hiddenSeq: [0, 1, 1, 6, 1, 4],
+      });
+      expect(replica1.snapshotAt(0, 1)).toEqual({
+        visible: "HelloWorld",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
+      });
+      expect(replica1.snapshotAt(1, -1)).toEqual({
+        visible: "hello_world!",
+        hidden: " ",
+        hiddenSeq: [0, 6, 1, 6],
+      });
+      expect(replica1.snapshotAt(1, 0)).toEqual({
+        visible: "Hello_World!",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
+      });
+      expect(replica1.snapshotAt(1, 1)).toEqual({
+        visible: "Hello_World!",
+        hidden: "h w",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
+      });
+      expect(replica1.snapshotAt(2, -1)).toEqual({
+        visible: "hello_world",
+        hidden: " !",
+        hiddenSeq: [0, 6, 1, 5, 1],
+      });
+      expect(replica1.snapshotAt(2, 0)).toEqual({
+        visible: "Hello_World",
+        hidden: "h w!",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
+      });
+      expect(replica1.snapshotAt(2, 1)).toEqual({
+        visible: "Hello_World",
+        hidden: "h w!",
+        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
+      });
     });
   });
 
@@ -62,11 +261,11 @@ describe("Replica", () => {
     });
 
     test("ingest", () => {
-      let version = 0;
       const replica = new Replica("client1");
       replica.edit(["a", 0]);
       let messages = replica.pending();
       expect(messages.length).toEqual(1);
+      let version = 0;
       for (const message of messages) {
         replica.ingest({ ...message, version });
         version++;
@@ -118,7 +317,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hello ", 0, 5]);
-      replica.edit(["goodbye ", 6, 11], { version: 0 });
+      replica.edit(["goodbye ", 6, 11], { change: 0 });
       expect(replica.snapshot.visible).toEqual("goodbye hello world");
     });
 
@@ -126,7 +325,7 @@ describe("Replica", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit([0, 1, "era", 9, 11]);
-      replica.edit(["Great H", 2, 5, 11], { version: 0 });
+      replica.edit(["Great H", 2, 5, 11], { change: 0 });
       expect(replica.snapshot.visible).toEqual("Great Hera");
     });
 
@@ -135,7 +334,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
       replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], { version: 1 });
+      replica.edit([0, 5, ", Dr. Evil", 11], { change: 1 });
       expect(replica.snapshot.visible).toEqual("Hello, Brian, Dr. Evil");
     });
 
@@ -144,7 +343,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hey ", 0, 5]);
-      replica.edit(["goodbye ", 6, 11], { version: 0 });
+      replica.edit(["goodbye ", 6, 11], { change: 0 });
       expect(replica.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -157,7 +356,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hey ", 0, 5]);
-      replica.edit(["goodbye ", 0, 5], { version: 1, before: true });
+      replica.edit(["goodbye ", 0, 5], { change: 1, before: true });
       expect(replica.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -170,7 +369,7 @@ describe("Replica", () => {
       replica.edit(["hello world", 0]);
       replica.edit([6, 11]);
       replica.edit(["hey ", 0, 5]);
-      replica.edit(["goodbye ", 6, 11], { version: 0 });
+      replica.edit(["goodbye ", 6, 11], { change: 0 });
       expect(replica.snapshot).toEqual({
         visible: "goodbye hey world",
         hidden: "hello ",
@@ -186,7 +385,7 @@ describe("Replica", () => {
       replica.edit(["why ", 0, 5, " there", 5, 11, "s", 11]);
       // ++++=====++++++======+
       //"why hello there worlds"
-      replica.edit([0, 11, "star", 11], { version: 0 });
+      replica.edit([0, 11, "star", 11], { change: 0 });
       // ======================++++
       //"why hello there worldsstar"
       expect(replica.snapshot.visible).toEqual("why hello there worldsstar");
@@ -216,7 +415,7 @@ describe("Replica", () => {
         hidden: "hello ",
         hiddenSeq: [0, 7, 5, 1, 1, 6],
       });
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 11]);
     });
 
     test("simple 2", () => {
@@ -244,7 +443,7 @@ describe("Replica", () => {
         hidden: "hello",
         hiddenSeq: [0, 7, 5, 11],
       });
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 11]);
     });
 
     test("concurrent 1", () => {
@@ -266,7 +465,7 @@ describe("Replica", () => {
         version++;
       }
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 11]);
     });
 
     test("concurrent 2", () => {
@@ -288,7 +487,7 @@ describe("Replica", () => {
         version++;
       }
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 11]);
     });
 
     test("concurrent 3", () => {
@@ -310,7 +509,7 @@ describe("Replica", () => {
         version++;
       }
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 11]);
     });
 
     test("concurrent 4", () => {
@@ -332,7 +531,7 @@ describe("Replica", () => {
         version++;
       }
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 11]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 11]);
     });
 
     test("concurrent 5", () => {
@@ -354,7 +553,7 @@ describe("Replica", () => {
       }
       expect(replica1.snapshot.visible).toEqual("abcdefghij");
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 4]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 4]);
     });
 
     test("concurrent 6", () => {
@@ -376,7 +575,7 @@ describe("Replica", () => {
       }
       expect(replica1.snapshot.visible).toEqual("abcdefghij");
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 4]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 4]);
     });
 
     test("concurrent 7", () => {
@@ -399,7 +598,7 @@ describe("Replica", () => {
       replica1.ingest(f);
       replica2.ingest(f);
       expect(replica1.snapshot).toEqual(replica2.snapshot);
-      expect(replica1.hiddenSeqAt(0)).toEqual([0, 1]);
+      expect(replica1.hiddenSeqAt(0, 0)).toEqual([0, 1]);
     });
   });
 });

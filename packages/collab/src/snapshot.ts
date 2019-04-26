@@ -2,9 +2,9 @@ import { factor, Patch } from "./patch";
 import { count, expand, merge, shrink, shuffle, Subseq, union } from "./subseq";
 
 export interface Snapshot {
-  visible: string;
-  hidden: string;
-  hiddenSeq: Subseq;
+  readonly visible: string;
+  readonly hidden: string;
+  readonly hiddenSeq: Subseq;
 }
 
 export const INITIAL_SNAPSHOT: Snapshot = Object.freeze({

@@ -13,7 +13,6 @@ import {
   union,
   zip,
 } from "./subseq";
-import { invert } from "./utils";
 
 /*
 Patches are arrays of strings and numbers which represent changes to text.
@@ -294,13 +293,6 @@ export function squash(patch1: Patch, patch2: Patch): Patch {
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
-export function summarize(patches: Patch[]): Patch {
-  if (patches.length === 0) {
-    throw new Error("empty array");
-  }
-  return patches.reduce(squash);
-}
-
 export function build(
   start: number,
   end: number,
@@ -322,85 +314,4 @@ export function build(
   pushSegment(insertSeq, inserted.length, true);
   pushSegment(insertSeq, length - start, false);
   return synthesize({ inserted, insertSeq, deleteSeq });
-}
-
-export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
-  let { inserted, insertSeq, deleteSeq } = factor(patch);
-  deleteSeq = difference(deleteSeq, expand(hiddenSeq, insertSeq));
-  return synthesize({ inserted, insertSeq, deleteSeq });
-}
-
-export interface LabeledPatch {
-  patch: Patch;
-}
-
-export function rebase<T extends LabeledPatch, U extends LabeledPatch>(
-  patch: T,
-  patches: U[],
-  compare: (patch1: T, patch2: U) => number,
-): [T, U[]] {
-  if (!patches.length) {
-    return [patch, patches];
-  }
-  let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
-  patches = patches.map((patch1) => {
-    let {
-      inserted: inserted1,
-      insertSeq: insertSeq1,
-      deleteSeq: deleteSeq1,
-    } = factor(patch1.patch);
-    const priority = compare(patch, patch1);
-    if (priority < 0) {
-      [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
-    } else if (priority > 0) {
-      [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
-    } else {
-      throw new Error("compare function identified two patches as equal");
-    }
-    deleteSeq = expand(deleteSeq, insertSeq1);
-    deleteSeq1 = difference(expand(deleteSeq1, insertSeq), deleteSeq);
-    return {
-      ...patch1,
-      patch: synthesize({
-        inserted: inserted1,
-        insertSeq: insertSeq1,
-        deleteSeq: deleteSeq1,
-      }),
-    };
-  });
-  patch = { ...patch, patch: synthesize({ inserted, insertSeq, deleteSeq }) };
-  return [patch, patches];
-}
-
-export function rearrange<T extends LabeledPatch>(
-  patches: T[],
-  test: (patch: T) => boolean,
-): T[] {
-  if (!patches.length) {
-    return patches;
-  }
-  const result: T[] = [];
-  let expandSeq: Subseq | undefined;
-  for (let patch of invert(patches)) {
-    let { inserted, insertSeq, deleteSeq } = factor(patch.patch);
-    if (test(patch)) {
-      if (expandSeq == null) {
-        expandSeq = insertSeq;
-      } else {
-        expandSeq = expand(insertSeq, expandSeq, { union: true });
-      }
-    } else {
-      if (expandSeq != null) {
-        deleteSeq = expand(deleteSeq, expandSeq);
-        insertSeq = expand(insertSeq, expandSeq);
-        expandSeq = shrink(expandSeq, insertSeq);
-        patch = {
-          ...patch,
-          patch: synthesize({ inserted, insertSeq, deleteSeq }),
-        };
-      }
-      result.unshift(patch);
-    }
-  }
-  return result;
 }

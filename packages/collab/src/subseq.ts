@@ -94,6 +94,7 @@ export function count(subseq: Subseq, test?: boolean): number {
   return result;
 }
 
+// TODO: make clear and fill take numbers and delete empty/full b/c I can never remember which is which
 export function empty(length: number): Subseq {
   const result: Subseq = [];
   push(result, length, false);
