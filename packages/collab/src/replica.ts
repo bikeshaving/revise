@@ -15,9 +15,12 @@ import {
 } from "./subseq";
 import { invert } from "./utils";
 
-export interface EditUpdate {
+export interface Version {
   commit: number;
   change: number;
+}
+
+export interface EditUpdate extends Version {
   patch?: Patch;
 }
 
@@ -53,38 +56,46 @@ export class Replica {
     }
     const checkpoint: Checkpoint = {
       version: this.received,
-      data: this.snapshotAt(this.received, -1),
+      data: this.snapshotAt({ commit: this.received, change: -1 }),
     };
     return new Replica(client, checkpoint);
   }
 
-  protected revisionsSince(commit: number, change: number): Revision[] {
+  protected validateVersion(version: Partial<Version>): Version {
+    const {
+      commit = this.commits.length - 1,
+      change = this.changes.length - 1,
+    } = version;
     if (commit < -1 || commit > this.commits.length - 1) {
       throw new RangeError(`commit (${commit}) out of range`);
     } else if (change < -1 || change > this.changes.length - 1) {
       throw new RangeError(`change (${change}) out of range`);
     }
-    const commits = this.commits.slice(commit + 1);
+    return { commit, change };
+  }
+
+  // TODO: add `to` version
+  protected revisions(from: Partial<Version> = {}): Revision[] {
+    from = this.validateVersion(from);
+    const commits = this.commits.slice(from.commit! + 1);
     const changes = this.changes.slice(this.local);
-    let i = this.changes.length;
+    let change = this.changes.length;
     return rearrange(commits.concat(changes), (rev) => {
       if (rev.client === this.client) {
-        i--;
-        return change >= i;
+        change--;
+        return from.change! >= change;
       }
       return false;
     });
   }
 
-  hiddenSeqAt(
-    commit: number = this.commits.length - 1,
-    change: number = this.changes.length - 1,
-  ): Subseq {
-    if (commit === -1 && change === -1) {
+  hiddenSeqAt(version: Partial<Version> = {}): Subseq {
+    version = this.validateVersion(version);
+    if (version.commit === -1 && version.change === -1) {
       return INITIAL_SNAPSHOT.hiddenSeq.slice();
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
-    const revisions = this.revisionsSince(commit, change);
+    const revisions = this.revisions(version);
     for (const { insertSeq, deleteSeq, revertSeq } of invert(revisions)) {
       hiddenSeq = difference(hiddenSeq, difference(deleteSeq, revertSeq));
       hiddenSeq = shrink(hiddenSeq, insertSeq);
@@ -92,14 +103,12 @@ export class Replica {
     return hiddenSeq;
   }
 
-  snapshotAt(
-    commit: number = this.commits.length - 1,
-    change: number = this.changes.length - 1,
-  ): Snapshot {
-    if (commit === -1 && change === -1) {
+  snapshotAt(version: Partial<Version> = {}): Snapshot {
+    if (version.commit === -1 && version.change === -1) {
       return { ...INITIAL_SNAPSHOT };
     }
-    const revs = this.revisionsSince(commit, change);
+    version = this.validateVersion(version);
+    const revs = this.revisions(version);
     if (revs.length === 0) {
       return { ...this.snapshot };
     }
@@ -108,25 +117,26 @@ export class Replica {
       let merged = merge(visible, hidden, hiddenSeq);
       const insertSeq = summarize(revs);
       [merged] = split(merged, insertSeq);
-      hiddenSeq = this.hiddenSeqAt(commit, change);
+      hiddenSeq = this.hiddenSeqAt(version);
       [visible, hidden] = split(merged, hiddenSeq);
     }
     return { visible, hidden, hiddenSeq };
   }
 
-  // TODO: return info about current commit, change, and a patch to catch up
+  patchAt(version: Partial<Version> = {}): Patch {
+    version;
+    return [];
+  }
+
   edit(
     patch: Patch,
     options: { commit?: number; change?: number; before?: boolean } = {},
   ): EditUpdate {
-    const {
-      commit = this.commits.length - 1,
-      change = this.changes.length - 1,
-      before = false,
-    } = options;
+    const { commit, change, before = false } = options;
+    const version = this.validateVersion({ commit, change });
     let { inserted, insertSeq, deleteSeq } = factor(patch);
     {
-      let hiddenSeq = this.hiddenSeqAt(commit, change);
+      let hiddenSeq = this.hiddenSeqAt(version);
       if (before) {
         [insertSeq, hiddenSeq] = interleave(insertSeq, hiddenSeq);
       } else {
@@ -142,15 +152,15 @@ export class Replica {
       revertSeq: clear(insertSeq),
     };
     let revs: Revision[];
-    [rev, revs] = rebase(rev, this.revisionsSince(commit, change), () =>
-      before ? -1 : 1,
-    );
-    const revertSeq = intersection(
-      expand(this.snapshot.hiddenSeq, rev.insertSeq),
-      rev.deleteSeq,
-    );
+    [rev, revs] = rebase(rev, this.revisions(version), () => (before ? -1 : 1));
+    rev = {
+      ...rev,
+      revertSeq: intersection(
+        expand(this.snapshot.hiddenSeq, rev.insertSeq),
+        rev.deleteSeq,
+      ),
+    };
     this.snapshot = apply(this.snapshot, synthesize(rev));
-    rev = { ...rev, revertSeq };
     this.changes.push(rev);
     return {
       change: this.commits.length - 1,
@@ -173,21 +183,23 @@ export class Replica {
       } else if (message.local !== this.local) {
         throw new Error(`unexpected message.local (${message.local})`);
       }
+      delete this.changes[this.local];
       this.local++;
       this.commits.push(rev);
       return;
     }
     const { inserted, insertSeq, deleteSeq } = factor(message.data);
-    const revertSeq = clear(insertSeq);
     let rev: Revision = {
       client: message.client,
       inserted,
       insertSeq,
       deleteSeq,
-      revertSeq,
+      revertSeq: clear(insertSeq),
     };
-    let commits = this.commits.slice(message.received + 1);
-    commits = rearrange(commits, (rev1) => rev.client === rev1.client);
+    let commits = rearrange(
+      this.commits.slice(message.received + 1),
+      (rev1) => rev.client === rev1.client,
+    );
     [rev] = rebase(rev, commits);
     // TODO: cache the rearranged/rebased commits by client id somewhere
     let rev1: Revision;
@@ -200,8 +212,8 @@ export class Replica {
 
   // TODO: protect changes and freeze any changes that have been seen outside this class
   pending(): Message[] {
-    const messages = this.changes.slice(this.sent).map((change, i) => ({
-      data: synthesize(change),
+    const messages = this.changes.slice(this.sent).map((rev, i) => ({
+      data: synthesize(rev),
       client: this.client,
       local: this.sent + i,
       received: this.received,

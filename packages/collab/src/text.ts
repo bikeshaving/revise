@@ -1,7 +1,7 @@
 import { Message } from "./connection";
 import { Client } from "./client";
 import { build } from "./patch";
-import { Replica } from "./replica";
+import { EditUpdate, Replica } from "./replica";
 
 export class CollabText {
   constructor(
@@ -24,9 +24,9 @@ export class CollabText {
     return this.replica.snapshot.visible;
   }
 
-  replace(start: number, end: number, inserted: string): void {
+  replace(start: number, end: number, inserted: string): EditUpdate {
     const patch = build(start, end, inserted, this.text.length);
-    this.replica.edit(patch);
     this.client.enqueueSave(this.id);
+    return this.replica.edit(patch);
   }
 }

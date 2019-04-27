@@ -51,10 +51,10 @@ export class Client {
   }
 
   async connect(id: string): Promise<void> {
-    if (this.items[id] != null && this.items[id].subscription != null) {
-      throw new Error("Unknown id");
-    }
     try {
+      if (this.items[id] != null && this.items[id].subscription != null) {
+        throw new Error("Unknown id");
+      }
       const replica = await this.getReplica(id);
       const subscription = this.connection.subscribe(id, replica.received + 1);
       this.items[id].subscription = subscription;

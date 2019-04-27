@@ -23,7 +23,7 @@ export function compare(rev1: Revision, rev2: Revision): number {
 export function rebase(
   rev: Revision,
   revs: Revision[],
-  compareFn: (rev1: Revision, rev2: Revision) => number = compare,
+  compareFn: typeof compare = compare,
 ): [Revision, Revision[]] {
   if (!revs.length) {
     return [rev, revs];
@@ -48,8 +48,10 @@ export function rebase(
     deleteSeq = expand(deleteSeq, insertSeq1);
     revertSeq = expand(revertSeq, insertSeq1);
     deleteSeq1 = expand(deleteSeq1, insertSeq);
-    revertSeq1 = expand(revertSeq1, insertSeq);
-    revertSeq1 = union(revertSeq1, intersection(deleteSeq, deleteSeq1));
+    revertSeq1 = union(
+      expand(revertSeq1, insertSeq),
+      intersection(deleteSeq, deleteSeq1),
+    );
     return {
       client: client1,
       inserted: inserted1,
