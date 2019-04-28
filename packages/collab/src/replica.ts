@@ -16,12 +16,12 @@ import {
 import { invert } from "./utils";
 
 export interface Version {
-  commit: number;
-  change: number;
+  readonly commit: number;
+  readonly change: number;
 }
 
-export interface EditUpdate extends Version {
-  patch?: Patch;
+export interface Update extends Version {
+  readonly patch?: Patch;
 }
 
 export class Replica {
@@ -35,6 +35,13 @@ export class Replica {
 
   get received(): number {
     return this.commits.length - 1;
+  }
+
+  get currentVersion(): Version {
+    return {
+      commit: this.commits.length - 1,
+      change: this.changes.length - 1,
+    };
   }
 
   constructor(
@@ -74,28 +81,42 @@ export class Replica {
     return { commit, change };
   }
 
-  // TODO: add `to` version
-  protected revisions(from: Partial<Version> = {}): Revision[] {
-    from = this.validateVersion(from);
-    const commits = this.commits.slice(from.commit! + 1);
+  protected revisionsSince(version: Partial<Version> = {}): Revision[] {
+    version = this.validateVersion(version);
+    const commits = this.commits.slice(version.commit! + 1);
     const changes = this.changes.slice(this.local);
     let change = this.changes.length;
     return rearrange(commits.concat(changes), (rev) => {
       if (rev.client === this.client) {
         change--;
-        return from.change! >= change;
+        return version.change! >= change;
       }
       return false;
     });
+  }
+
+  updateSince(version: Partial<Version> = {}): Update {
+    version = this.validateVersion(version);
+    const revs = this.revisionsSince(version);
+    return {
+      commit: this.commits.length - 1,
+      change: this.changes.length - 1,
+      patch: revs.length ? revs.map(synthesize).reduce(squash) : undefined,
+    };
   }
 
   hiddenSeqAt(version: Partial<Version> = {}): Subseq {
     version = this.validateVersion(version);
     if (version.commit === -1 && version.change === -1) {
       return INITIAL_SNAPSHOT.hiddenSeq.slice();
+    } else if (
+      version.commit === this.commits.length - 1 &&
+      version.change === this.changes.length - 1
+    ) {
+      return this.snapshot.hiddenSeq.slice();
     }
     let hiddenSeq = this.snapshot.hiddenSeq;
-    const revisions = this.revisions(version);
+    const revisions = this.revisionsSince(version);
     for (const { insertSeq, deleteSeq, revertSeq } of invert(revisions)) {
       hiddenSeq = difference(hiddenSeq, difference(deleteSeq, revertSeq));
       hiddenSeq = shrink(hiddenSeq, insertSeq);
@@ -104,11 +125,11 @@ export class Replica {
   }
 
   snapshotAt(version: Partial<Version> = {}): Snapshot {
+    version = this.validateVersion(version);
     if (version.commit === -1 && version.change === -1) {
       return { ...INITIAL_SNAPSHOT };
     }
-    version = this.validateVersion(version);
-    const revs = this.revisions(version);
+    const revs = this.revisionsSince(version);
     if (revs.length === 0) {
       return { ...this.snapshot };
     }
@@ -123,15 +144,10 @@ export class Replica {
     return { visible, hidden, hiddenSeq };
   }
 
-  patchAt(version: Partial<Version> = {}): Patch {
-    version;
-    return [];
-  }
-
   edit(
     patch: Patch,
     options: { commit?: number; change?: number; before?: boolean } = {},
-  ): EditUpdate {
+  ): Update {
     const { commit, change, before = false } = options;
     const version = this.validateVersion({ commit, change });
     let { inserted, insertSeq, deleteSeq } = factor(patch);
@@ -151,8 +167,8 @@ export class Replica {
       deleteSeq,
       revertSeq: clear(insertSeq),
     };
-    let revs: Revision[];
-    [rev, revs] = rebase(rev, this.revisions(version), () => (before ? -1 : 1));
+    let revs: Revision[] = this.revisionsSince(version);
+    [rev, revs] = rebase(rev, revs, () => (before ? -1 : 1));
     rev = {
       ...rev,
       revertSeq: intersection(
@@ -163,8 +179,8 @@ export class Replica {
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
     return {
-      change: this.commits.length - 1,
-      commit: this.changes.length - 1,
+      commit: this.commits.length - 1,
+      change: this.changes.length - 1,
       patch: revs.length ? revs.map(synthesize).reduce(squash) : undefined,
     };
   }
@@ -196,15 +212,13 @@ export class Replica {
       deleteSeq,
       revertSeq: clear(insertSeq),
     };
-    let commits = rearrange(
+    const commits = rearrange(
       this.commits.slice(message.received + 1),
       (rev1) => rev.client === rev1.client,
     );
     [rev] = rebase(rev, commits);
-    // TODO: cache the rearranged/rebased commits by client id somewhere
-    let rev1: Revision;
-    let changes = this.changes.slice(this.local);
-    [rev1, changes] = rebase(rev, changes);
+    // TODO: cache the rearranged/rebased commits by client id
+    let [rev1, changes] = rebase(rev, this.changes.slice(this.local));
     this.snapshot = apply(this.snapshot, synthesize(rev1));
     this.commits.push(rev);
     this.changes = this.changes.slice(0, this.local).concat(changes);

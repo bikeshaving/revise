@@ -29,7 +29,8 @@ export function rebase(
     return [rev, revs];
   }
   let { client, inserted, insertSeq, deleteSeq, revertSeq } = rev;
-  revs = revs.map((rev1) => {
+  let revs1: Revision[] = [];
+  for (const rev1 of revs) {
     let {
       client: client1,
       inserted: inserted1,
@@ -52,16 +53,16 @@ export function rebase(
       expand(revertSeq1, insertSeq),
       intersection(deleteSeq, deleteSeq1),
     );
-    return {
+    revs1.push({
       client: client1,
       inserted: inserted1,
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
       revertSeq: revertSeq1,
-    };
-  });
+    });
+  }
   rev = { client, inserted, insertSeq, deleteSeq, revertSeq };
-  return [rev, revs];
+  return [rev, revs1];
 }
 
 export function rearrange(
