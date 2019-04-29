@@ -1,5 +1,11 @@
 import { Checkpoint, Message } from "./connection";
-import { factor, Patch, squash, synthesize } from "./patch";
+import {
+  factor,
+  Patch,
+  shrink as shrinkPatch,
+  squash,
+  synthesize,
+} from "./patch";
 import { rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
 import {
@@ -98,10 +104,20 @@ export class Replica {
   updateSince(version: Partial<Version> = {}): Update {
     version = this.validateVersion(version);
     const revs = this.revisionsSince(version);
+    if (revs.length) {
+      const patch = shrinkPatch(
+        revs.map(synthesize).reduce(squash),
+        this.snapshot.hiddenSeq,
+      );
+      return {
+        commit: this.commits.length - 1,
+        change: this.changes.length - 1,
+        patch,
+      };
+    }
     return {
       commit: this.commits.length - 1,
       change: this.changes.length - 1,
-      patch: revs.length ? revs.map(synthesize).reduce(squash) : undefined,
     };
   }
 
@@ -178,10 +194,20 @@ export class Replica {
     };
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
+    if (revs.length) {
+      const patch = shrinkPatch(
+        revs.map(synthesize).reduce(squash),
+        this.snapshot.hiddenSeq,
+      );
+      return {
+        commit: this.commits.length - 1,
+        change: this.changes.length - 1,
+        patch,
+      };
+    }
     return {
       commit: this.commits.length - 1,
       change: this.changes.length - 1,
-      patch: revs.length ? revs.map(synthesize).reduce(squash) : undefined,
     };
   }
 

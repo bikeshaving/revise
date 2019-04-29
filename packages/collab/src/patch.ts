@@ -1,23 +1,11 @@
-import {
-  clear,
-  count,
-  difference,
-  expand,
-  merge,
-  push as pushSegment,
-  shrink,
-  split,
-  Subseq,
-  unify,
-  union,
-  zip,
-} from "./subseq";
+import * as ss from "./subseq";
+import { Subseq } from "./subseq";
 
 /*
 Patches are arrays of strings and numbers which represent changes to text.
 Numbers represent indexes into the text. Two consecutive indexes represent a copy or retain operation, where the numbers represent the start-inclusive and end-exclusive range which should be copied over to the result. Deletions are represented via omission, i.e. a gap between two copy operations.
 Strings within a patch represent insertions at the current index.
-A -1 before a string indicates the string is added and immediately removed (useful to squash multiple patches without losing information).
+A -1 before a string indicates the string is added and immediately deleted. It is useful for representing squashed patches or patches made against a snapshot.
 The last element of a patch will always be a number which represent the length of the text being modified.
 */
 
@@ -49,10 +37,10 @@ export type Patch = (number | string)[];
 
 export function apply(text: string, patch: Patch): string {
   const factored = factor(patch);
-  const deleteSeq = shrink(factored.deleteSeq, factored.insertSeq);
-  [text] = split(text, deleteSeq);
-  const insertSeq = difference(factored.insertSeq, factored.deleteSeq);
-  return merge(text, factored.inserted, insertSeq);
+  const deleteSeq = ss.shrink(factored.deleteSeq, factored.insertSeq);
+  [text] = ss.split(text, deleteSeq);
+  const insertSeq = ss.difference(factored.insertSeq, factored.deleteSeq);
+  return ss.merge(text, factored.inserted, insertSeq);
 }
 
 export interface RetainOperation {
@@ -73,9 +61,9 @@ export interface InsertOperation {
   inserted: string;
 }
 
-// TODO: is there a better name for this? Looking for a word that means insert and immediately remove. Bonus points if it’s six letters
-export interface RemoveOperation {
-  type: "remove";
+// ToggleOperation represents insertions which are immediately deleted. It is useful for representing squashed patches or patches made against a snapshot.
+export interface ToggleOperation {
+  type: "toggle";
   start: number;
   inserted: string;
 }
@@ -84,7 +72,7 @@ export type Operation =
   | RetainOperation
   | DeleteOperation
   | InsertOperation
-  | RemoveOperation;
+  | ToggleOperation;
 
 export function* operations(patch: Patch): IterableIterator<Operation> {
   const length = patch[patch.length - 1];
@@ -93,7 +81,7 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
   }
   let start = 0;
   let retaining = false;
-  let removing = false;
+  let toggling = false;
   for (const op of patch) {
     if (retaining) {
       if (typeof op === "string") {
@@ -101,7 +89,7 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
         retaining = false;
       } else if (op === -1) {
         retaining = false;
-        removing = true;
+        toggling = true;
       } else {
         if (op <= start || op > length) {
           throw new Error("Malformed patch");
@@ -110,15 +98,15 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
         start = op;
         retaining = false;
       }
-    } else if (removing) {
+    } else if (toggling) {
       if (typeof op !== "string") {
         throw new Error("Malformed patch");
       }
-      yield { type: "remove", start, inserted: op };
-      removing = false;
+      yield { type: "toggle", start, inserted: op };
+      toggling = false;
     } else if (typeof op === "number") {
       if (op === -1) {
-        removing = true;
+        toggling = true;
       } else {
         if (op < start || op > length) {
           throw new Error("Malformed patch");
@@ -163,24 +151,24 @@ export function factor(patch: Patch): FactoredPatch {
   for (const op of operations(patch)) {
     switch (op.type) {
       case "retain": {
-        pushSegment(deleteSeq, op.end - op.start, false);
-        pushSegment(insertSeq, op.end - op.start, false);
+        ss.push(deleteSeq, op.end - op.start, false);
+        ss.push(insertSeq, op.end - op.start, false);
         break;
       }
       case "delete": {
-        pushSegment(deleteSeq, op.end - op.start, true);
-        pushSegment(insertSeq, op.end - op.start, false);
+        ss.push(deleteSeq, op.end - op.start, true);
+        ss.push(insertSeq, op.end - op.start, false);
         break;
       }
       case "insert": {
-        pushSegment(deleteSeq, op.inserted.length, false);
-        pushSegment(insertSeq, op.inserted.length, true);
+        ss.push(deleteSeq, op.inserted.length, false);
+        ss.push(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
-      case "remove": {
-        pushSegment(deleteSeq, op.inserted.length, true);
-        pushSegment(insertSeq, op.inserted.length, true);
+      case "toggle": {
+        ss.push(deleteSeq, op.inserted.length, true);
+        ss.push(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
@@ -191,8 +179,8 @@ export function factor(patch: Patch): FactoredPatch {
 
 export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
   let { inserted = "", insertSeq, deleteSeq } = patch;
-  insertSeq = insertSeq || (deleteSeq && clear(deleteSeq)) || [];
-  deleteSeq = deleteSeq || (insertSeq && clear(insertSeq)) || [];
+  insertSeq = insertSeq || (deleteSeq && ss.clear(deleteSeq)) || [];
+  deleteSeq = deleteSeq || (insertSeq && ss.clear(insertSeq)) || [];
   return { inserted, insertSeq, deleteSeq };
 }
 
@@ -218,7 +206,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let insertIndex = 0;
   let retainIndex = 0;
   let prevDFlag = false;
-  for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
+  for (const [length, iFlag, dFlag] of ss.zip(insertSeq, deleteSeq)) {
     if (iFlag) {
       if (prevDFlag) {
         push(result, retainIndex);
@@ -243,7 +231,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   if (insertIndex !== inserted.length) {
     throw new Error("Length mismatch");
   }
-  const length = count(insertSeq, false);
+  const length = ss.count(insertSeq, false);
   push(result, length);
   return result;
 }
@@ -251,14 +239,14 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
 export function squash(patch1: Patch, patch2: Patch): Patch {
   let factored1 = factor(patch1);
   let factored2 = factor(patch2);
-  const [inserted, insertSeq] = unify(
+  const [inserted, insertSeq] = ss.consolidate(
     factored1.inserted,
     factored2.inserted,
-    expand(factored1.insertSeq, factored2.insertSeq),
+    ss.expand(factored1.insertSeq, factored2.insertSeq),
     factored2.insertSeq,
   );
-  const deleteSeq = union(
-    expand(factored1.deleteSeq, factored2.insertSeq),
+  const deleteSeq = ss.union(
+    ss.expand(factored1.deleteSeq, factored2.insertSeq),
     factored2.deleteSeq,
   );
   return synthesize({ inserted, insertSeq, deleteSeq });
@@ -276,13 +264,20 @@ export function build(
     throw new RangeError("end cannot be less than start");
   }
   let deleteSeq: Subseq = [];
-  pushSegment(deleteSeq, start, false);
-  pushSegment(deleteSeq, inserted.length, false);
-  pushSegment(deleteSeq, end - start, true);
-  pushSegment(deleteSeq, length - end, false);
+  ss.push(deleteSeq, start, false);
+  ss.push(deleteSeq, inserted.length, false);
+  ss.push(deleteSeq, end - start, true);
+  ss.push(deleteSeq, length - end, false);
   let insertSeq: Subseq = [];
-  pushSegment(insertSeq, start, false);
-  pushSegment(insertSeq, inserted.length, true);
-  pushSegment(insertSeq, length - start, false);
+  ss.push(insertSeq, start, false);
+  ss.push(insertSeq, inserted.length, true);
+  ss.push(insertSeq, length - start, false);
+  return synthesize({ inserted, insertSeq, deleteSeq });
+}
+
+export function shrink(patch: Patch, subseq: Subseq): Patch {
+  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  [inserted, insertSeq] = ss.erase(inserted, insertSeq, subseq);
+  deleteSeq = ss.shrink(deleteSeq, subseq);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }

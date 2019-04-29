@@ -336,7 +336,8 @@ export function shuffle(
   return split(merge(text1, text2, subseq1), subseq2);
 }
 
-export function unify(
+// TODO: it would be nice if we could reuse union and shrink for consolidate/erase
+export function consolidate(
   text1: string,
   text2: string,
   subseq1: Subseq,
@@ -348,7 +349,7 @@ export function unify(
   let consumed2 = 0;
   for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
     if (flag1 && flag2) {
-      throw new Error("cannot unify overlapping subseqs");
+      throw new Error("cannot consolidate overlapping subseqs");
     } else if (flag1) {
       result += text1.slice(consumed1, consumed1 + length);
       consumed1 += length;
@@ -357,6 +358,28 @@ export function unify(
       consumed2 += length;
     }
     push(subseq, length, flag1 || flag2);
+  }
+  return [result, subseq];
+}
+
+export function erase(
+  text: string,
+  subseq1: Subseq,
+  subseq2: Subseq,
+): [string, Subseq] {
+  let result = text.slice(0, 0);
+  let subseq: Subseq = [];
+  let consumed = 0;
+  for (const [length, flag1, flag2] of zip(subseq1, subseq2)) {
+    if (flag1) {
+      if (!flag2) {
+        result += text.slice(consumed, consumed + length);
+      }
+      consumed += length;
+    }
+    if (!flag2) {
+      push(subseq, length, flag1);
+    }
   }
   return [result, subseq];
 }
