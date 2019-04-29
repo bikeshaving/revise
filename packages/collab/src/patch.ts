@@ -3,7 +3,6 @@ import {
   count,
   difference,
   expand,
-  interleave,
   merge,
   push as pushSegment,
   shrink,
@@ -247,34 +246,6 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   const length = count(insertSeq, false);
   push(result, length);
   return result;
-}
-
-export function order(patch1: Patch, patch2: Patch): [Patch, Patch] {
-  let {
-    inserted: inserted1,
-    insertSeq: insertSeq1,
-    deleteSeq: deleteSeq1,
-  } = factor(patch1);
-  let {
-    inserted: inserted2,
-    insertSeq: insertSeq2,
-    deleteSeq: deleteSeq2,
-  } = factor(patch2);
-  [insertSeq1, insertSeq2] = interleave(insertSeq1, insertSeq2);
-  deleteSeq1 = expand(deleteSeq1, insertSeq2);
-  deleteSeq2 = expand(deleteSeq2, insertSeq1);
-  return [
-    synthesize({
-      inserted: inserted1,
-      insertSeq: insertSeq1,
-      deleteSeq: deleteSeq1,
-    }),
-    synthesize({
-      inserted: inserted2,
-      insertSeq: insertSeq2,
-      deleteSeq: deleteSeq2,
-    }),
-  ];
 }
 
 export function squash(patch1: Patch, patch2: Patch): Patch {
