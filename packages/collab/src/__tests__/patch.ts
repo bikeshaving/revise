@@ -38,6 +38,11 @@ describe("patch", () => {
     test("apply 5", () => {
       expect(apply(text, p5)).toEqual(text);
     });
+
+    test("toggle", () => {
+      const patch = ["H", -1, "h", 0, "ello W", -1, "w", 0, "orld", 0];
+      expect(apply("", patch)).toEqual("Hello World");
+    });
   });
 
   describe("operations", () => {

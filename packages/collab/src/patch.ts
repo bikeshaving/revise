@@ -36,11 +36,10 @@ The last element of a patch will always be a number which represent the length o
 export type Patch = (number | string)[];
 
 export function apply(text: string, patch: Patch): string {
-  const factored = factor(patch);
-  const deleteSeq = ss.shrink(factored.deleteSeq, factored.insertSeq);
+  const {inserted, insertSeq, deleteSeq } = factor(patch);
+  text = ss.merge(text, inserted, insertSeq);
   [text] = ss.split(text, deleteSeq);
-  const insertSeq = ss.difference(factored.insertSeq, factored.deleteSeq);
-  return ss.merge(text, factored.inserted, insertSeq);
+  return text;
 }
 
 export interface RetainOperation {
@@ -259,9 +258,9 @@ export function build(
   length: number,
 ): Patch {
   if (length < end) {
-    throw new RangeError("length cannot be less than end");
+    throw new RangeError(`length (${length}) cannot be less than end (${end})`);
   } else if (end < start) {
-    throw new RangeError("end cannot be less than start");
+    throw new RangeError(`end (${end}) cannot be less than start (${start})`);
   }
   let deleteSeq: Subseq = [];
   ss.push(deleteSeq, start, false);
