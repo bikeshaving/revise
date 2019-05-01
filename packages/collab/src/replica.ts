@@ -1,5 +1,6 @@
 import { Checkpoint, Message } from "./connection";
 import {
+  cleanup,
   factor,
   Patch,
   shrink as shrinkPatch,
@@ -105,20 +106,18 @@ export class Replica {
     version = this.validateVersion(version);
     const revs = this.revisionsSince(version);
     if (revs.length) {
-      const patch = shrinkPatch(
-        revs.map(synthesize).reduce(squash),
-        this.snapshot.hiddenSeq,
-      );
+      let patch = revs.map(synthesize).reduce(squash);
+      const { insertSeq } = factor(patch);
+      const hiddenSeq = expand(this.hiddenSeqAt(version), insertSeq);
+      patch = shrinkPatch(patch, hiddenSeq);
+      patch = cleanup(patch);
       return {
+        patch,
         commit: this.commits.length - 1,
         change: this.changes.length - 1,
-        patch,
       };
     }
-    return {
-      commit: this.commits.length - 1,
-      change: this.changes.length - 1,
-    };
+    return { commit: this.commits.length - 1, change: this.changes.length - 1 };
   }
 
   hiddenSeqAt(version: Partial<Version> = {}): Subseq {
@@ -162,13 +161,13 @@ export class Replica {
 
   edit(
     patch: Patch,
-    options: { commit?: number; change?: number; before?: boolean } = {},
+    options: { before?: boolean } & Partial<Version> = {},
   ): Update {
     const { commit, change, before = false } = options;
     const version = this.validateVersion({ commit, change });
     let { inserted, insertSeq, deleteSeq } = factor(patch);
+    let hiddenSeq = this.hiddenSeqAt(version);
     {
-      let hiddenSeq = this.hiddenSeqAt(version);
       if (before) {
         [insertSeq, hiddenSeq] = interleave(insertSeq, hiddenSeq);
       } else {
@@ -183,26 +182,27 @@ export class Replica {
       deleteSeq,
       revertSeq: clear(insertSeq),
     };
-    let revs: Revision[] = this.revisionsSince(version);
-    [rev, revs] = rebase(rev, revs, () => (before ? -1 : 1));
+    const revs: Revision[] = this.revisionsSince(version);
+    [rev] = rebase(rev, revs, () => (before ? -1 : 1));
     rev = {
       ...rev,
       revertSeq: intersection(
-        expand(this.snapshot.hiddenSeq, rev.insertSeq),
         rev.deleteSeq,
+        expand(this.snapshot.hiddenSeq, rev.insertSeq),
       ),
     };
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
     if (revs.length) {
-      const patch = shrinkPatch(
-        revs.map(synthesize).reduce(squash),
-        this.snapshot.hiddenSeq,
-      );
+      let patch = revs.map(synthesize).reduce(squash);
+      const { insertSeq } = factor(patch);
+      const hiddenSeq1 = expand(this.hiddenSeqAt(version), insertSeq);
+      patch = shrinkPatch(patch, hiddenSeq1);
+      patch = cleanup(patch);
       return {
+        patch,
         commit: this.commits.length - 1,
         change: this.changes.length - 1,
-        patch,
       };
     }
     return {
@@ -250,6 +250,7 @@ export class Replica {
     this.changes = this.changes.slice(0, this.local).concat(changes);
   }
 
+  // TODO: squash changes
   // TODO: protect changes and freeze any changes that have been seen outside this class
   pending(): Message[] {
     const messages = this.changes.slice(this.sent).map((rev, i) => ({

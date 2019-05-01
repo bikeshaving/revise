@@ -1,3 +1,4 @@
+import { apply } from "../patch";
 import { Replica } from "../replica";
 
 describe("Replica", () => {
@@ -248,6 +249,38 @@ describe("Replica", () => {
         hidden: "h w!",
         hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
       });
+    });
+  });
+
+  describe("Replica.updateSince", () => {
+    test("edits", () => {
+      const replica = new Replica("client1");
+      replica.edit(["hello world", 0]);
+      replica.edit(["H", 1, 6, "W", 7, 11]);
+      replica.edit([0, 5, ", Brian", 11]);
+      replica.edit([0, 5, ", Dr. Evil", 11], { change: 0 });
+      replica.edit([0, 5, 12], { change: 2 });
+      replica.edit([7, 15]);
+      expect(replica.snapshot.visible).toEqual("Dr. Evil");
+      const visible0 = replica.snapshotAt({ change: -1 }).visible;
+      const patch0 = replica.updateSince({ change: -1 }).patch;
+      expect(apply(visible0, patch0!)).toEqual(replica.snapshot.visible);
+      const visible1 = replica.snapshotAt({ change: 0 }).visible;
+      const patch1 = replica.updateSince({ change: 0 }).patch;
+      expect(apply(visible1, patch1!)).toEqual(replica.snapshot.visible);
+      const visible2 = replica.snapshotAt({ change: 1 }).visible;
+      const patch2 = replica.updateSince({ change: 1 }).patch;
+      expect(apply(visible2, patch2!)).toEqual(replica.snapshot.visible);
+      const visible3 = replica.snapshotAt({ change: 2 }).visible;
+      const patch3 = replica.updateSince({ change: 2 }).patch;
+      expect(apply(visible3, patch3!)).toEqual(replica.snapshot.visible);
+      const visible4 = replica.snapshotAt({ change: 3 }).visible;
+      const patch4 = replica.updateSince({ change: 3 }).patch;
+      expect(apply(visible4, patch4!)).toEqual(replica.snapshot.visible);
+      const visible5 = replica.snapshotAt({ change: 4 }).visible;
+      const patch5 = replica.updateSince({ change: 4 }).patch;
+      expect(apply(visible5, patch5!)).toEqual(replica.snapshot.visible);
+      expect(replica.updateSince({ change: 5 }).patch).toBeUndefined();
     });
   });
 

@@ -36,7 +36,10 @@ The last element of a patch will always be a number which represent the length o
 export type Patch = (number | string)[];
 
 export function apply(text: string, patch: Patch): string {
-  const {inserted, insertSeq, deleteSeq } = factor(patch);
+  if (text.length !== patch[patch.length - 1]) {
+    throw new Error("Length mismatch");
+  }
+  const { inserted, insertSeq, deleteSeq } = factor(patch);
   text = ss.merge(text, inserted, insertSeq);
   [text] = ss.split(text, deleteSeq);
   return text;
@@ -279,4 +282,10 @@ export function shrink(patch: Patch, subseq: Subseq): Patch {
   [inserted, insertSeq] = ss.erase(inserted, insertSeq, subseq);
   deleteSeq = ss.shrink(deleteSeq, subseq);
   return synthesize({ inserted, insertSeq, deleteSeq });
+}
+
+export function cleanup(patch: Patch): Patch {
+  let { insertSeq, deleteSeq } = factor(patch);
+  const toggleSeq = ss.intersection(insertSeq, deleteSeq);
+  return shrink(patch, toggleSeq);
 }
