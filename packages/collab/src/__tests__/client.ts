@@ -21,7 +21,7 @@ describe("Client", () => {
         local: 0 + i,
         received: -1,
       }));
-      expect(sendMessages).nthCalledWith(1, "doc1", messages1);
+      expect(sendMessages).toHaveBeenNthCalledWith(1, "doc1", messages1);
       // @ts-ignore
       const messages2 = replica["revisions"].slice(2).map((data, i) => ({
         data,
@@ -29,7 +29,7 @@ describe("Client", () => {
         local: 2 + i,
         received: -1,
       }));
-      expect(sendMessages).nthCalledWith(2, "doc1", messages2);
+      expect(sendMessages).toHaveBeenNthCalledWith(2, "doc1", messages2);
       client.close();
     });
 
@@ -58,7 +58,7 @@ describe("Client", () => {
         local: 0 + i,
         received: -1,
       }));
-      expect(sendMessages).nthCalledWith(1, "doc1", messages1);
+      expect(sendMessages).toHaveBeenNthCalledWith(1, "doc1", messages1);
       // @ts-ignore
       const messages2 = replica["revisions"].slice(3).map((data, i) => ({
         data,
@@ -66,7 +66,7 @@ describe("Client", () => {
         local: 3 + i,
         received: 2,
       }));
-      expect(sendMessages).nthCalledWith(2, "doc1", messages2);
+      expect(sendMessages).toHaveBeenNthCalledWith(2, "doc1", messages2);
       client.close();
     });
   });

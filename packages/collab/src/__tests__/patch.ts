@@ -82,7 +82,7 @@ describe("patch", () => {
       ]);
     });
 
-    test("operations 4", () => {
+    test("operations 5", () => {
       expect(Array.from(operations(p5))).toEqual([
         { type: "retain", start: 0, end: 5 },
         { type: "toggle", start: 5, inserted: "_" },

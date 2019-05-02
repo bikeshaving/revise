@@ -49,16 +49,6 @@ The last element of a patch will always be a number which represent the length o
 // ]
 export type Patch = (number | string)[];
 
-export function apply(text: string, patch: Patch): string {
-  if (text.length !== patch[patch.length - 1]) {
-    throw new Error("Length mismatch");
-  }
-  const { inserted, insertSeq, deleteSeq } = factor(patch);
-  text = merge(text, inserted, insertSeq);
-  [text] = split(text, deleteSeq);
-  return text;
-}
-
 export interface RetainOperation {
   type: "retain";
   start: number;
@@ -266,6 +256,16 @@ export function squash(patch1: Patch, patch2: Patch): Patch {
     factored2.deleteSeq,
   );
   return synthesize({ inserted, insertSeq, deleteSeq });
+}
+
+export function apply(text: string, patch: Patch): string {
+  if (text.length !== patch[patch.length - 1]) {
+    throw new Error("Length mismatch");
+  }
+  const { inserted, insertSeq, deleteSeq } = factor(patch);
+  text = merge(text, inserted, insertSeq);
+  [text] = split(text, deleteSeq);
+  return text;
 }
 
 export function build(
