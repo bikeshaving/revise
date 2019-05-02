@@ -1,25 +1,15 @@
 import { Checkpoint, Message } from "./connection";
 import {
-  cleanup,
+  expandHidden,
   factor,
   Patch,
-  shrink as shrinkPatch,
+  shrinkHidden,
   squash,
   synthesize,
 } from "./patch";
-import { rearrange, rebase, Revision, summarize } from "./revision";
+import { normalize, rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
-import {
-  clear,
-  difference,
-  expand,
-  interleave,
-  intersection,
-  merge,
-  shrink,
-  split,
-  Subseq,
-} from "./subseq";
+import { clear, difference, merge, shrink, split, Subseq } from "./subseq";
 import { invert } from "./utils";
 
 export interface Version {
@@ -35,9 +25,9 @@ export class Replica {
   public snapshot: Snapshot;
   protected commits: Revision[];
   protected changes: Revision[] = [];
-  protected local = 0;
+  protected accepted = 0;
   protected sent = 0;
-  // TODO: summarize patches before sending them using groups
+  // TODO: group and squash patches to be sent
   // protected groups: number[] = [];
 
   get received(): number {
@@ -89,14 +79,14 @@ export class Replica {
   }
 
   protected revisionsSince(version: Partial<Version> = {}): Revision[] {
-    version = this.validateVersion(version);
-    const commits = this.commits.slice(version.commit! + 1);
-    const changes = this.changes.slice(this.local);
-    let change = this.changes.length;
+    const { commit, change } = this.validateVersion(version);
+    const commits = this.commits.slice(commit + 1);
+    const changes = this.changes.slice(this.accepted);
+    let change1 = this.changes.length;
     return rearrange(commits.concat(changes), (rev) => {
       if (rev.client === this.client) {
-        change--;
-        return version.change! >= change;
+        change1--;
+        return change >= change1;
       }
       return false;
     });
@@ -107,10 +97,7 @@ export class Replica {
     const revs = this.revisionsSince(version);
     if (revs.length) {
       let patch = revs.map(synthesize).reduce(squash);
-      const { insertSeq } = factor(patch);
-      const hiddenSeq = expand(this.hiddenSeqAt(version), insertSeq);
-      patch = shrinkPatch(patch, hiddenSeq);
-      patch = cleanup(patch);
+      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
       return {
         patch,
         commit: this.commits.length - 1,
@@ -124,16 +111,15 @@ export class Replica {
     version = this.validateVersion(version);
     if (version.commit === -1 && version.change === -1) {
       return INITIAL_SNAPSHOT.hiddenSeq.slice();
-    } else if (
-      version.commit === this.commits.length - 1 &&
-      version.change === this.changes.length - 1
-    ) {
-      return this.snapshot.hiddenSeq.slice();
     }
+    const revs = this.revisionsSince(version);
     let hiddenSeq = this.snapshot.hiddenSeq;
-    const revisions = this.revisionsSince(version);
-    for (const { insertSeq, deleteSeq, revertSeq } of invert(revisions)) {
-      hiddenSeq = difference(hiddenSeq, difference(deleteSeq, revertSeq));
+    if (revs.length === 0) {
+      return hiddenSeq;
+    }
+    for (let { insertSeq, deleteSeq, revertSeq } of invert(revs)) {
+      deleteSeq = difference(deleteSeq, revertSeq);
+      hiddenSeq = difference(hiddenSeq, deleteSeq);
       hiddenSeq = shrink(hiddenSeq, insertSeq);
     }
     return hiddenSeq;
@@ -149,13 +135,11 @@ export class Replica {
       return { ...this.snapshot };
     }
     let { visible, hidden, hiddenSeq } = this.snapshot;
-    {
-      let merged = merge(visible, hidden, hiddenSeq);
-      const insertSeq = summarize(revs);
-      [merged] = split(merged, insertSeq);
-      hiddenSeq = this.hiddenSeqAt(version);
-      [visible, hidden] = split(merged, hiddenSeq);
-    }
+    let merged = merge(visible, hidden, hiddenSeq);
+    const insertSeq = summarize(revs);
+    [merged] = split(merged, insertSeq);
+    hiddenSeq = this.hiddenSeqAt(version);
+    [visible, hidden] = split(merged, hiddenSeq);
     return { visible, hidden, hiddenSeq };
   }
 
@@ -165,40 +149,22 @@ export class Replica {
   ): Update {
     const { commit, change, before = false } = options;
     const version = this.validateVersion({ commit, change });
-    let { inserted, insertSeq, deleteSeq } = factor(patch);
-    let hiddenSeq = this.hiddenSeqAt(version);
-    {
-      if (before) {
-        [insertSeq, hiddenSeq] = interleave(insertSeq, hiddenSeq);
-      } else {
-        [hiddenSeq, insertSeq] = interleave(hiddenSeq, insertSeq);
-      }
-      deleteSeq = expand(deleteSeq, hiddenSeq);
-    }
+    const factored = factor(
+      expandHidden(patch, this.hiddenSeqAt(version), { before }),
+    );
     let rev: Revision = {
       client: this.client,
-      inserted,
-      insertSeq,
-      deleteSeq,
-      revertSeq: clear(insertSeq),
+      ...factored,
+      revertSeq: clear(factored.insertSeq),
     };
     const revs: Revision[] = this.revisionsSince(version);
     [rev] = rebase(rev, revs, () => (before ? -1 : 1));
-    rev = {
-      ...rev,
-      revertSeq: intersection(
-        rev.deleteSeq,
-        expand(this.snapshot.hiddenSeq, rev.insertSeq),
-      ),
-    };
+    rev = normalize(rev, this.hiddenSeqAt());
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
     if (revs.length) {
       let patch = revs.map(synthesize).reduce(squash);
-      const { insertSeq } = factor(patch);
-      const hiddenSeq1 = expand(this.hiddenSeqAt(version), insertSeq);
-      patch = shrinkPatch(patch, hiddenSeq1);
-      patch = cleanup(patch);
+      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
       return {
         patch,
         commit: this.commits.length - 1,
@@ -217,18 +183,12 @@ export class Replica {
         `message.received (${message.received}) out of range`,
       );
     } else if (message.version !== this.received + 1) {
-      throw new Error(`unexpected message.version (${message.version})`);
-    } else if (message.client === this.client) {
-      const rev = this.changes[this.local];
-      if (rev == null) {
-        throw new Error("missing change");
-      } else if (message.local !== this.local) {
-        throw new Error(`unexpected message.local (${message.local})`);
-      }
-      delete this.changes[this.local];
-      this.local++;
-      this.commits.push(rev);
-      return;
+      throw new RangeError(`message.version (${message.version}) out of range`);
+    } else if (
+      message.client === this.client &&
+      message.local !== this.accepted
+    ) {
+      throw new RangeError(`message.local (${message.local}) out of range`);
     }
     const { inserted, insertSeq, deleteSeq } = factor(message.data);
     let rev: Revision = {
@@ -244,10 +204,16 @@ export class Replica {
     );
     [rev] = rebase(rev, commits);
     // TODO: cache the rearranged/rebased commits by client id
-    let [rev1, changes] = rebase(rev, this.changes.slice(this.local));
-    this.snapshot = apply(this.snapshot, synthesize(rev1));
+    rev = normalize(rev, this.hiddenSeqAt({ change: -1 }));
+    if (rev.client === this.client) {
+      this.accepted++;
+      // TODO: delete acked changes
+    } else {
+      let [rev1, changes] = rebase(rev, this.changes.slice(this.accepted));
+      this.snapshot = apply(this.snapshot, synthesize(rev1));
+      this.changes = this.changes.slice(0, this.accepted).concat(changes);
+    }
     this.commits.push(rev);
-    this.changes = this.changes.slice(0, this.local).concat(changes);
   }
 
   // TODO: squash changes

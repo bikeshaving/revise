@@ -47,12 +47,11 @@ export function rebase(
       throw new Error("compare function identified two revisions as equal");
     }
     deleteSeq = expand(deleteSeq, insertSeq1);
-    revertSeq = expand(revertSeq, insertSeq1);
     deleteSeq1 = expand(deleteSeq1, insertSeq);
-    revertSeq1 = union(
-      expand(revertSeq1, insertSeq),
-      intersection(deleteSeq, deleteSeq1),
-    );
+    // TODO: figure out if this is necessary
+    const intersecting = intersection(deleteSeq, deleteSeq1);
+    revertSeq = union(expand(revertSeq, insertSeq1), intersecting);
+    revertSeq1 = union(expand(revertSeq1, insertSeq), intersecting);
     revs1.push({
       client: client1,
       inserted: inserted1,
@@ -102,11 +101,18 @@ export function rearrange(
 
 export function summarize(revs: Revision[]): Subseq {
   if (revs.length === 0) {
-    throw new Error("empty array");
+    throw new Error("summarize called with empty array");
   }
-  let { insertSeq } = revs[0];
+  let expandSeq = revs[0].insertSeq;
   for (const rev of revs.slice(1)) {
-    insertSeq = expand(insertSeq, rev.insertSeq, { union: true });
+    expandSeq = expand(expandSeq, rev.insertSeq, { union: true });
   }
-  return insertSeq;
+  return expandSeq;
+}
+
+export function normalize(rev: Revision, hiddenSeq: Subseq): Revision {
+  return {
+    ...rev,
+    revertSeq: intersection(rev.deleteSeq, expand(hiddenSeq, rev.insertSeq)),
+  };
 }

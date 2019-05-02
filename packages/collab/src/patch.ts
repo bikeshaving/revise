@@ -1,5 +1,19 @@
-import * as ss from "./subseq";
-import { Subseq } from "./subseq";
+import {
+  clear,
+  consolidate,
+  count,
+  erase,
+  expand,
+  interleave,
+  intersection,
+  merge,
+  push as pushSegment,
+  shrink,
+  split,
+  Subseq,
+  union,
+  zip,
+} from "./subseq";
 
 /*
 Patches are arrays of strings and numbers which represent changes to text.
@@ -40,8 +54,8 @@ export function apply(text: string, patch: Patch): string {
     throw new Error("Length mismatch");
   }
   const { inserted, insertSeq, deleteSeq } = factor(patch);
-  text = ss.merge(text, inserted, insertSeq);
-  [text] = ss.split(text, deleteSeq);
+  text = merge(text, inserted, insertSeq);
+  [text] = split(text, deleteSeq);
   return text;
 }
 
@@ -153,36 +167,29 @@ export function factor(patch: Patch): FactoredPatch {
   for (const op of operations(patch)) {
     switch (op.type) {
       case "retain": {
-        ss.push(deleteSeq, op.end - op.start, false);
-        ss.push(insertSeq, op.end - op.start, false);
+        pushSegment(deleteSeq, op.end - op.start, false);
+        pushSegment(insertSeq, op.end - op.start, false);
         break;
       }
       case "delete": {
-        ss.push(deleteSeq, op.end - op.start, true);
-        ss.push(insertSeq, op.end - op.start, false);
+        pushSegment(deleteSeq, op.end - op.start, true);
+        pushSegment(insertSeq, op.end - op.start, false);
         break;
       }
       case "insert": {
-        ss.push(deleteSeq, op.inserted.length, false);
-        ss.push(insertSeq, op.inserted.length, true);
+        pushSegment(deleteSeq, op.inserted.length, false);
+        pushSegment(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
       case "toggle": {
-        ss.push(deleteSeq, op.inserted.length, true);
-        ss.push(insertSeq, op.inserted.length, true);
+        pushSegment(deleteSeq, op.inserted.length, true);
+        pushSegment(insertSeq, op.inserted.length, true);
         inserted += op.inserted;
         break;
       }
     }
   }
-  return { inserted, insertSeq, deleteSeq };
-}
-
-export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
-  let { inserted = "", insertSeq, deleteSeq } = patch;
-  insertSeq = insertSeq || (deleteSeq && ss.clear(deleteSeq)) || [];
-  deleteSeq = deleteSeq || (insertSeq && ss.clear(insertSeq)) || [];
   return { inserted, insertSeq, deleteSeq };
 }
 
@@ -202,13 +209,20 @@ export function push(patch: Patch, op: string | number): number {
   return patch.length;
 }
 
+export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
+  let { inserted = "", insertSeq, deleteSeq } = patch;
+  insertSeq = insertSeq || (deleteSeq && clear(deleteSeq)) || [];
+  deleteSeq = deleteSeq || (insertSeq && clear(insertSeq)) || [];
+  return { inserted, insertSeq, deleteSeq };
+}
+
 export function synthesize(patch: Partial<FactoredPatch>): Patch {
   let { inserted, insertSeq, deleteSeq } = complete(patch);
   const result: Patch = [];
   let insertIndex = 0;
   let retainIndex = 0;
   let prevDFlag = false;
-  for (const [length, iFlag, dFlag] of ss.zip(insertSeq, deleteSeq)) {
+  for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
       if (prevDFlag) {
         push(result, retainIndex);
@@ -233,7 +247,7 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
   if (insertIndex !== inserted.length) {
     throw new Error("Length mismatch");
   }
-  const length = ss.count(insertSeq, false);
+  const length = count(insertSeq, false);
   push(result, length);
   return result;
 }
@@ -241,14 +255,14 @@ export function synthesize(patch: Partial<FactoredPatch>): Patch {
 export function squash(patch1: Patch, patch2: Patch): Patch {
   let factored1 = factor(patch1);
   let factored2 = factor(patch2);
-  const [inserted, insertSeq] = ss.consolidate(
+  const [inserted, insertSeq] = consolidate(
     factored1.inserted,
     factored2.inserted,
-    ss.expand(factored1.insertSeq, factored2.insertSeq),
+    expand(factored1.insertSeq, factored2.insertSeq),
     factored2.insertSeq,
   );
-  const deleteSeq = ss.union(
-    ss.expand(factored1.deleteSeq, factored2.insertSeq),
+  const deleteSeq = union(
+    expand(factored1.deleteSeq, factored2.insertSeq),
     factored2.deleteSeq,
   );
   return synthesize({ inserted, insertSeq, deleteSeq });
@@ -266,26 +280,38 @@ export function build(
     throw new RangeError(`end (${end}) cannot be less than start (${start})`);
   }
   let deleteSeq: Subseq = [];
-  ss.push(deleteSeq, start, false);
-  ss.push(deleteSeq, inserted.length, false);
-  ss.push(deleteSeq, end - start, true);
-  ss.push(deleteSeq, length - end, false);
+  pushSegment(deleteSeq, start, false);
+  pushSegment(deleteSeq, inserted.length, false);
+  pushSegment(deleteSeq, end - start, true);
+  pushSegment(deleteSeq, length - end, false);
   let insertSeq: Subseq = [];
-  ss.push(insertSeq, start, false);
-  ss.push(insertSeq, inserted.length, true);
-  ss.push(insertSeq, length - start, false);
+  pushSegment(insertSeq, start, false);
+  pushSegment(insertSeq, inserted.length, true);
+  pushSegment(insertSeq, length - start, false);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
-export function shrink(patch: Patch, subseq: Subseq): Patch {
+export function expandHidden(
+  patch: Patch,
+  hiddenSeq: Subseq,
+  options: { before?: boolean } = {},
+): Patch {
+  const { before = false } = options;
   let { inserted, insertSeq, deleteSeq } = factor(patch);
-  [inserted, insertSeq] = ss.erase(inserted, insertSeq, subseq);
-  deleteSeq = ss.shrink(deleteSeq, subseq);
+  if (before) {
+    [insertSeq, hiddenSeq] = interleave(insertSeq, hiddenSeq);
+  } else {
+    [hiddenSeq, insertSeq] = interleave(hiddenSeq, insertSeq);
+  }
+  deleteSeq = expand(deleteSeq, hiddenSeq);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }
 
-export function cleanup(patch: Patch): Patch {
-  let { insertSeq, deleteSeq } = factor(patch);
-  const toggleSeq = ss.intersection(insertSeq, deleteSeq);
-  return shrink(patch, toggleSeq);
+export function shrinkHidden(patch: Patch, hiddenSeq: Subseq): Patch {
+  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  hiddenSeq = expand(hiddenSeq, insertSeq);
+  hiddenSeq = union(hiddenSeq, intersection(insertSeq, deleteSeq));
+  [inserted, insertSeq] = erase(inserted, insertSeq, hiddenSeq);
+  deleteSeq = shrink(deleteSeq, hiddenSeq);
+  return synthesize({ inserted, insertSeq, deleteSeq });
 }
