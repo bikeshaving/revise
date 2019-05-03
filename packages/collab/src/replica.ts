@@ -22,9 +22,11 @@ export interface Update extends Version {
 }
 
 export class Replica {
-  public snapshot: Snapshot;
   // TODO: document what each of these members represent
+  // TODO: make snapshot the snapshot against the received commit not against every change
+  public snapshot: Snapshot;
   protected commits: Revision[];
+  // TODO: change type of changes to Patch[]
   protected changes: Revision[] = [];
   protected marks: number[] = [];
   protected accepted = -1;
@@ -102,26 +104,7 @@ export class Replica {
     });
   }
 
-  updateSince(version: Partial<Version> = {}): Update {
-    version = this.validateVersion(version);
-    const revs = this.revisionsSince(version);
-    if (revs.length) {
-      let patch = revs.map(synthesize).reduce(squash);
-      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
-      return {
-        patch,
-        commit: this.commits.length - 1,
-        change: this.changes.length - 1,
-      };
-    }
-    return { commit: this.commits.length - 1, change: this.changes.length - 1 };
-  }
-
   hiddenSeqAt(version: Partial<Version> = {}): Subseq {
-    version = this.validateVersion(version);
-    if (version.commit === -1 && version.change === -1) {
-      return INITIAL_SNAPSHOT.hiddenSeq.slice();
-    }
     const revs = this.revisionsSince(version);
     let hiddenSeq = this.snapshot.hiddenSeq;
     if (revs.length === 0) {
@@ -136,10 +119,6 @@ export class Replica {
   }
 
   snapshotAt(version: Partial<Version> = {}): Snapshot {
-    version = this.validateVersion(version);
-    if (version.commit === -1 && version.change === -1) {
-      return { ...INITIAL_SNAPSHOT };
-    }
     const revs = this.revisionsSince(version);
     if (revs.length === 0) {
       return { ...this.snapshot };
@@ -151,6 +130,20 @@ export class Replica {
     hiddenSeq = this.hiddenSeqAt(version);
     [visible, hidden] = split(merged, hiddenSeq);
     return { visible, hidden, hiddenSeq };
+  }
+
+  updateSince(version: Partial<Version> = {}): Update {
+    const revs = this.revisionsSince(version);
+    if (revs.length) {
+      let patch = revs.map(synthesize).reduce(squash);
+      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
+      return {
+        patch,
+        commit: this.commits.length - 1,
+        change: this.changes.length - 1,
+      };
+    }
+    return { commit: this.commits.length - 1, change: this.changes.length - 1 };
   }
 
   // TODO: allow an edit to push a new mark so it isn’t squashed with other edits when sent
