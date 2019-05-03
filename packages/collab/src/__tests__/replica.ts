@@ -123,41 +123,21 @@ describe("Replica", () => {
         hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
       });
       expect(replica1.snapshotAt({ commit: 1, change: -1 })).toEqual({
-        visible: "hello_world!",
-        hidden: " ",
-        hiddenSeq: [0, 6, 1, 6],
+        visible: "hello_world",
+        hidden: " !",
+        hiddenSeq: [0, 6, 1, 5, 1],
       });
       expect(replica1.snapshotAt({ commit: 1, change: 0 })).toEqual({
-        visible: "hello_world!",
-        hidden: " ",
-        hiddenSeq: [0, 6, 1, 6],
+        visible: "hello_world",
+        hidden: " !",
+        hiddenSeq: [0, 6, 1, 5, 1],
       });
       expect(replica1.snapshotAt({ commit: 1, change: 1 })).toEqual({
-        visible: "Hello_World!",
-        hidden: "h w",
-        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
-      });
-      expect(replica1.snapshotAt({ commit: 1, change: 2 })).toEqual({
-        visible: "Hello_World!",
-        hidden: "h w",
-        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
-      });
-      expect(replica1.snapshotAt({ commit: 2, change: -1 })).toEqual({
-        visible: "hello_world",
-        hidden: " !",
-        hiddenSeq: [0, 6, 1, 5, 1],
-      });
-      expect(replica1.snapshotAt({ commit: 2, change: 0 })).toEqual({
-        visible: "hello_world",
-        hidden: " !",
-        hiddenSeq: [0, 6, 1, 5, 1],
-      });
-      expect(replica1.snapshotAt({ commit: 2, change: 1 })).toEqual({
         visible: "Hello_World",
         hidden: "h w!",
         hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
       });
-      expect(replica1.snapshotAt({ commit: 2, change: 2 })).toEqual({
+      expect(replica1.snapshotAt({ commit: 1, change: 2 })).toEqual({
         visible: "Hello_World",
         hidden: "h w!",
         hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
@@ -220,31 +200,16 @@ describe("Replica", () => {
         hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
       });
       expect(replica1.snapshotAt({ commit: 1, change: -1 })).toEqual({
-        visible: "hello_world!",
-        hidden: " ",
-        hiddenSeq: [0, 6, 1, 6],
-      });
-      expect(replica1.snapshotAt({ commit: 1, change: 0 })).toEqual({
-        visible: "Hello_World!",
-        hidden: "h w",
-        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
-      });
-      expect(replica1.snapshotAt({ commit: 1, change: 1 })).toEqual({
-        visible: "Hello_World!",
-        hidden: "h w",
-        hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 5],
-      });
-      expect(replica1.snapshotAt({ commit: 2, change: -1 })).toEqual({
         visible: "hello_world",
         hidden: " !",
         hiddenSeq: [0, 6, 1, 5, 1],
       });
-      expect(replica1.snapshotAt({ commit: 2, change: 0 })).toEqual({
+      expect(replica1.snapshotAt({ commit: 1, change: 0 })).toEqual({
         visible: "Hello_World",
         hidden: "h w!",
         hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
       });
-      expect(replica1.snapshotAt({ commit: 2, change: 1 })).toEqual({
+      expect(replica1.snapshotAt({ commit: 1, change: 1 })).toEqual({
         visible: "Hello_World",
         hidden: "h w!",
         hiddenSeq: [0, 1, 1, 5, 1, 1, 1, 4, 1],
@@ -289,11 +254,11 @@ describe("Replica", () => {
       const replica = new Replica("client1");
       replica.edit(["a", 0]);
       replica.edit(["b", 0, 1]);
-      expect(replica.pending().length).toEqual(2);
+      expect(replica.pending().length).toEqual(1);
       expect(replica.pending().length).toEqual(0);
       replica.edit(["c", 0, 2]);
       replica.edit(["d", 0, 3]);
-      expect(replica.pending().length).toEqual(2);
+      expect(replica.pending().length).toEqual(1);
       expect(replica.pending().length).toEqual(0);
     });
 
@@ -308,15 +273,16 @@ describe("Replica", () => {
         version++;
       }
       replica.edit(["b", 0, 1]);
+      messages = replica.pending();
+      expect(messages.length).toEqual(1);
+      replica.ingest({ ...messages[0], version });
+      version++;
       replica.edit(["c", 0, 2]);
       messages = replica.pending();
-      expect(messages.length).toEqual(2);
       replica.ingest({ ...messages[0], version });
       version++;
       replica.edit(["d", 0, 3]);
       expect(replica.pending().length).toEqual(1);
-      replica.ingest({ ...messages[1], version });
-      version++;
       expect(replica.pending().length).toEqual(0);
     });
   });

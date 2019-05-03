@@ -65,11 +65,9 @@ describe("CollabText", () => {
     doc2.replace(0, 2, "hello");
     await client2.save("doc", { force: true });
     await sub1.next();
-    await sub1.next();
     doc2.replace(6, 6, "uhhh");
     doc2.replace(10, 10, " what");
     await client2.save("doc", { force: true });
-    await sub1.next();
     await sub1.next();
     expect(doc2.text).toEqual(doc1.text);
     expect(doc1.text).toEqual("hello uhhh whatworld");

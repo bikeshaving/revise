@@ -23,12 +23,12 @@ export interface Update extends Version {
 
 export class Replica {
   public snapshot: Snapshot;
+  // TODO: document what each of these members represent
   protected commits: Revision[];
   protected changes: Revision[] = [];
-  protected accepted = 0;
-  protected sent = 0;
-  // TODO: group and squash patches to be sent
-  // protected groups: number[] = [];
+  protected marks: number[] = [];
+  protected accepted = -1;
+  protected sent = -1;
 
   get received(): number {
     return this.commits.length - 1;
@@ -80,8 +80,18 @@ export class Replica {
 
   protected revisionsSince(version: Partial<Version> = {}): Revision[] {
     const { commit, change } = this.validateVersion(version);
-    const commits = this.commits.slice(commit + 1);
-    const changes = this.changes.slice(this.accepted);
+    const commits: Revision[] = [];
+    let i = this.accepted;
+    for (const rev of invert(this.commits.slice(commit + 1))) {
+      if (rev.client === this.client) {
+        i--;
+        const changes = this.changes.slice(this.marks[i], this.marks[i + 1]);
+        commits.unshift(...changes);
+      } else {
+        commits.unshift(rev);
+      }
+    }
+    const changes = this.changes.slice(this.marks[this.accepted] || 0);
     let change1 = this.changes.length;
     return rearrange(commits.concat(changes), (rev) => {
       if (rev.client === this.client) {
@@ -143,6 +153,7 @@ export class Replica {
     return { visible, hidden, hiddenSeq };
   }
 
+  // TODO: allow an edit to push a new mark so it isn’t squashed with other edits when sent
   edit(
     patch: Patch,
     options: { before?: boolean } & Partial<Version> = {},
@@ -186,7 +197,7 @@ export class Replica {
       throw new RangeError(`message.version (${message.version}) out of range`);
     } else if (
       message.client === this.client &&
-      message.local !== this.accepted
+      message.local !== this.accepted + 1
     ) {
       throw new RangeError(`message.local (${message.local}) out of range`);
     }
@@ -207,24 +218,35 @@ export class Replica {
     rev = normalize(rev, this.hiddenSeqAt({ change: -1 }));
     if (rev.client === this.client) {
       this.accepted++;
-      // TODO: delete acked changes
     } else {
-      let [rev1, changes] = rebase(rev, this.changes.slice(this.accepted));
+      const change = this.marks[this.accepted] || 0;
+      let [rev1, changes] = rebase(rev, this.changes.slice(change));
       this.snapshot = apply(this.snapshot, synthesize(rev1));
-      this.changes = this.changes.slice(0, this.accepted).concat(changes);
+      this.changes = this.changes.slice(0, change).concat(changes);
     }
     this.commits.push(rev);
   }
 
-  // TODO: squash changes
-  // TODO: protect changes and freeze any changes that have been seen outside this class
   pending(): Message[] {
-    const messages = this.changes.slice(this.sent).map((rev, i) => ({
-      data: synthesize(rev),
-      client: this.client,
-      local: this.sent + i,
-      received: this.received,
-    }));
+    let start = this.marks[this.sent] || 0;
+    const messages: Message[] = [];
+    if (
+      (!this.marks.length && this.changes.length) ||
+      this.marks[this.marks.length - 1] < this.changes.length
+    ) {
+      this.marks.push(this.changes.length);
+    }
+    for (const [i, end] of this.marks.slice(this.sent + 1).entries()) {
+      const changes = this.changes.slice(start, end);
+      const patch = changes.map(synthesize).reduce(squash);
+      messages.push({
+        data: patch,
+        client: this.client,
+        local: this.sent + 1 + i,
+        received: this.received,
+      });
+      start = end;
+    }
     this.sent += messages.length;
     return messages;
   }
