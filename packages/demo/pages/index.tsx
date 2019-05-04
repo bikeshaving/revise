@@ -48,7 +48,7 @@ function Editor() {
     let text: CollabText;
     let version: Version;
     function handleChange(
-      cm: CodeMirror.Doc,
+      cm: CodeMirror.Editor & CodeMirror.Doc,
       change: CodeMirror.EditorChangeCancellable,
     ): void {
       if (change.origin === "setValue" || change.origin === "collab") {
@@ -68,7 +68,6 @@ function Editor() {
       cm.setValue(value.text);
       cm.setOption("readOnly", false);
       cm.on("beforeChange", handleChange);
-      // h
       for await (const _ of text.subscribe()) {
         const update = text.updateSince(version);
         version = { commit: update.commit, change: update.change };

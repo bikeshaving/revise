@@ -4,12 +4,13 @@ import {
   Message,
 } from "@collabjs/collab/lib/connection";
 import { Channel, DroppingBuffer } from "@channel/channel";
+import { messageEvents } from "./channel";
 import { Action } from "./actions";
 
 interface Request {
   resolve(value?: any): void;
   reject(reason: any): void;
-  persist?: boolean;
+  persist: boolean;
 }
 
 export class WebSocketConnection implements Connection {
@@ -17,55 +18,51 @@ export class WebSocketConnection implements Connection {
   protected requests: Request[] = [];
   protected nextRequestId = 0;
   constructor(protected socket: WebSocket) {
-    socket.onopen = this.handleOpen.bind(this);
-    // TODO: what do we do if the socket is closed?
-    socket.onclose = (ev) => console.log("close", ev);
-    // TODO: what do we do if there is an error?
-    socket.onerror = (ev) => console.log("error", ev);
-    socket.onmessage = this.handleMessage.bind(this);
+    this.listen(socket);
   }
 
-  protected handleOpen(): void {
-    if (this.buffer.length) {
-      for (const action of this.buffer) {
-        this.send(action);
+  protected async listen(socket: WebSocket): Promise<void> {
+    socket.onopen = () => {
+      if (this.buffer.length) {
+        for (const action of this.buffer) {
+          // TODO: handle rejection
+          this.send(action);
+        }
+        this.buffer = [];
       }
-      this.buffer = [];
-    }
-  }
-
-  protected async handleMessage(ev: MessageEvent): Promise<void> {
-    let message: any;
+    };
     try {
-      message = JSON.parse(ev.data);
+      for await (const ev of messageEvents(socket)) {
+        const action: Action = JSON.parse(ev.data);
+        // TODO: validate action
+        const req = this.requests[action.reqId];
+        if (req == null) {
+          continue;
+        } else if (!req.persist) {
+          delete this.requests[action.reqId];
+        }
+        switch (action.type) {
+          case "ack": {
+            req.resolve();
+            break;
+          }
+          case "sm": {
+            req.resolve(action.messages);
+            break;
+          }
+          case "sc": {
+            req.resolve(action.checkpoint);
+            break;
+          }
+          default: {
+            req.reject(Error(`Invalid action type: ${action.type}`));
+            break;
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
-      return;
-    }
-    const request = this.requests[message.reqId];
-    if (request == null) {
-      return;
-    } else if (!request.persist) {
-      delete this.requests[message.reqId];
-    }
-    switch (message.type) {
-      case "acknowledge":
-      case "sendNothing": {
-        request.resolve();
-        break;
-      }
-      case "sendMessages": {
-        request.resolve(message.messages);
-        break;
-      }
-      case "sendCheckpoint": {
-        request.resolve(message.checkpoint);
-        break;
-      }
-      default: {
-        request.reject(Error(`Unknown action type: ${message.type}`));
-        break;
-      }
+      //TODO: do something
     }
   }
 
@@ -82,12 +79,11 @@ export class WebSocketConnection implements Connection {
       this.socket.send(serialized);
     }
     if (this.requests[action.reqId] != null) {
-      // if there is a request under action.reqId that means send is being called by handleOpen so we can ignore the returned Promise.
       return;
     }
-    return new Promise(
-      (resolve, reject) => (this.requests[action.reqId] = { resolve, reject }),
-    );
+    return new Promise((resolve, reject) => {
+      this.requests[action.reqId] = { resolve, reject, persist: false };
+    });
   }
 
   // TODO: handle negative indexes?
@@ -96,58 +92,54 @@ export class WebSocketConnection implements Connection {
     start?: number,
     end?: number,
   ): Promise<Message[] | undefined> {
-    const action: Action = {
-      type: "fetchMessages",
+    return this.send({
+      type: "fm",
       id,
       start,
       end,
       reqId: this.nextRequestId++,
-    };
-    return this.send(action);
+    });
   }
 
   sendMessages(id: string, messages: Message[]): Promise<void> {
-    const action: Action = {
-      type: "sendMessages",
+    return this.send({
+      type: "sm",
       id,
       messages,
       reqId: this.nextRequestId++,
-    };
-    return this.send(action);
+    });
   }
 
   fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined> {
-    const action: Action = {
-      type: "fetchCheckpoint",
+    return this.send({
+      type: "fc",
       id,
       start,
       reqId: this.nextRequestId++,
-    };
-    return this.send(action);
+    });
   }
 
   sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
-    const action: Action = {
-      type: "sendCheckpoint",
+    return this.send({
+      type: "sc",
       id,
       checkpoint,
       reqId: this.nextRequestId++,
-    };
-    return this.send(action);
+    });
   }
 
-  subscribe(id: string, start: number): AsyncIterableIterator<Message[]> {
+  subscribe(id: string, start: number): Channel<Message[]> {
     return new Channel<Message[]>(async (resolve, reject, stop) => {
       const action: Action = {
-        type: "subscribe",
+        type: "sub",
         id,
         start,
         reqId: this.nextRequestId++,
       };
-      let stopped = false;
-      stop.then(() => (stopped = true));
-      await Promise.race([stop, this.send(action)]);
-      if (!stopped) {
+      let canceled = false;
+      stop.then(() => (canceled = true));
+      await Promise.race([this.send(action), stop]);
+      if (!canceled) {
         this.requests[action.reqId] = { resolve, reject, persist: true };
       }
       await stop;

@@ -1,97 +1,115 @@
-import { Action } from "./actions";
 import { Connection } from "@collabjs/collab/lib/connection";
+import {
+  Action,
+  FetchCheckpoint,
+  FetchMessages,
+  SendCheckpoint,
+  SendMessages,
+  Subscribe,
+} from "./actions";
+import { messageEvents } from "./channel";
+
+function send(socket: WebSocket, action: Action): void {
+  socket.send(JSON.stringify(action));
+}
+
+async function fetchCheckpoint(
+  conn: Connection,
+  socket: WebSocket,
+  action: FetchCheckpoint,
+): Promise<void> {
+  const checkpoint = await conn.fetchCheckpoint(action.id, action.start);
+  if (checkpoint == null) {
+    send(socket, { type: "ack", id: action.id, reqId: action.reqId });
+  } else {
+    send(socket, {
+      type: "sc",
+      id: action.id,
+      reqId: action.reqId,
+      checkpoint,
+    });
+  }
+}
+
+async function fetchMessages(
+  conn: Connection,
+  socket: WebSocket,
+  action: FetchMessages,
+): Promise<void> {
+  const messages = await conn.fetchMessages(
+    action.id,
+    action.start,
+    action.end,
+  );
+  if (messages == null) {
+    send(socket, { type: "ack", id: action.id, reqId: action.reqId });
+  } else {
+    send(socket, { type: "sm", id: action.id, reqId: action.reqId, messages });
+  }
+}
+
+async function sendCheckpoint(
+  conn: Connection,
+  socket: WebSocket,
+  action: SendCheckpoint,
+): Promise<void> {
+  await conn.sendCheckpoint(action.id, action.checkpoint!);
+  send(socket, {
+    type: "ack",
+    id: action.id,
+    reqId: action.reqId,
+  });
+}
+
+async function sendMessages(
+  conn: Connection,
+  socket: WebSocket,
+  action: SendMessages,
+): Promise<void> {
+  await conn.sendMessages(action.id, action.messages!);
+  send(socket, { type: "ack", id: action.id, reqId: action.reqId });
+}
+
+async function subscribe(
+  conn: Connection,
+  socket: WebSocket,
+  action: Subscribe,
+): Promise<void> {
+  send(socket, { type: "ack", id: action.id, reqId: action.reqId });
+  const subscription = conn.subscribe(action.id, action.start);
+  for await (const messages of subscription) {
+    send(socket, { type: "sm", id: action.id, reqId: action.reqId, messages });
+  }
+}
 
 // TODO: return a more useful value, maybe make this a class.
-export function link(conn: Connection, socket: WebSocket): void {
-  async function handleMessage(ev: MessageEvent) {
-    let message: Action = JSON.parse(ev.data);
+export async function link(conn: Connection, socket: WebSocket): Promise<void> {
+  for await (const ev of messageEvents(socket)) {
     try {
-      switch (message.type) {
-        case "fetchCheckpoint": {
-          const checkpoint = await conn.fetchCheckpoint(
-            message.id,
-            message.start,
-          );
-          let action: Action;
-          if (checkpoint == null) {
-            action = {
-              type: "sendNothing",
-              id: message.id,
-              reqId: message.reqId,
-            };
-          } else {
-            action = {
-              type: "sendCheckpoint",
-              id: message.id,
-              reqId: message.reqId,
-              checkpoint,
-            };
-          }
-          socket.send(JSON.stringify(action));
+      const action: Action = JSON.parse(ev.data);
+      switch (action.type) {
+        case "fc": {
+          await fetchCheckpoint(conn, socket, action);
           break;
         }
-        case "fetchMessages": {
-          const messages = await conn.fetchMessages(
-            message.id,
-            message.start,
-            message.end,
-          );
-          let action: Action;
-          if (messages == null) {
-            action = {
-              type: "sendNothing",
-              id: message.id,
-              reqId: message.reqId,
-            };
-          } else {
-            action = {
-              type: "sendMessages",
-              id: message.id,
-              reqId: message.reqId,
-              messages,
-            };
-          }
-          socket.send(JSON.stringify(action));
+        case "fm": {
+          await fetchMessages(conn, socket, action);
           break;
         }
-        case "sendCheckpoint": {
-          await conn.sendCheckpoint(message.id, message.checkpoint!);
-          const action: Action = {
-            type: "acknowledge",
-            id: message.id,
-            reqId: message.reqId,
-          };
-          socket.send(JSON.stringify(action));
+        case "sc": {
+          await sendCheckpoint(conn, socket, action);
           break;
         }
-        case "sendMessages": {
-          await conn.sendMessages(message.id, message.messages!);
-          const action: Action = {
-            type: "acknowledge",
-            id: message.id,
-            reqId: message.reqId,
-          };
-          socket.send(JSON.stringify(action));
+        case "sm": {
+          await sendMessages(conn, socket, action);
           break;
         }
-        case "subscribe": {
-          const action: Action = {
-            type: "acknowledge",
-            id: message.id,
-            reqId: message.reqId,
-          };
-          socket.send(JSON.stringify(action));
-          const subscription = conn.subscribe(message.id, message.start);
-          for await (const messages of subscription) {
-            const action: Action = {
-              type: "sendMessages",
-              id: message.id,
-              reqId: message.reqId,
-              messages,
-            };
-            socket.send(JSON.stringify(action));
-          }
+        case "sub": {
+          subscribe(conn, socket, action);
           break;
+        }
+        default: {
+          throw new Error(`Invalid action type: ${action.type}`);
         }
       }
     } catch (err) {
@@ -99,6 +117,4 @@ export function link(conn: Connection, socket: WebSocket): void {
       socket.close();
     }
   }
-  socket.addEventListener("message", handleMessage);
-  socket.onclose = () => socket.removeEventListener("message", handleMessage);
 }
