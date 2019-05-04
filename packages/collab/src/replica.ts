@@ -167,10 +167,10 @@ export class Replica {
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
     if (revs.length) {
-      let patch = revs.map(synthesize).reduce(squash);
-      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
+      let patch1 = revs.map(synthesize).reduce(squash);
+      patch1 = shrinkHidden(patch1, this.hiddenSeqAt(version));
       return {
-        patch,
+        patch: patch1,
         commit: this.commits.length - 1,
         change: this.changes.length - 1,
       };

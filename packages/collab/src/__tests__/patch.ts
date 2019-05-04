@@ -95,40 +95,40 @@ describe("patch", () => {
     test("factor 1", () => {
       expect(factor(p1)).toEqual({
         inserted: "era",
-        insertSeq: [0, 1, 3, 10],
-        deleteSeq: [0, 4, 8, 2],
+        insertSeq: [1, 3, 10],
+        deleteSeq: [4, 8, 2],
       });
     });
 
     test("factor 2", () => {
       expect(factor(p2)).toEqual({
         inserted: "je",
-        insertSeq: [1, 2, 11],
-        deleteSeq: [0, 2, 2, 3, 6],
+        insertSeq: [0, 2, 11],
+        deleteSeq: [2, 2, 3, 6],
       });
     });
 
     test("factor 3", () => {
       expect(factor(p3)).toEqual({
         inserted: " n Earth",
-        insertSeq: [0, 4, 1, 1, 7, 6],
-        deleteSeq: [0, 13, 6],
+        insertSeq: [4, 1, 1, 7, 6],
+        deleteSeq: [13, 6],
       });
     });
 
     test("factor 4", () => {
       expect(factor(p4)).toEqual({
         inserted: "buddy",
-        insertSeq: [0, 6, 5, 5],
-        deleteSeq: [0, 11, 5],
+        insertSeq: [6, 5, 5],
+        deleteSeq: [11, 5],
       });
     });
 
     test("factor 5", () => {
       expect(factor(p5)).toEqual({
         inserted: "_",
-        insertSeq: [0, 5, 1, 6],
-        deleteSeq: [0, 5, 1, 6],
+        insertSeq: [5, 1, 6],
+        deleteSeq: [5, 1, 6],
       });
     });
   });
@@ -136,14 +136,14 @@ describe("patch", () => {
   describe("synthesize", () => {
     test("mismatched inserted and insertSeq throws", () => {
       expect(() => {
-        synthesize({ inserted: "foo", insertSeq: [0, 2, 2] });
+        synthesize({ inserted: "foo", insertSeq: [2, 2] });
       }).toThrow();
     });
 
     test("insertions after deletions", () => {
       const inserted = "bro";
-      const insertSeq = [0, 11, 3];
-      const deleteSeq = [0, 6, 5, 3];
+      const insertSeq = [11, 3];
+      const deleteSeq = [6, 5, 3];
       const patch = synthesize({ inserted, insertSeq, deleteSeq });
       expect(patch).toEqual([0, 6, 11, "bro", 11]);
       expect(factor(patch)).toEqual({ inserted, insertSeq, deleteSeq });
@@ -155,21 +155,21 @@ describe("patch", () => {
 
     test("simple", () => {
       const inserted = "foo";
-      const insertSeq = [0, 3, 3, 7];
-      const deleteSeq = [0, 6, 3, 3, 1];
+      const insertSeq = [3, 3, 7];
+      const deleteSeq = [6, 3, 3, 1];
       const result = [0, 3, "foo", 6, 9, 10];
       expect(synthesize({ inserted, insertSeq, deleteSeq })).toEqual(result);
     });
 
     test("deletions only", () => {
-      const deleteSeq = [0, 1, 3, 1, 1, 2, 3];
+      const deleteSeq = [1, 3, 1, 1, 2, 3];
       expect(synthesize({ deleteSeq })).toEqual([0, 1, 4, 5, 6, 8, 11]);
     });
 
     test("intersecting", () => {
       const inserted = "goodbyes";
-      const insertSeq = [1, 7, 11, 1];
-      const deleteSeq = [0, 4, 3, 12];
+      const insertSeq = [0, 7, 11, 1];
+      const deleteSeq = [4, 3, 12];
       const result = ["good", -1, "bye", 0, 11, "s", 11];
       expect(synthesize({ inserted, insertSeq, deleteSeq })).toEqual(result);
     });
@@ -217,14 +217,14 @@ describe("patch", () => {
       const snapshot: Snapshot = {
         visible: "a1f",
         hidden: "",
-        hiddenSeq: [0, 3],
+        hiddenSeq: [3],
       };
       const patches: Patch[] = [[0, 2, "d", 2, 3], [0, 1, "s", 2, 4]];
       const snapshot1 = patches.reduce(snapshotApply, snapshot);
       expect(snapshot1).toEqual({
         visible: "asdf",
         hidden: "1",
-        hiddenSeq: [0, 2, 1, 2],
+        hiddenSeq: [2, 1, 2],
       });
       const squashed = squash(patches[0], patches[1]);
       expect(snapshotApply(snapshot, squashed)).toEqual(snapshot1);
@@ -234,14 +234,14 @@ describe("patch", () => {
       const snapshot: Snapshot = {
         visible: "hello world",
         hidden: "",
-        hiddenSeq: [0, 11],
+        hiddenSeq: [11],
       };
       const patches: Patch[] = [["H", 1, 6, "W", 7, 11], [0, 6, 7, 13]];
       const snapshot1 = patches.reduce(snapshotApply, snapshot);
       expect(snapshot1).toEqual({
         visible: "HelloWorld",
         hidden: "h w",
-        hiddenSeq: [0, 1, 1, 4, 1, 1, 1, 4],
+        hiddenSeq: [1, 1, 4, 1, 1, 1, 4],
       });
       const squashed = squash(patches[0], patches[1]);
       expect(snapshotApply(snapshot, squashed)).toEqual(snapshot1);
