@@ -30,7 +30,7 @@ fastify.register(
 const dev = process.env.NODE_ENV !== "production";
 fastify.register(
   plugin(async (fastify) => {
-    const app = next({ dev });
+    const app = next({ dev, dir: __dirname });
     await app.prepare();
     fastify.decorate("next", app);
 

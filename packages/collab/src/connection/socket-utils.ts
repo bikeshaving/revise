@@ -119,11 +119,8 @@ export async function link(conn: Connection, socket: WebSocket): Promise<void> {
         break;
       }
       case "sub": {
-        // TODO:
         subscribe(conn, socket, action)
-          .then(() => {
-            evs.return();
-          })
+          .then(() => evs.return())
           .catch((err) => {
             // TODO: cause link to throw or something
             // evs.throw(err);
