@@ -1,4 +1,5 @@
-import { Connection } from "@collabjs/collab/lib/connection";
+import { Channel, ChannelBuffer } from "@channel/channel";
+import { Connection } from "./index";
 import {
   Action,
   FetchCheckpoint,
@@ -7,7 +8,20 @@ import {
   SendMessages,
   Subscribe,
 } from "./actions";
-import { messageEvents } from "./channel";
+
+// TODO: create or use a generic socket type
+export function messageEvents(
+  socket: WebSocket,
+  buffer?: ChannelBuffer<MessageEvent>,
+): Channel<MessageEvent> {
+  return new Channel(async (push, close, stop) => {
+    socket.onmessage = push;
+    socket.onerror = close;
+    socket.onclose = close;
+    await stop;
+    socket.close();
+  }, buffer);
+}
 
 function send(socket: WebSocket, action: Action): void {
   socket.send(JSON.stringify(action));
@@ -84,37 +98,42 @@ async function subscribe(
 
 // TODO: return a more useful value, maybe make this a class.
 export async function link(conn: Connection, socket: WebSocket): Promise<void> {
-  for await (const ev of messageEvents(socket)) {
-    try {
-      const action: Action = JSON.parse(ev.data);
-      switch (action.type) {
-        case "fc": {
-          await fetchCheckpoint(conn, socket, action);
-          break;
-        }
-        case "fm": {
-          await fetchMessages(conn, socket, action);
-          break;
-        }
-        case "sc": {
-          await sendCheckpoint(conn, socket, action);
-          break;
-        }
-        case "sm": {
-          await sendMessages(conn, socket, action);
-          break;
-        }
-        case "sub": {
-          subscribe(conn, socket, action);
-          break;
-        }
-        default: {
-          throw new Error(`Invalid action type: ${action.type}`);
-        }
+  const evs = messageEvents(socket);
+  for await (const ev of evs) {
+    const action: Action = JSON.parse(ev.data);
+    switch (action.type) {
+      case "fc": {
+        await fetchCheckpoint(conn, socket, action);
+        break;
       }
-    } catch (err) {
-      console.error(err);
-      socket.close();
+      case "fm": {
+        await fetchMessages(conn, socket, action);
+        break;
+      }
+      case "sc": {
+        await sendCheckpoint(conn, socket, action);
+        break;
+      }
+      case "sm": {
+        await sendMessages(conn, socket, action);
+        break;
+      }
+      case "sub": {
+        // TODO:
+        subscribe(conn, socket, action)
+          .then(() => {
+            evs.return();
+          })
+          .catch((err) => {
+            // TODO: cause link to throw or something
+            // evs.throw(err);
+            console.error(err);
+          });
+        break;
+      }
+      default: {
+        throw new Error(`Invalid action type: ${action.type}`);
+      }
     }
   }
 }

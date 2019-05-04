@@ -3,7 +3,7 @@ import * as plugin from "fastify-plugin";
 import * as ws from "ws";
 import * as next from "next";
 import { InMemoryConnection } from "@collabjs/collab/lib/connection/in-memory";
-import { link } from "../websocket/link";
+import { link } from "@collabjs/collab/lib/connection/socket-utils";
 
 declare module "fastify" {
   export interface FastifyInstance {

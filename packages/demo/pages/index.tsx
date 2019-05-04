@@ -1,10 +1,10 @@
 import * as React from "react";
 import * as uuid from "uuid/v4";
-import { WebSocketConnection } from "../websocket/connection";
-import { Client } from "@collabjs/collab/lib/client";
 import { operations, Patch } from "@collabjs/collab/lib/patch";
 import { Version } from "@collabjs/collab/lib/replica";
+import { Client } from "@collabjs/collab/lib/client";
 import { CollabText } from "@collabjs/collab/lib/text";
+import { WebSocketConnection } from "@collabjs/collab/lib/connection/websocket";
 
 let CodeMirror: any;
 if (typeof window !== "undefined") {

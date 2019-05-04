@@ -1,10 +1,6 @@
-import {
-  Checkpoint,
-  Connection,
-  Message,
-} from "@collabjs/collab/lib/connection";
 import { Channel, DroppingBuffer } from "@channel/channel";
-import { messageEvents } from "./channel";
+import { Checkpoint, Connection, Message } from "./index";
+import { messageEvents } from "./socket-utils";
 import { Action } from "./actions";
 
 interface Request {

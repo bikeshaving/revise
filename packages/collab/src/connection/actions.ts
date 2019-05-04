@@ -1,4 +1,4 @@
-import { Checkpoint, Message } from "@collabjs/collab/lib/connection";
+import { Checkpoint, Message } from "./index";
 
 export interface AbstractAction {
   type: string;
