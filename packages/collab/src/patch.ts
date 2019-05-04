@@ -183,22 +183,6 @@ export function factor(patch: Patch): FactoredPatch {
   return { inserted, insertSeq, deleteSeq };
 }
 
-export function push(patch: Patch, op: string | number): number {
-  const last = patch[patch.length - 1];
-  if (typeof op === "number") {
-    if (last !== op) {
-      patch.push(op);
-    }
-  } else if (typeof op === "string") {
-    if (typeof last === "string") {
-      patch[patch.length - 1] += op;
-    } else {
-      patch.push(op);
-    }
-  }
-  return patch.length;
-}
-
 export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
   let { inserted = "", insertSeq, deleteSeq } = patch;
   insertSeq = insertSeq || (deleteSeq && clear(deleteSeq)) || [];
@@ -206,40 +190,60 @@ export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
   return { inserted, insertSeq, deleteSeq };
 }
 
-export function synthesize(patch: Partial<FactoredPatch>): Patch {
-  let { inserted, insertSeq, deleteSeq } = complete(patch);
-  const result: Patch = [];
+export function push(patch: Patch, op: string | number): number {
+  const prevOp = patch[patch.length - 1];
+  if (typeof op === "number") {
+    if (prevOp !== op) {
+      patch.push(op);
+    }
+  } else if (typeof op === "string") {
+    if (typeof prevOp === "string") {
+      patch[patch.length - 1] += op;
+    } else {
+      patch.push(op);
+    }
+  } else {
+    throw new Error("op is not string or number");
+  }
+  return patch.length;
+}
+
+export function synthesize(factored: Partial<FactoredPatch>): Patch {
+  const { inserted, insertSeq, deleteSeq } = complete(factored);
+  const patch: Patch = [];
   let insertIndex = 0;
   let retainIndex = 0;
+  let prevIFlag = false;
   let prevDFlag = false;
   for (const [length, iFlag, dFlag] of zip(insertSeq, deleteSeq)) {
     if (iFlag) {
       if (prevDFlag) {
-        push(result, retainIndex);
+        push(patch, retainIndex);
       }
       if (dFlag) {
-        push(result, -1);
+        push(patch, -1);
       }
       const text = inserted.slice(insertIndex, insertIndex + length);
-      push(result, text);
+      push(patch, text);
       insertIndex += length;
     } else {
       if (!dFlag) {
-        push(result, retainIndex);
+        push(patch, retainIndex);
+      }
+      if (!dFlag || prevIFlag) {
+        push(patch, retainIndex + length);
       }
       retainIndex += length;
-      if (!dFlag || typeof result[result.length - 1] === "string") {
-        push(result, retainIndex);
-      }
     }
+    prevIFlag = iFlag;
     prevDFlag = dFlag;
   }
   if (insertIndex !== inserted.length) {
     throw new Error("Length mismatch");
   }
   const length = count(insertSeq, false);
-  push(result, length);
-  return result;
+  push(patch, length);
+  return patch;
 }
 
 export function squash(patch1: Patch, patch2: Patch): Patch {
