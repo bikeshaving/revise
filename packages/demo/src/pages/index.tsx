@@ -4,7 +4,7 @@ import { operations, Patch } from "@collabjs/collab/lib/patch";
 import { Version } from "@collabjs/collab/lib/replica";
 import { Client } from "@collabjs/collab/lib/client";
 import { CollabText } from "@collabjs/collab/lib/text";
-import { WebSocketConnection } from "@collabjs/collab/lib/connection/websocket";
+import { SocketConnection } from "@collabjs/collab/lib/connection/socket";
 
 let CodeMirror: any;
 if (typeof window !== "undefined") {
@@ -39,7 +39,7 @@ function Editor() {
   const editor = React.useRef(null);
   React.useEffect(() => {
     const socket = new WebSocket("ws://localhost:3000/collab");
-    const conn = new WebSocketConnection(socket);
+    const conn = new SocketConnection(socket);
     const client = new Client(uuid(), conn);
     const cm = CodeMirror(editor.current, {
       readOnly: true,
@@ -47,7 +47,7 @@ function Editor() {
     });
     let text: CollabText;
     let version: Version;
-    function handleChange(
+    function handleBeforeChange(
       cm: CodeMirror.Editor & CodeMirror.Doc,
       change: CodeMirror.EditorChangeCancellable,
     ): void {
@@ -62,12 +62,11 @@ function Editor() {
     }
     CollabText.initialize("doc1", client).then(async (text1) => {
       text = text1;
-      console.log(text);
       const value = text.value;
       version = { commit: value.commit, change: value.change };
       cm.setValue(value.text);
       cm.setOption("readOnly", false);
-      cm.on("beforeChange", handleChange);
+      cm.on("beforeChange", handleBeforeChange);
       for await (const _ of text.subscribe()) {
         const update = text.updateSince(version);
         version = { commit: update.commit, change: update.change };
@@ -76,7 +75,7 @@ function Editor() {
         }
       }
     });
-    return () => cm.off("beforeChange", handleChange);
+    return () => cm.off("beforeChange", handleBeforeChange);
   }, []);
   return <div ref={editor} />;
 }
