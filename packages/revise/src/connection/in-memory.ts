@@ -20,6 +20,22 @@ export class InMemoryConnection implements Connection {
   protected pubsub = new InMemoryPubSub<number>();
   protected items: Record<string, InMemoryConnectionItem> = {};
 
+  fetchCheckpoint(
+    id: string,
+    before?: number,
+  ): Promise<Checkpoint | undefined> {
+    const checkpoints: Checkpoint[] | undefined =
+      this.items[id] && this.items[id].checkpoints;
+    if (checkpoints == null || !checkpoints.length) {
+      return Promise.resolve(undefined);
+    } else if (before == null) {
+      return Promise.resolve(checkpoints[checkpoints.length - 1]);
+    }
+    return Promise.resolve(
+      findLast(checkpoints, (checkpoint) => checkpoint.version <= before),
+    );
+  }
+
   fetchMessages(
     id: string,
     start?: number,
@@ -34,6 +50,21 @@ export class InMemoryConnection implements Connection {
       throw new RangeError("end cannot be negative");
     }
     return Promise.resolve(item.messages.slice(start, end));
+  }
+
+  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
+    const item = this.items[id];
+    if (
+      (item == null && checkpoint.version !== 0) ||
+      checkpoint.version > item.messages.length
+    ) {
+      return Promise.reject(new Error("Missing message"));
+    }
+    // TODO: use binary search to insert
+    // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
+    item.checkpoints.push(checkpoint);
+    item.checkpoints.sort((a, b) => a.version - b.version);
+    return Promise.resolve();
   }
 
   sendMessages(id: string, messages: Message[]): Promise<void> {
@@ -66,37 +97,6 @@ export class InMemoryConnection implements Connection {
     if (version != null) {
       return this.pubsub.publish(id, version);
     }
-    return Promise.resolve();
-  }
-
-  fetchCheckpoint(
-    id: string,
-    before?: number,
-  ): Promise<Checkpoint | undefined> {
-    const checkpoints: Checkpoint[] | undefined =
-      this.items[id] && this.items[id].checkpoints;
-    if (checkpoints == null || !checkpoints.length) {
-      return Promise.resolve(undefined);
-    } else if (before == null) {
-      return Promise.resolve(checkpoints[checkpoints.length - 1]);
-    }
-    return Promise.resolve(
-      findLast(checkpoints, (checkpoint) => checkpoint.version <= before),
-    );
-  }
-
-  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
-    const item = this.items[id];
-    if (
-      (item == null && checkpoint.version !== 0) ||
-      checkpoint.version > item.messages.length
-    ) {
-      return Promise.reject(new Error("Missing message"));
-    }
-    // TODO: use binary search to insert
-    // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
-    item.checkpoints.push(checkpoint);
-    item.checkpoints.sort((a, b) => a.version - b.version);
     return Promise.resolve();
   }
 

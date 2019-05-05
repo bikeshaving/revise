@@ -9,14 +9,7 @@ import {
   Subscribe,
 } from "./actions";
 
-// WebSocket and RTCDataChannel implement this interface
-export interface Socket {
-  onmessage?: ((this: any, ev: MessageEvent) => any) | null;
-  onclose?: ((this: any, ev: any) => any) | null;
-  onerror?: ((this: any, ev: any) => any) | null;
-  send(data: string | Blob | ArrayBuffer | ArrayBufferView): void;
-  close(): void;
-}
+export type Socket = WebSocket | RTCDataChannel;
 
 export function listen(
   socket: Socket,
@@ -24,7 +17,7 @@ export function listen(
 ): Channel<any> {
   return new Channel(async (push, close, stop) => {
     socket.onmessage = (ev) => push(ev.data);
-    socket.onerror = (ev) => close(ev);
+    socket.onerror = () => close(new Error("Socket Error"));
     socket.onclose = () => close();
     await stop;
     socket.close();
@@ -144,32 +137,33 @@ interface Request {
 }
 
 export class SocketConnection implements Connection {
+  protected opened = false;
   protected buffer: Action[] = [];
-  protected requests: Request[] = [];
+  protected reqs: Request[] = [];
   protected nextReqId = 0;
-  constructor(protected socket: WebSocket) {
+  constructor(protected socket: Socket) {
     // TODO: handle errors
-    this.listen(socket);
+    socket.onopen = () => {
+      this.opened = true;
+      for (const action of this.buffer) {
+        // TODO: handle this.send rejecting
+        this.send(action);
+      }
+      this.buffer = [];
+    };
+    // TODO: catch err;
+    this.connect(socket);
   }
 
-  protected async listen(socket: WebSocket): Promise<void> {
-    socket.onopen = () => {
-      if (this.buffer.length) {
-        for (const action of this.buffer) {
-          // TODO: handle this.send rejecting
-          this.send(action);
-        }
-        this.buffer = [];
-      }
-    };
+  protected async connect(socket: Socket): Promise<void> {
     for await (const data of listen(socket)) {
       const action: Action = JSON.parse(data);
       // TODO: validate action
-      const req = this.requests[action.reqId];
+      const req = this.reqs[action.reqId];
       if (req == null) {
         continue;
       } else if (!req.persist) {
-        delete this.requests[action.reqId];
+        delete this.reqs[action.reqId];
       }
       switch (action.type) {
         case "ack": {
@@ -193,23 +187,22 @@ export class SocketConnection implements Connection {
   }
 
   protected async send(action: Action): Promise<any> {
-    if (this.socket.readyState === WebSocket.CONNECTING) {
+    if (!this.opened) {
       this.buffer.push(action);
-    } else if (
-      this.socket.readyState === WebSocket.CLOSING ||
-      this.socket.readyState === WebSocket.CLOSED
-    ) {
-      throw new Error("WebSocket is closed or closing 🤮");
     } else {
       const serialized = JSON.stringify(action);
       this.socket.send(serialized);
     }
-    if (this.requests[action.reqId] != null) {
+    if (this.reqs[action.reqId] != null) {
       return;
     }
     return new Promise((resolve, reject) => {
-      this.requests[action.reqId] = { resolve, reject, persist: false };
+      this.reqs[action.reqId] = { resolve, reject, persist: false };
     });
+  }
+
+  fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined> {
+    return this.send({ type: "fc", id, reqId: this.nextReqId++, start });
   }
 
   fetchMessages(
@@ -220,16 +213,12 @@ export class SocketConnection implements Connection {
     return this.send({ type: "fm", id, reqId: this.nextReqId++, start, end });
   }
 
-  sendMessages(id: string, messages: Message[]): Promise<void> {
-    return this.send({ type: "sm", id, reqId: this.nextReqId++, messages });
-  }
-
-  fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined> {
-    return this.send({ type: "fc", id, reqId: this.nextReqId++, start });
-  }
-
   sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
     return this.send({ type: "sc", id, reqId: this.nextReqId++, checkpoint });
+  }
+
+  sendMessages(id: string, messages: Message[]): Promise<void> {
+    return this.send({ type: "sm", id, reqId: this.nextReqId++, messages });
   }
 
   subscribe(
@@ -238,8 +227,6 @@ export class SocketConnection implements Connection {
     buffer?: ChannelBuffer<Message[]>,
   ): Channel<Message[]> {
     return new Channel<Message[]>(async (resolve, reject, stop) => {
-      let canceled = false;
-      stop.then(() => (canceled = true));
       const action: Action = {
         type: "sub",
         id,
@@ -247,11 +234,9 @@ export class SocketConnection implements Connection {
         start,
       };
       await Promise.race([this.send(action), stop]);
-      if (!canceled) {
-        this.requests[action.reqId] = { resolve, reject, persist: true };
-      }
+      this.reqs[action.reqId] = { resolve, reject, persist: true };
       await stop;
-      delete this.requests[action.reqId];
+      delete this.reqs[action.reqId];
     }, buffer);
   }
 }

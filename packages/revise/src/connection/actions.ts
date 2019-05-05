@@ -37,9 +37,9 @@ export interface Subscribe extends AbstractAction {
 }
 
 export type Action =
-  | FetchMessages
-  | SendMessages
-  | FetchCheckpoint
-  | SendCheckpoint
   | Acknowledge
+  | FetchCheckpoint
+  | FetchMessages
+  | SendCheckpoint
+  | SendMessages
   | Subscribe;

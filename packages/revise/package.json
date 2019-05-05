@@ -6,7 +6,7 @@
   "scripts": {
     "clean": "shx rm -rf ./lib",
     "prebuild": "yarn clean",
-    "build": "tsc",
+    "build": "tsc --sourceMap",
     "watch": "yarn run build -w",
     "develop": "yarn test --watchAll",
     "test": "jest",

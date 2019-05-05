@@ -12,13 +12,13 @@ export interface Checkpoint {
 }
 
 export interface Connection {
+  fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined>;
   fetchMessages(
     id: string,
     start?: number,
     end?: number,
   ): Promise<Message[] | undefined>;
-  sendMessages(id: string, messages: Message[]): Promise<void>;
-  fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined>;
   sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void>;
+  sendMessages(id: string, messages: Message[]): Promise<void>;
   subscribe(id: string, start?: number): AsyncIterableIterator<Message[]>;
 }
