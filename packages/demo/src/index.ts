@@ -2,8 +2,8 @@ import * as createFastify from "fastify";
 import * as plugin from "fastify-plugin";
 import * as ws from "ws";
 import * as next from "next";
-import { InMemoryConnection } from "@collabjs/collab/lib/connection/in-memory";
-import { proxy } from "@collabjs/collab/lib/connection/socket";
+import { InMemoryConnection } from "@createx/revise/lib/connection/in-memory";
+import { proxy } from "@createx/revise/lib/connection/socket";
 
 declare module "fastify" {
   export interface FastifyInstance {

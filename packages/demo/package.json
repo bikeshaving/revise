@@ -1,5 +1,5 @@
 {
-  "name": "@collabjs/demo",
+  "name": "@createx/demo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@channel/channel": "^0.1.0",
-    "@collabjs/collab": "*",
+    "@createx/revise": "*",
     "@zeit/next-css": "^1.0.1",
     "@zeit/next-typescript": "^1.1.1",
     "codemirror": "^5.46.0",
@@ -26,6 +26,12 @@
   },
   "devDependencies": {
     "@channel/timers": "^0.1.0",
+    "@types/codemirror": "^0.0.74",
+    "@types/next": "^8.0.5",
+    "@types/react": "^16.8.15",
+    "@types/react-dom": "16.8.4",
+    "@types/uuid": "^3.4.4",
+    "@types/ws": "^6.0.1",
     "nodemon": "^1.19.0",
     "pino-pretty": "^3.0.0"
   }

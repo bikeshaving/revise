@@ -1,10 +1,10 @@
 import * as React from "react";
 import * as uuid from "uuid/v4";
-import { operations, Patch } from "@collabjs/collab/lib/patch";
-import { Version } from "@collabjs/collab/lib/replica";
-import { Client } from "@collabjs/collab/lib/client";
-import { CollabText } from "@collabjs/collab/lib/text";
-import { SocketConnection } from "@collabjs/collab/lib/connection/socket";
+import { operations, Patch } from "@createx/revise/lib/patch";
+import { Version } from "@createx/revise/lib/replica";
+import { Client } from "@createx/revise/lib/client";
+import { CollabText } from "@createx/revise/lib/text";
+import { SocketConnection } from "@createx/revise/lib/connection/socket";
 
 let CodeMirror: any;
 if (typeof window !== "undefined") {
