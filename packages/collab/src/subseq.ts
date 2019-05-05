@@ -1,5 +1,12 @@
 /**
- * A Subseq is an array of numbers which represents a subsequence of elements derived from another sequence. The numbers in the Subseq represent the lengths of contiguous segments from the sequence. These segments are included in the subsequence based on their index: segments alternate between not included (false) and included (true), with the first length representing a false segment. A Subseq will start with a 0 when the subsequence and sequence share the same first element. The elements of a Subseq are in the same order as they appear in the sequence.
+ * A Subseq is an array of numbers which represents a subsequence of elements
+ * derived from another sequence. The numbers in the Subseq represent the
+ * lengths of contiguous segments from the sequence. These segments are
+ * included in the subsequence based on their index: segments alternate between
+ * not included (false) and included (true), with the first length representing
+ * a false segment. A Subseq will start with a 0 when the subsequence and
+ * sequence share the same first element. The elements of a Subseq are in the
+ * same order as they appear in the sequence.
  *
  * Examples:
  * Given the following string sequence: "abcdefgh"
