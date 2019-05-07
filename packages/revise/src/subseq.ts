@@ -1,12 +1,12 @@
 /**
  * A Subseq is an array of numbers which represents a subsequence of elements
  * derived from another sequence. The numbers in the Subseq represent the
- * lengths of contiguous segments from the sequence. These segments are
- * included in the subsequence based on their index: segments alternate between
- * not included (false) and included (true), with the first length representing
- * a false segment. A Subseq will start with a 0 when the subsequence and
- * sequence share the same first element. The elements of a Subseq are in the
- * same order as they appear in the sequence.
+ * lengths of contiguous segments from the sequence. The represented
+ * subsequence “contains” a subsequence based on its index in the Subseq:
+ * segments alternate between not included and included, with the first length
+ * representing a non-included segment. A Subseq will start with a 0 when the
+ * subsequence and sequence share the same first element. The elements of the
+ * subsequence are in the same order as they appear in the sequence.
  *
  * Examples:
  * Given the following string sequence: "abcdefgh"
@@ -16,13 +16,14 @@
  * [0, 2, 2, 2, 2]          = "abef"
  * [0, 1, 6, 1]             = "ah"
  * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
- *
  */
 export interface Subseq extends Array<number> {
   __count?: number;
   __falseCount?: number;
   __trueCount?: number;
 }
+
+// TODO: implement and use a generic Seq type which covers arrays and strings
 
 // [length, ...flags[]]
 export type Segment = [number, ...boolean[]];
@@ -48,6 +49,7 @@ export function print(subseq: Subseq): string {
   return result;
 }
 
+// TODO: maybe use a WeakMap-based cache here
 function cacheCounts(
   subseq: Subseq,
   falseCount: number,
@@ -89,7 +91,7 @@ export function count(subseq: Subseq, test?: boolean): number {
 }
 
 export function push(subseq: Subseq, length: number, flag: boolean): number {
-  // make sure we count properties are defined
+  // make sure cached count properties are defined
   count(subseq);
   if (length < 0) {
     throw new RangeError("Negative length");
