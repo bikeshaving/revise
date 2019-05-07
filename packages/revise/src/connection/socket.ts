@@ -69,11 +69,7 @@ async function sendCheckpoint(
   action: SendCheckpoint,
 ): Promise<void> {
   await conn.sendCheckpoint(action.id, action.checkpoint!);
-  send(socket, {
-    type: "ack",
-    id: action.id,
-    reqId: action.reqId,
-  });
+  send(socket, { type: "ack", id: action.id, reqId: action.reqId });
 }
 
 async function sendMessages(
@@ -97,8 +93,8 @@ async function subscribe(
 }
 
 export async function proxy(conn: Connection, socket: Socket): Promise<void> {
-  const channel = listen(socket);
-  for await (const data of channel) {
+  const chan = listen(socket);
+  for await (const data of chan) {
     const action: Action = JSON.parse(data);
     switch (action.type) {
       case "fc": {
@@ -118,9 +114,10 @@ export async function proxy(conn: Connection, socket: Socket): Promise<void> {
         break;
       }
       case "sub": {
-        subscribe(conn, socket, action).then(() => channel.return());
-        // TODO: cause link to throw or something
-        //.catch((err) => channe.throw(err));
+        subscribe(conn, socket, action)
+          .then(() => chan.return())
+          .catch((err) => chan.throw(err))
+          .catch(() => {});
         break;
       }
       default: {

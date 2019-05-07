@@ -13,7 +13,7 @@
     "lint": "eslint --ext js,ts src"
   },
   "dependencies": {
-    "@channel/limiters": "^0.1.0",
-    "@channel/pubsub": "^0.1.0"
+    "@channel/limiters": "^0.1.1",
+    "@channel/pubsub": "^0.1.1"
   }
 }

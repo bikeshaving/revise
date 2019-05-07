@@ -10,7 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@channel/channel": "^0.1.0",
+    "@channel/channel": "^0.1.1",
     "@createx/revise": "*",
     "@zeit/next-css": "^1.0.1",
     "@zeit/next-typescript": "^1.1.1",
@@ -25,10 +25,10 @@
     "ws": "^7.0.0"
   },
   "devDependencies": {
-    "@channel/timers": "^0.1.0",
+    "@channel/timers": "^0.1.1",
     "@types/codemirror": "^0.0.74",
     "@types/next": "^8.0.5",
-    "@types/react": "^16.8.15",
+    "@types/react": "^16.8.16",
     "@types/react-dom": "16.8.4",
     "@types/uuid": "^3.4.4",
     "@types/ws": "^6.0.1",
