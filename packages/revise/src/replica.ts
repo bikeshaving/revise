@@ -9,7 +9,16 @@ import {
 } from "./patch";
 import { normalize, rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
-import { clear, difference, merge, shrink, split, Subseq } from "./subseq";
+import {
+  clear,
+  difference,
+  expand,
+  merge,
+  shrink,
+  split,
+  Subseq,
+  union,
+} from "./subseq";
 import { invert } from "./utils";
 
 export interface Version {
@@ -80,6 +89,7 @@ export class Replica {
     return { commit, change };
   }
 
+  // TODO: this is wrong when combined with squashed commits because squashing makes contiguous insertions
   protected revisionsSince(version: Partial<Version> = {}): Revision[] {
     const { commit, change } = this.validateVersion(version);
     const commits: Revision[] = [];
@@ -136,7 +146,11 @@ export class Replica {
     const revs = this.revisionsSince(version);
     if (revs.length) {
       let patch = revs.map(synthesize).reduce(squash);
-      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
+      const hiddenSeq = expand(
+        this.hiddenSeqAt(version),
+        factor(patch).insertSeq,
+      );
+      patch = shrinkHidden(patch, hiddenSeq);
       return {
         patch,
         commit: this.commits.length - 1,
@@ -151,8 +165,8 @@ export class Replica {
     patch: Patch,
     options: { before?: boolean } & Partial<Version> = {},
   ): Update {
-    const { commit, change, before = false } = options;
-    const version = this.validateVersion({ commit, change });
+    const { before = false } = options;
+    const version = this.validateVersion(options);
     const factored = factor(
       expandHidden(patch, this.hiddenSeqAt(version), { before }),
     );
@@ -161,16 +175,19 @@ export class Replica {
       ...factored,
       revertSeq: clear(factored.insertSeq),
     };
-    const revs: Revision[] = this.revisionsSince(version);
-    [rev] = rebase(rev, revs, () => (before ? -1 : 1));
+    let revs: Revision[] = this.revisionsSince(version);
+    [rev, revs] = rebase(rev, revs, () => (before ? -1 : 1));
     rev = normalize(rev, this.hiddenSeqAt());
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
     if (revs.length) {
-      let patch1 = revs.map(synthesize).reduce(squash);
-      patch1 = shrinkHidden(patch1, this.hiddenSeqAt(version));
+      const patch1 = revs.map(synthesize).reduce(squash);
+      const hiddenSeq = union(
+        rev.deleteSeq,
+        difference(this.hiddenSeqAt(), factor(patch1).deleteSeq),
+      );
       return {
-        patch: patch1,
+        patch: shrinkHidden(patch1, hiddenSeq),
         commit: this.commits.length - 1,
         change: this.changes.length - 1,
       };
