@@ -1,7 +1,6 @@
 import * as React from "react";
 import * as uuid from "uuid/v4";
-import { delay } from "@channel/timers";
-import { build, operations, Patch } from "@createx/revise/lib/patch";
+import { operations, Patch } from "@createx/revise/lib/patch";
 import { Version } from "@createx/revise/lib/replica";
 import { Client } from "@createx/revise/lib/client";
 import { CollabText } from "@createx/revise/lib/text";
@@ -55,18 +54,16 @@ function Editor() {
     let version: Version;
     function handleChange(
       cm: CodeMirror.Editor & CodeMirror.Doc,
-      change: CodeMirror.EditorChange,
+      change: CodeMirror.EditorChangeCancellable,
     ): void {
       if (change.origin === "setValue" || change.origin === "collab") {
         return;
       }
       const start = cm.indexFromPos(change.from);
-      const removed = change.removed.join("\n");
+      const removed = change.removed == null ? "" : change.removed.join("\n");
       const end = start + removed.length;
       const inserted = change.text.join("\n");
-      const length = cm.getValue().length + removed.length - inserted.length;
-      const patch = build(start, end, inserted, length);
-      const update = text.edit(patch, version);
+      const update = text.replace(start, end, inserted, version);
       if (update.patch != null) {
         apply(cm, update.patch);
       }
@@ -74,14 +71,12 @@ function Editor() {
     }
     CollabText.initialize("doc1", client).then(async (text1) => {
       text = text1;
-      // console.log(text);
       const value = text.value;
       version = { commit: value.commit, change: value.change };
       cm.setValue(value.text);
       cm.setOption("readOnly", false);
       cm.on("change", handleChange);
       for await (const _ of text.subscribe()) {
-        await delay(4000).next();
         const update = text.updateSince(version);
         version = { commit: update.commit, change: update.change };
         if (update.patch != null) {
