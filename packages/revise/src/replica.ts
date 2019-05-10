@@ -9,16 +9,7 @@ import {
 } from "./patch";
 import { normalize, rearrange, rebase, Revision, summarize } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
-import {
-  clear,
-  difference,
-  expand,
-  merge,
-  shrink,
-  split,
-  Subseq,
-  union,
-} from "./subseq";
+import { clear, difference, merge, shrink, split, Subseq } from "./subseq";
 import { invert } from "./utils";
 
 export interface Version {
@@ -146,11 +137,7 @@ export class Replica {
     const revs = this.revisionsSince(version);
     if (revs.length) {
       let patch = revs.map(synthesize).reduce(squash);
-      const hiddenSeq = expand(
-        this.hiddenSeqAt(version),
-        factor(patch).insertSeq,
-      );
-      patch = shrinkHidden(patch, hiddenSeq);
+      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
       return {
         patch,
         commit: this.commits.length - 1,
@@ -181,11 +168,13 @@ export class Replica {
     this.snapshot = apply(this.snapshot, synthesize(rev));
     this.changes.push(rev);
     if (revs.length) {
+      let { hiddenSeq } = this.snapshot;
+      for (let { insertSeq, deleteSeq, revertSeq } of invert(revs)) {
+        deleteSeq = difference(deleteSeq, revertSeq);
+        hiddenSeq = difference(hiddenSeq, deleteSeq);
+        hiddenSeq = shrink(hiddenSeq, insertSeq);
+      }
       const patch1 = revs.map(synthesize).reduce(squash);
-      const hiddenSeq = union(
-        rev.deleteSeq,
-        difference(this.hiddenSeqAt(), factor(patch1).deleteSeq),
-      );
       return {
         patch: shrinkHidden(patch1, hiddenSeq),
         commit: this.commits.length - 1,

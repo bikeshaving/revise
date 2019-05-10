@@ -296,6 +296,7 @@ export function expandHidden(
 
 export function shrinkHidden(patch: Patch, hiddenSeq: Subseq): Patch {
   let { inserted, insertSeq, deleteSeq } = factor(patch);
+  hiddenSeq = expand(hiddenSeq, insertSeq);
   hiddenSeq = union(hiddenSeq, intersection(insertSeq, deleteSeq));
   [inserted, insertSeq] = erase(inserted, insertSeq, hiddenSeq);
   deleteSeq = shrink(deleteSeq, hiddenSeq);

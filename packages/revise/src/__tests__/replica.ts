@@ -469,6 +469,41 @@ describe("Replica", () => {
       expect(text2).toEqual(replica2.snapshot.visible);
       expect(text2).toEqual("");
     });
+
+    test("returned update 3", () => {
+      const replica1 = new Replica("client1");
+      replica1.edit(["hello world", 0]);
+      const replica2 = replica1.clone("client2");
+      let version = 0;
+      for (const message of replica1.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      replica1.edit([0, 4, 6, 11]);
+      let text2 = "hello world";
+      const patch0 = [0, 5, 6, 11];
+      text2 = apply(text2, patch0);
+      const update0 = replica2.edit([0, 5, 6, 11], { commit: 0, change: -1 });
+      expect(update0.patch).toBeUndefined();
+      for (const message of replica2.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      for (const message of replica1.pending()) {
+        replica1.ingest({ ...message, version });
+        replica2.ingest({ ...message, version });
+        version++;
+      }
+      const patch1 = [0, 2, 8, 10];
+      text2 = apply(text2, patch1);
+      const update1 = replica2.edit(patch1, { commit: 0, change: 0 });
+      expect(update1.patch).toBeDefined();
+      text2 = apply(text2, update1.patch!);
+      expect(text2).toEqual(replica2.snapshot.visible);
+      expect(text2).toEqual("held");
+    });
   });
 
   // TODO: use fastcheck commands or something to make testing more obvious
