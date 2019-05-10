@@ -17,11 +17,7 @@
  * [0, 1, 6, 1]             = "ah"
  * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
  */
-export interface Subseq extends Array<number> {
-  __count?: number;
-  __falseCount?: number;
-  __trueCount?: number;
-}
+export type Subseq = number[];
 
 // TODO: implement and use a generic Seq type which covers arrays and strings
 
@@ -49,50 +45,21 @@ export function print(subseq: Subseq): string {
   return result;
 }
 
-// TODO: maybe use a WeakMap-based cache here
-function cacheCounts(
-  subseq: Subseq,
-  falseCount: number,
-  trueCount: number,
-): void {
-  Object.defineProperty(subseq, "__falseCount", {
-    value: falseCount,
-    writable: true,
-  });
-  Object.defineProperty(subseq, "__trueCount", {
-    value: trueCount,
-    writable: true,
-  });
-  Object.defineProperty(subseq, "__count", {
-    get() {
-      return subseq.__falseCount! + subseq.__trueCount!;
-    },
-  });
-}
-
+// TODO: cache counts in a WeakMap
 export function count(subseq: Subseq, test?: boolean): number {
-  if (subseq.__count == null) {
-    let falseCount = 0;
-    let trueCount = 0;
-    for (const [length, flag] of segments(subseq)) {
-      if (flag) {
-        trueCount += length;
-      } else {
-        falseCount += length;
-      }
+  let trueCount = 0;
+  let falseCount = 0;
+  for (const [length, flag] of segments(subseq)) {
+    if (flag) {
+      trueCount += length;
+    } else {
+      falseCount += length;
     }
-    cacheCounts(subseq, falseCount, trueCount);
   }
-  return test == null
-    ? subseq.__count!
-    : test
-    ? subseq.__trueCount!
-    : subseq.__falseCount!;
+  return test == null ? trueCount + falseCount : test ? trueCount : falseCount;
 }
 
 export function push(subseq: Subseq, length: number, flag: boolean): number {
-  // make sure cached count properties are defined
-  count(subseq);
   if (length < 0) {
     throw new RangeError("Negative length");
   } else if (length === 0) {
@@ -110,11 +77,6 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
     } else {
       subseq.push(length);
     }
-  }
-  if (flag) {
-    subseq.__trueCount! += length;
-  } else {
-    subseq.__falseCount! += length;
   }
   return subseq.length;
 }
@@ -135,11 +97,6 @@ export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
   } else {
     result = result.concat(subseq2.slice(flag2 ? 1 : 0));
   }
-  cacheCounts(
-    result,
-    count(subseq1, false) + count(subseq2, false),
-    count(subseq1, true) + count(subseq2, true),
-  );
   return result;
 }
 
@@ -170,7 +127,6 @@ export function complement(subseq: Subseq): Subseq {
   } else {
     result = [0].concat(subseq);
   }
-  cacheCounts(result, count(subseq, true), count(subseq, false));
   return result;
 }
 
