@@ -50,31 +50,33 @@ function Editor() {
       lineWrapping: true,
       autofocus: true,
     });
-    let text: CollabText;
-    let version: Version;
-    function handleChange(
+    let handleChange: (
       cm: CodeMirror.Editor & CodeMirror.Doc,
-      change: CodeMirror.EditorChangeCancellable,
-    ): void {
-      if (change.origin === "setValue" || change.origin === "collab") {
+      change: CodeMirror.EditorChange,
+    ) => void;
+    let unmounted = false;
+    CollabText.initialize("doc1", client).then(async (text) => {
+      if (unmounted) {
         return;
       }
-      const start = cm.indexFromPos(change.from);
-      const removed = change.removed == null ? "" : change.removed.join("\n");
-      const end = start + removed.length;
-      const inserted = change.text.join("\n");
-      const update = text.replace(start, end, inserted, version);
-      if (update.patch != null) {
-        apply(cm, update.patch);
-      }
-      version = { commit: update.commit, change: update.change };
-    }
-    CollabText.initialize("doc1", client).then(async (text1) => {
-      text = text1;
       const value = text.value;
-      version = { commit: value.commit, change: value.change };
+      let version = { commit: value.commit, change: value.change };
       cm.setValue(value.text);
       cm.setOption("readOnly", false);
+      handleChange = (cm, change) => {
+        if (change.origin === "setValue" || change.origin === "collab") {
+          return;
+        }
+        const start = cm.indexFromPos(change.from);
+        const removed = change.removed == null ? "" : change.removed.join("\n");
+        const end = start + removed.length;
+        const inserted = change.text.join("\n");
+        const update = text.replace(start, end, inserted, version);
+        if (update.patch != null) {
+          apply(cm, update.patch);
+        }
+        version = { commit: update.commit, change: update.change };
+      };
       cm.on("change", handleChange);
       for await (const _ of text.subscribe()) {
         const update = text.updateSince(version);
@@ -84,7 +86,10 @@ function Editor() {
         }
       }
     });
-    return () => cm.off("change", handleChange);
+    return () => {
+      unmounted = true;
+      cm.off("change", handleChange);
+    };
   }, []);
   return <div ref={editor} />;
 }
