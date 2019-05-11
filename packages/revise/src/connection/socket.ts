@@ -115,7 +115,6 @@ export async function proxy(conn: Connection, socket: Socket): Promise<void> {
       }
       case "sub": {
         subscribe(conn, socket, action)
-          .then(() => chan.return())
           .catch((err) => chan.throw(err))
           .catch(() => {});
         break;
@@ -130,7 +129,7 @@ export async function proxy(conn: Connection, socket: Socket): Promise<void> {
 interface Request {
   resolve(value?: any): void;
   reject(reason: any): void;
-  persist: boolean;
+  promise?: Promise<any>;
 }
 
 export class SocketConnection implements Connection {
@@ -139,27 +138,31 @@ export class SocketConnection implements Connection {
   protected reqs: Request[] = [];
   protected nextReqId = 0;
   constructor(protected socket: Socket) {
-    // TODO: handle errors
     socket.onopen = () => {
       this.opened = true;
       for (const action of this.buffer) {
-        // TODO: handle this.send rejecting
         this.send(action);
       }
       this.buffer = [];
     };
-    // TODO: catch err;
+    // TODO: catch rejection
     this.connect(socket);
   }
 
   protected async connect(socket: Socket): Promise<void> {
     for await (const data of listen(socket)) {
-      const action: Action = JSON.parse(data);
-      // TODO: validate action
+      let action: Action;
+      try {
+        // TODO: validate action
+        action = JSON.parse(data);
+      } catch (err) {
+        // TOOD: close the connection???
+        continue;
+      }
       const req = this.reqs[action.reqId];
       if (req == null) {
         continue;
-      } else if (!req.persist) {
+      } else if (req.promise != null) {
         delete this.reqs[action.reqId];
       }
       switch (action.type) {
@@ -176,26 +179,27 @@ export class SocketConnection implements Connection {
           break;
         }
         default: {
-          req.reject(Error(`Invalid action type: ${action.type}`));
-          break;
+          req.reject(`Invalid action type: ${action.type}`);
         }
       }
     }
   }
 
   protected async send(action: Action): Promise<any> {
-    if (!this.opened) {
-      this.buffer.push(action);
+    if (this.opened) {
+      this.socket.send(JSON.stringify(action));
     } else {
-      const serialized = JSON.stringify(action);
-      this.socket.send(serialized);
+      this.buffer.push(action);
     }
+
     if (this.reqs[action.reqId] != null) {
-      return;
+      return this.reqs[action.reqId].promise;
     }
-    return new Promise((resolve, reject) => {
-      this.reqs[action.reqId] = { resolve, reject, persist: false };
+    const promise = new Promise((resolve, reject) => {
+      this.reqs[action.reqId] = { resolve, reject };
     });
+    this.reqs[action.reqId].promise = promise;
+    return promise;
   }
 
   fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined> {
@@ -231,7 +235,7 @@ export class SocketConnection implements Connection {
         start,
       };
       await Promise.race([this.send(action), stop]);
-      this.reqs[action.reqId] = { resolve, reject, persist: true };
+      this.reqs[action.reqId] = { resolve, reject };
       await stop;
       delete this.reqs[action.reqId];
     }, buffer);

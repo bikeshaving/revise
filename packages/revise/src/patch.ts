@@ -16,21 +16,21 @@ import {
 } from "./subseq";
 
 /**
- * Patches are arrays of strings and numbers which represent changes to text.
- * Numbers represent indexes into the text. Two consecutive indexes represent a
+ * Patches are arrays of numbers and strings which represent changes to text.
+ * Numbers represent indexes in the text. Two consecutive indexes represent a
  * copy or retain operation, where the numbers represent the start-inclusive
  * and end-exclusive range which should be copied over to the result. Deletions
  * are represented via omission, i.e. a gap between two copy operations.
- * Strings within a patch represent insertions at the current index.  A -1
- * before a string indicates the string is added and immediately deleted. It is
- * useful for representing squashed patches or patches made against a snapshot.
- * The last element of a patch will always be a number which represent the
- * length of the text being modified.
+ * Strings within a patch represent insertions at the current index. A -1
+ * before a string indicates the string is added and immediately removed. This
+ * is useful for representing squashed patches or patches made against a
+ * snapshot. The last element of a patch will always be a number which
+ * represents the length of the text before modification.
  */
-
+export type Patch = (number | string)[];
 // TODO: implement revives
 // TODO: implement moves
-export type Patch = (number | string)[];
+// TODO: extend to Seq
 
 export interface RetainOperation {
   type: "retain";

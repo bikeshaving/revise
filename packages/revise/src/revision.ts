@@ -1,4 +1,5 @@
 import {
+  difference,
   expand,
   interleave,
   intersection,
@@ -10,10 +11,20 @@ import { invert } from "./utils";
 
 export interface Revision {
   readonly client: string;
+  // readonly patch: Patch
   readonly inserted: string;
   readonly insertSeq: Subseq;
   readonly deleteSeq: Subseq;
   readonly revertSeq: Subseq;
+}
+
+export function rewind(hiddenSeq: Subseq, revs: Revision[]) {
+  for (let { insertSeq, deleteSeq, revertSeq } of invert(revs)) {
+    deleteSeq = difference(deleteSeq, revertSeq);
+    hiddenSeq = difference(hiddenSeq, deleteSeq);
+    hiddenSeq = shrink(hiddenSeq, insertSeq);
+  }
+  return hiddenSeq;
 }
 
 export function compare(rev1: Revision, rev2: Revision): number {
@@ -111,8 +122,6 @@ export function summarize(revs: Revision[]): Subseq {
 }
 
 export function normalize(rev: Revision, hiddenSeq: Subseq): Revision {
-  return {
-    ...rev,
-    revertSeq: intersection(rev.deleteSeq, expand(hiddenSeq, rev.insertSeq)),
-  };
+  hiddenSeq = expand(hiddenSeq, rev.insertSeq);
+  return { ...rev, revertSeq: intersection(rev.deleteSeq, hiddenSeq) };
 }

@@ -7,9 +7,16 @@ import {
   squash,
   synthesize,
 } from "./patch";
-import { normalize, rearrange, rebase, Revision, summarize } from "./revision";
+import {
+  normalize,
+  rearrange,
+  rebase,
+  Revision,
+  rewind,
+  summarize,
+} from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
-import { clear, difference, merge, shrink, split, Subseq } from "./subseq";
+import { clear, merge, split, Subseq } from "./subseq";
 import { invert } from "./utils";
 
 export interface Version {
@@ -80,7 +87,6 @@ export class Replica {
     return { commit, change };
   }
 
-  // TODO: this is wrong when combined with squashed commits because squashing makes contiguous insertions
   protected revisionsSince(version: Partial<Version> = {}): Revision[] {
     const { commit, change } = this.validateVersion(version);
     const commits: Revision[] = [];
@@ -111,12 +117,7 @@ export class Replica {
     if (revs.length === 0) {
       return hiddenSeq;
     }
-    for (let { insertSeq, deleteSeq, revertSeq } of invert(revs)) {
-      deleteSeq = difference(deleteSeq, revertSeq);
-      hiddenSeq = difference(hiddenSeq, deleteSeq);
-      hiddenSeq = shrink(hiddenSeq, insertSeq);
-    }
-    return hiddenSeq;
+    return rewind(hiddenSeq, revs);
   }
 
   snapshotAt(version: Partial<Version> = {}): Snapshot {
@@ -169,14 +170,13 @@ export class Replica {
     this.changes.push(rev);
     if (revs.length) {
       let { hiddenSeq } = this.snapshot;
-      for (let { insertSeq, deleteSeq, revertSeq } of invert(revs)) {
-        deleteSeq = difference(deleteSeq, revertSeq);
-        hiddenSeq = difference(hiddenSeq, deleteSeq);
-        hiddenSeq = shrink(hiddenSeq, insertSeq);
-      }
-      const patch1 = revs.map(synthesize).reduce(squash);
+      hiddenSeq = rewind(hiddenSeq, revs);
+      const patch1 = shrinkHidden(
+        revs.map(synthesize).reduce(squash),
+        hiddenSeq,
+      );
       return {
-        patch: shrinkHidden(patch1, hiddenSeq),
+        patch: patch1,
         commit: this.commits.length - 1,
         change: this.changes.length - 1,
       };

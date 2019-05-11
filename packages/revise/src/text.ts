@@ -44,11 +44,12 @@ export class CollabText {
     return this.edit(patch, version);
   }
 
-  subscribe(): AsyncIterableIterator<Message> {
-    return this.client.subscribe(this.id);
-  }
-
   updateSince(version: Version): Update {
     return this.replica.updateSince(version);
+  }
+
+  // TODO: return versions not messages and also listen for local edits
+  subscribe(): AsyncIterableIterator<Message> {
+    return this.client.subscribe(this.id);
   }
 }
