@@ -1,11 +1,11 @@
 /**
  * A Subseq is an array of numbers which represents a subsequence of elements
- * derived from another sequence. The numbers in the Subseq represent the
- * lengths of contiguous segments from the sequence. The represented
- * subsequence “contains” a subsequence based on its index in the Subseq:
- * segments alternate between not included and included, with the first length
+ * derived from another sequence. The numbers in the Subseq represent lengths
+ * of contiguous segments from the sequence. The represented subsequence
+ * “contains” a segment based on its index in the Subseq: segments
+ * alternate between not included and included, with the first length
  * representing a non-included segment. A Subseq will start with a 0 when the
- * subsequence and sequence share the same first element. The elements of the
+ * sequence and subsequence share the same first element. The elements of the
  * subsequence are in the same order as they appear in the sequence.
  *
  * Examples:
@@ -27,12 +27,10 @@ export type Segment = [number, ...boolean[]];
 // TODO: is it possible to make this function variadic so we don’t need zip?
 export function* segments(subseq: Subseq): IterableIterator<Segment> {
   let flag = false;
-  if (subseq[0] === 0) {
-    flag = true;
-    subseq = subseq.slice(1);
-  }
   for (const length of subseq) {
-    yield [length, flag];
+    if (length > 0) {
+      yield [length, flag];
+    }
     flag = !flag;
   }
 }
@@ -45,16 +43,23 @@ export function print(subseq: Subseq): string {
   return result;
 }
 
-// TODO: cache counts in a WeakMap
+// WeakMap<Subseq, [falseCount: number, trueCount: number]>
+const countCache = new WeakMap<Subseq, [number, number]>();
+
 export function count(subseq: Subseq, test?: boolean): number {
   let trueCount = 0;
   let falseCount = 0;
-  for (const [length, flag] of segments(subseq)) {
-    if (flag) {
-      trueCount += length;
-    } else {
-      falseCount += length;
+  if (countCache.has(subseq)) {
+    [falseCount, trueCount] = countCache.get(subseq);
+  } else {
+    for (const [length, flag] of segments(subseq)) {
+      if (flag) {
+        trueCount += length;
+      } else {
+        falseCount += length;
+      }
     }
+    countCache.set(subseq, [falseCount, trueCount]);
   }
   return test == null ? trueCount + falseCount : test ? trueCount : falseCount;
 }
@@ -78,6 +83,17 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
       subseq.push(length);
     }
   }
+  if (countCache.has(subseq)) {
+    let [falseCount, trueCount] = countCache.get(subseq);
+    if (flag) {
+      trueCount += length;
+    } else {
+      falseCount += length;
+    }
+    countCache.set(subseq, [falseCount, trueCount]);
+  } else {
+    count(subseq);
+  }
   return subseq.length;
 }
 
@@ -97,6 +113,7 @@ export function concat(subseq1: Subseq, subseq2: Subseq): Subseq {
   } else {
     result = result.concat(subseq2.slice(flag2 ? 1 : 0));
   }
+  count(result);
   return result;
 }
 
@@ -126,6 +143,12 @@ export function complement(subseq: Subseq): Subseq {
     result = subseq.slice(1);
   } else {
     result = [0].concat(subseq);
+  }
+  if (countCache.has(subseq)) {
+    const [trueCount, falseCount] = countCache.get(subseq);
+    countCache.set(result, [falseCount, trueCount]);
+  } else {
+    count(result);
   }
   return result;
 }
