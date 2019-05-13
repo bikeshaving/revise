@@ -10,10 +10,10 @@
  *
  * Examples:
  * Given the following string sequence: "abcdefgh"
- * [4, 4]                   = "efgh"
  * [0, 4, 4]                = "abcd"
- * [2, 2, 2, 2]             = "cdgh"
+ * [4, 4]                   = "efgh"
  * [0, 2, 2, 2, 2]          = "abef"
+ * [2, 2, 2, 2]             = "cdgh"
  * [0, 1, 6, 1]             = "ah"
  * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
  */
@@ -47,8 +47,8 @@ export function print(subseq: Subseq): string {
 const countCache = new WeakMap<Subseq, [number, number]>();
 
 export function count(subseq: Subseq, test?: boolean): number {
-  let trueCount = 0;
   let falseCount = 0;
+  let trueCount = 0;
   if (countCache.has(subseq)) {
     [falseCount, trueCount] = countCache.get(subseq);
   } else {

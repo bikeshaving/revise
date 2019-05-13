@@ -2,7 +2,7 @@ import { Checkpoint, Message } from "../../connection";
 import { InMemoryConnection } from "../in-memory";
 
 describe("InMemoryConnection", () => {
-  test("send and fetch messages", async () => {
+  test("messages", async () => {
     const connection = new InMemoryConnection();
     const messages: Message[] = [
       { data: "a", client: "client1", local: 0, received: -1 },
@@ -18,7 +18,7 @@ describe("InMemoryConnection", () => {
     expect(messages1).toEqual(messages2);
   });
 
-  test("send and fetch checkpoints", async () => {
+  test("checkpoints", async () => {
     const connection = new InMemoryConnection();
     await connection.sendMessages("doc1", [
       { data: "hi", client: "client1", local: 0, received: -1 },

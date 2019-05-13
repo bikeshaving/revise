@@ -50,11 +50,11 @@ function Editor() {
       lineWrapping: true,
       autofocus: true,
     });
+    let unmounted = false;
     let handleChange: (
       cm: CodeMirror.Editor & CodeMirror.Doc,
       change: CodeMirror.EditorChange,
     ) => void;
-    let unmounted = false;
     CollabText.initialize("doc1", client).then(async (text) => {
       if (unmounted) {
         return;
@@ -80,10 +80,10 @@ function Editor() {
       cm.on("change", handleChange);
       for await (const _ of text.subscribe()) {
         const update = text.updateSince(version);
-        version = { commit: update.commit, change: update.change };
         if (update.patch != null) {
           apply(cm, update.patch);
         }
+        version = { commit: update.commit, change: update.change };
       }
     });
     return () => {
