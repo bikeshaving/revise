@@ -2,6 +2,4 @@ node_modules
 coverage
 lib
 .next
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+*.log
