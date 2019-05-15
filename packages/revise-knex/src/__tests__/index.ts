@@ -5,9 +5,18 @@ import * as knexfile from "../../knexfile";
 import { Message } from "@createx/revise/lib/connection";
 
 describe("KnexConnection", () => {
-  const knex: Knex = Knex(knexfile);
+  let knex: Knex;
+  beforeAll(() => {
+    knex = Knex(knexfile);
+  });
+
   beforeEach(async () => {
     await knex("revise_message").truncate();
+  });
+
+  afterAll(async () => {
+    await knex("revise_message").truncate();
+    knex.destroy();
   });
 
   test("messages", async () => {
