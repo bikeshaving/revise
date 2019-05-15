@@ -1,4 +1,4 @@
-import Knex from "knex";
+import * as Knex from "knex";
 import { InMemoryPubSub, PubSub } from "@channel/pubsub";
 import {
   Checkpoint,
@@ -68,6 +68,7 @@ export class KnexConnection implements Connection {
     for (const message of messages) {
       clients.add(message.client);
     }
+
     await this.knex.transaction(async (trx) => {
       let { version } = await this.knex("revise_message")
         .transacting(trx)
