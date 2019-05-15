@@ -89,13 +89,13 @@ export class KnexConnection implements Connection {
         }
       }
       const rows: MessageRow[] = [];
-      for (const [i, message] of messages.entries()) {
+      let i = 0;
+      for (const message of messages) {
         const local =
           locals[message.client] == null ? -1 : locals[message.client];
         if (message.local > local + 1) {
           throw new Error("Missing message");
         } else if (message.local < local + 1) {
-          // TODO: allow updates to already seen messages maybe
           continue;
         } else {
           locals[message.client] = local + 1;
@@ -106,7 +106,7 @@ export class KnexConnection implements Connection {
           data: message.data,
           local: message.local,
           received: message.received,
-          version: version + 1 + i,
+          version: version + 1 + i++,
         });
       }
       await this.knex("revise_message")

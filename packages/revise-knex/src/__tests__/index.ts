@@ -48,6 +48,25 @@ describe("KnexConnection", () => {
     expect(messages1).toEqual(messages2);
   });
 
+  test("sendMessages idempotent", async () => {
+    const conn = new KnexConnection(knex);
+    const messages: Message[] = [
+      { data: "a", client: "client1", local: 0, received: -1 },
+      { data: "b", client: "client1", local: 1, received: -1 },
+      { data: "c", client: "client1", local: 2, received: -1 },
+      { data: "d", client: "client1", local: 3, received: -1 },
+      { data: "e", client: "client1", local: 4, received: -1 },
+    ];
+    await conn.sendMessages("doc1", messages.slice(0, 3));
+    await conn.sendMessages("doc1", messages.slice(2));
+    const messages1 = await conn.fetchMessages("doc1");
+    const messages2 = messages.map((message, version) => ({
+      ...message,
+      version,
+    }));
+    expect(messages1).toEqual(messages2);
+  });
+
   test("multiple clients", async () => {
     const conn = new KnexConnection(knex);
     const messages: Message[] = [
