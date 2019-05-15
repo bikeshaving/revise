@@ -2,6 +2,7 @@
   "name": "@createx/revise-knex",
   "version": "0.1.0",
   "private": true,
+  "main": "lib/index.js",
   "scripts": {
     "clean": "shx rm -rf ./lib",
     "prebuild": "yarn clean",
