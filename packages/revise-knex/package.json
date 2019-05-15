@@ -1,0 +1,29 @@
+{
+  "name": "@createx/revise-knex",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "clean": "shx rm -rf ./lib",
+    "prebuild": "yarn clean",
+    "build": "tsc --sourceMap",
+    "watch": "yarn run build -w",
+    "develop": "yarn test --watch",
+    "test": "jest",
+    "lint": "eslint --ext js,ts src"
+  },
+  "dependencies": {
+    "@channel/pubsub": "^0.1.1",
+    "@createx/revise": "*",
+    "pg": "^7.11.0"
+  },
+  "devDependencies": {
+    "@channel/timers": "^0.1.1",
+    "@types/dotenv": "^6.1.1",
+    "dotenv": "^8.0.0",
+    "knex": "^0.16.5",
+    "pino-pretty": "^3.0.0"
+  },
+  "peerDependencies": {
+    "knex": "^0.16.5"
+  }
+}
