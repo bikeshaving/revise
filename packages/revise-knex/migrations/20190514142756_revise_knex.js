@@ -10,7 +10,7 @@ exports.up = function(knex) {
       table.timestamps(false, true);
       table.primary(["doc_id", "version"]);
       table.unique(["client_id", "local"]);
-    })
+    });
 };
 
 exports.down = function(knex) {
