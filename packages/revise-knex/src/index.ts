@@ -15,18 +15,86 @@ interface MessageRow {
   data: string;
 }
 
+async function fetchMessages(
+  query: Knex.QueryBuilder,
+  id: string,
+  start?: number,
+  end?: number,
+): Promise<Message[]> {
+  query = query.where("doc_id", id).orderBy("version", "asc");
+  if (start != null) {
+    query = query.where("version", ">=", start);
+  }
+  if (end != null) {
+    query = query.where("version", "<", end);
+  }
+  const rows: MessageRow[] = await query;
+  return rows.map((row) => ({
+    client: row.client_id,
+    local: row.local,
+    received: row.received,
+    version: row.version,
+    data: JSON.parse(row.data),
+  }));
+}
+
+async function fetchLocals(
+  query: Knex.QueryBuilder,
+  id: string,
+  clients: string[],
+): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+  const rows: MessageRow[] = await query
+    .where("doc_id", id)
+    .whereIn("client_id", clients)
+    .groupBy("client_id")
+    .select("client_id")
+    .max("local as local");
+  for (const row of rows) {
+    result[row.client_id] = row.local;
+  }
+  return result;
+}
+
+function createRows(
+  id: string,
+  messages: Message[],
+  version: number,
+  locals: Record<string, number>,
+): MessageRow[] {
+  const result: MessageRow[] = [];
+  let i = 0;
+  for (const message of messages) {
+    const local = locals[message.client] == null ? -1 : locals[message.client];
+    if (message.local > local + 1) {
+      throw new Error("Missing message");
+    } else if (message.local < local + 1) {
+      continue;
+    } else {
+      locals[message.client] = local + 1;
+    }
+    i++;
+    result.push({
+      doc_id: id,
+      client_id: message.client,
+      data: JSON.stringify(message.data),
+      local: message.local,
+      received: message.received,
+      version: version + i,
+    });
+  }
+  return result;
+}
+
 export class KnexConnection implements Connection {
   constructor(
     protected knex: Knex,
-    protected pubsub: PubSub<Message[]> = new InMemoryPubSub(),
+    protected pubsub: PubSub<number> = new InMemoryPubSub(),
   ) {}
 
-  async fetchCheckpoint(
-    _id: string,
-    _start?: number,
-  ): Promise<Checkpoint | undefined> {
+  async fetchCheckpoint(): Promise<undefined> {
     // TODO
-    return undefined;
+    return;
   }
 
   async fetchMessages(
@@ -39,24 +107,11 @@ export class KnexConnection implements Connection {
     } else if (end != null && end < 0) {
       throw new RangeError(`end (${end}) cannot be less than 0`);
     } else if (start != null && end != null && end <= start) {
-      throw new RangeError(`end (${end}) cannot be less than start (${start})`);
+      throw new RangeError(
+        `end (${end}) cannot be less than or equal to start (${start})`,
+      );
     }
-    let query = this.knex("revise_message")
-      .where("doc_id", id)
-      .orderBy("version", "asc");
-    if (start != null) {
-      query = query.where("version", ">=", start);
-    }
-    if (end != null) {
-      query = query.where("version", "<", end);
-    }
-    return (await query).map((row: MessageRow) => ({
-      client: row.client_id,
-      local: row.local,
-      received: row.received,
-      version: row.version,
-      data: row.data,
-    }));
+    return fetchMessages(this.knex("revise_message"), id, start, end);
   }
 
   async sendCheckpoint(_id: string, _checkpoint: Checkpoint): Promise<void> {
@@ -69,57 +124,48 @@ export class KnexConnection implements Connection {
       clients.add(message.client);
     }
 
+    let version: number;
     await this.knex.transaction(async (trx) => {
-      let { version } = await this.knex("revise_message")
+      ({ version } = await this.knex("revise_message")
         .transacting(trx)
-        .max("version as version")
         .where("doc_id", id)
-        .first();
+        .max("version as version")
+        .first());
       version = version == null ? -1 : version;
-      const locals: Record<string, number> = {};
-      {
-        const rows: MessageRow[] = await this.knex("revise_message")
-          .transacting(trx)
-          .where("doc_id", id)
-          .whereIn("client_id", Array.from(clients))
-          .groupBy("client_id")
-          .select("client_id")
-          .max("local as local");
-        for (const row of rows) {
-          locals[row.client_id] = row.local;
-        }
-      }
-      const rows: MessageRow[] = [];
-      let i = 0;
-      for (const message of messages) {
-        const local =
-          locals[message.client] == null ? -1 : locals[message.client];
-        if (message.local > local + 1) {
-          throw new Error("Missing message");
-        } else if (message.local < local + 1) {
-          continue;
-        } else {
-          locals[message.client] = local + 1;
-        }
-        rows.push({
-          doc_id: id,
-          client_id: message.client,
-          data: message.data,
-          local: message.local,
-          received: message.received,
-          version: version + 1 + i++,
-        });
-      }
+      const locals = await fetchLocals(
+        this.knex("revise_message").transacting(trx),
+        id,
+        Array.from(clients),
+      );
+      const rows = createRows(id, messages, version, locals);
       await this.knex("revise_message")
         .transacting(trx)
         .insert(rows);
+      version += rows.length;
     });
+    this.pubsub.publish(id, version!);
   }
 
   async *subscribe(
     id: string,
-    _start?: number,
+    start: number = 0,
   ): AsyncIterableIterator<Message[]> {
-    yield* this.pubsub.subscribe(id);
+    if (start < 0) {
+      throw new RangeError("start cannot be less than 0");
+    }
+    const messages = await this.fetchMessages(id, start);
+    if (messages != null && messages.length) {
+      yield messages;
+      start = messages[messages.length - 1].version! + 1;
+    }
+    for await (const end of this.pubsub.subscribe(id)) {
+      if (end >= start) {
+        const messages = await this.fetchMessages(id, start);
+        if (messages != null && messages.length) {
+          yield messages;
+        }
+        start = end + 1;
+      }
+    }
   }
 }

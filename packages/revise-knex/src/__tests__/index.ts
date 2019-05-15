@@ -21,7 +21,6 @@ describe("KnexConnection", () => {
 
   test("messages", async () => {
     const conn = new KnexConnection(knex);
-
     const messages: Message[] = [
       { data: "a", client: "client1", local: 0, received: -1 },
       { data: "b", client: "client1", local: 1, received: -1 },
@@ -168,7 +167,6 @@ describe("KnexConnection", () => {
 
   test("messages with start and end", async () => {
     const conn = new KnexConnection(knex);
-
     const messages: Message[] = [
       { data: "a", client: "client1", local: 0, received: -1 },
       { data: "b", client: "client1", local: 1, received: -1 },
@@ -176,6 +174,7 @@ describe("KnexConnection", () => {
       { data: "d", client: "client1", local: 3, received: -1 },
       { data: "e", client: "client1", local: 4, received: -1 },
     ];
+
     await conn.sendMessages("doc1", messages);
 
     const messages1 = await conn.fetchMessages("doc1", 1, 2);
@@ -198,5 +197,33 @@ describe("KnexConnection", () => {
 
     await expect(conn.fetchMessages("doc1", 2, 2)).rejects.toThrow(RangeError);
     await expect(conn.fetchMessages("doc1", 5, 3)).rejects.toThrow(RangeError);
+  });
+
+  test("subscribe", async () => {
+    const conn = new KnexConnection(knex);
+
+    const subscription = conn.subscribe("doc", 0);
+    const messages: Promise<Message[]> = (async () => {
+      let messages: Message[] = [];
+      for await (const messages1 of subscription) {
+        messages = messages.concat(messages1);
+        if (messages.length === 3) {
+          break;
+        }
+      }
+      return messages;
+    })();
+    const messages1 = [
+      { data: "a", client: "client1", local: 0, received: -1 },
+      { data: "b", client: "client1", local: 1, received: -1 },
+      { data: "c", client: "client1", local: 2, received: 1 },
+    ];
+    await conn.sendMessages("doc", messages1.slice(0, 2));
+    await conn.sendMessages("doc", messages1.slice(2));
+    const messages2 = messages1.map((message, version) => ({
+      ...message,
+      version,
+    }));
+    await expect(messages).resolves.toEqual(messages2);
   });
 });
