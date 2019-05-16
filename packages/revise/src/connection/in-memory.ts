@@ -109,11 +109,11 @@ export class InMemoryConnection implements Connection {
     const messages = await this.fetchMessages(id, start);
     if (messages != null && messages.length) {
       yield messages;
-      start = messages[messages.length - 1].version!;
+      start = messages[messages.length - 1].version! + 1;
     }
     for await (const end of this.pubsub.subscribe(id)) {
       if (end >= start) {
-        const messages = await this.fetchMessages(id, start, end + 1);
+        const messages = await this.fetchMessages(id, start);
         if (messages != null && messages.length) {
           yield messages;
         }
