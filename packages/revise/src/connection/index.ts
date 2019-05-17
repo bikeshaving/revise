@@ -21,4 +21,5 @@ export interface Connection {
   sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void>;
   sendMessages(id: string, messages: Message[]): Promise<void>;
   subscribe(id: string, start?: number): AsyncIterableIterator<Message[]>;
+  close(): void;
 }

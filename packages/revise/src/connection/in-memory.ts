@@ -17,6 +17,7 @@ function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
 }
 
 export class InMemoryConnection implements Connection {
+  closed = false;
   protected pubsub = new InMemoryPubSub<number>();
   protected items: Record<string, InMemoryConnectionItem> = {};
 
@@ -120,5 +121,13 @@ export class InMemoryConnection implements Connection {
         start = end + 1;
       }
     }
+  }
+
+  close(): void {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    this.pubsub.close();
   }
 }

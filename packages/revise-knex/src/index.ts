@@ -87,6 +87,7 @@ function createRows(
 }
 
 export class KnexConnection implements Connection {
+  protected closed = false;
   constructor(
     protected knex: Knex,
     protected pubsub: PubSub<number> = new InMemoryPubSub(),
@@ -125,6 +126,7 @@ export class KnexConnection implements Connection {
     }
 
     let version: number;
+    let inserted = false;
     await this.knex.transaction(async (trx) => {
       ({ version } = await this.knex("revise_message")
         .transacting(trx)
@@ -138,12 +140,17 @@ export class KnexConnection implements Connection {
         Array.from(clients),
       );
       const rows = createRows(id, messages, version, locals);
-      await this.knex("revise_message")
-        .transacting(trx)
-        .insert(rows);
-      version += rows.length;
+      if (rows.length) {
+        await this.knex("revise_message")
+          .transacting(trx)
+          .insert(rows);
+        version += rows.length;
+        inserted = true;
+      }
     });
-    this.pubsub.publish(id, version!);
+    if (inserted) {
+      await this.pubsub.publish(id, version!);
+    }
   }
 
   async *subscribe(
@@ -167,5 +174,13 @@ export class KnexConnection implements Connection {
         start = end + 1;
       }
     }
+  }
+
+  close(): void {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    this.pubsub.close();
   }
 }

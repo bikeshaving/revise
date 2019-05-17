@@ -19,7 +19,7 @@ export class Client {
   // TODO: allow clients to be populated with replicas which have been persisted locally
   constructor(
     public readonly id: string,
-    protected readonly connection: Connection,
+    public connection: Connection,
     options: { wait?: number } = {},
   ) {
     const { wait = 3000 } = options;

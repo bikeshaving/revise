@@ -8,7 +8,7 @@ import {
   SendMessages,
   Subscribe,
 } from "./actions";
-
+import { race } from "../utils";
 export type Socket = WebSocket | RTCDataChannel;
 
 export function listen(
@@ -86,9 +86,24 @@ async function subscribe(
   socket: Socket,
   action: Subscribe,
 ): Promise<void> {
+  const close = new Promise<void>((resolve) =>
+    socket.addEventListener("close", () => {
+      resolve();
+    }),
+  );
   send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-  for await (const messages of conn.subscribe(action.id, action.start)) {
-    send(socket, { type: "sm", id: action.id, reqId: action.reqId, messages });
+  for await (const messages of race([
+    close,
+    conn.subscribe(action.id, action.start),
+  ])) {
+    if (messages != null) {
+      send(socket, {
+        type: "sm",
+        id: action.id,
+        reqId: action.reqId,
+        messages,
+      });
+    }
   }
 }
 
@@ -239,5 +254,9 @@ export class SocketConnection implements Connection {
       await stop;
       delete this.reqs[action.reqId];
     }, buffer);
+  }
+
+  close(): void {
+    this.socket.close();
   }
 }
