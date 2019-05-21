@@ -1,8 +1,10 @@
 import * as createFastify from "fastify";
 import * as plugin from "fastify-plugin";
 import * as ws from "ws";
+import * as Knex from "knex";
 import * as next from "next";
-import { InMemoryConnection } from "@createx/revise/lib/connection/in-memory";
+// import { InMemoryConnection } from "@createx/revise/lib/connection/in-memory";
+import { KnexConnection } from "@createx/revise-knex";
 import { proxy } from "@createx/revise/lib/connection/socket";
 
 declare module "fastify" {
@@ -57,7 +59,11 @@ fastify.ready((err) => {
   if (err) {
     throw err;
   }
-  const conn = new InMemoryConnection();
+  // const conn = new InMemoryConnection();
+  const conn = new KnexConnection(Knex({
+    client: "pg",
+    connection: "postgresql://brian:poop@localhost/revise_knex",
+  }));
   fastify.wss.on("connection", (socket: WebSocket) => {
     proxy(conn, socket);
   });

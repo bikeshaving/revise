@@ -27,23 +27,27 @@ export function* invert<T>(arr: T[]): IterableIterator<T> {
   }
 }
 
-type Contender<T> = T | Promise<T> | AsyncIterableIterator<T>;
+type Contender<T> = T | Promise<T> | Iterable<T> | AsyncIterable<T>;
 
-function* results<T>(
+function iterators<T>(
   contenders: Iterable<Contender<T>>,
-): IterableIterator<Promise<IteratorResult<T>>> {
+): (Iterator<T> | AsyncIterator<T>)[] {
+  const iters: (Iterator<T> | AsyncIterator<T>)[] = [];
   for (const contender of contenders) {
-    if ("then" in contender && typeof contender.then === "function") {
-      yield (contender as Promise<T>).then((value: T) => ({
-        value,
-        done: true,
-      }));
-    } else if ("next" in contender && typeof contender.next === "function") {
-      yield contender.next();
+    if (typeof (contender as any)[Symbol.asyncIterator] === "function") {
+      iters.push((contender as AsyncIterable<T>)[Symbol.asyncIterator]());
+    } else if (typeof (contender as any)[Symbol.iterator] === "function") {
+      iters.push((contender as Iterable<T>)[Symbol.iterator]());
     } else {
-      yield Promise.resolve({ value: contender as T, done: true });
+      /* eslint-disable require-yield */
+      const iter: AsyncIterator<T> = (async function*() {
+        return contender as T;
+      })();
+      /* eslint-enable require-yield */
+      iters.push(iter);
     }
   }
+  return iters;
 }
 
 export function race<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
@@ -128,17 +132,24 @@ export function race<T>(
   contenders: Iterable<Contender<T>>,
 ): AsyncIterableIterator<T>;
 export async function* race(contenders: Iterable<Contender<any>>) {
+  const iters = iterators(contenders);
+  // We use a finally block to ensure that return is called on every iterator.
   try {
-    let result: IteratorResult<any>;
-    do {
-      result = await Promise.race(results(contenders));
-      yield result.value;
-    } while (!result.done);
-  } finally {
-    for (const contender of contenders) {
-      if ("return" in contender && typeof contender.return === "function") {
-        await contender.return();
+    while (true) {
+      const result = await Promise.race(iters.map((iter) => iter.next()));
+      if (result.done) {
+        return result.value;
       }
+      yield result.value;
     }
+  } finally {
+    await Promise.race(
+      iters.map((iter) => {
+        if (iter.return != null) {
+          return iter.return();
+        }
+        return { value: undefined, done: true };
+      }),
+    );
   }
 }

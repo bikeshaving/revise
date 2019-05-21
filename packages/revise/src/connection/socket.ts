@@ -16,11 +16,17 @@ export function listen(
   buffer?: ChannelBuffer<any>,
 ): Channel<any> {
   return new Channel(async (push, close, stop) => {
-    socket.onmessage = (ev) => push(ev.data);
-    socket.onerror = () => close(new Error("Socket Error"));
-    socket.onclose = () => close();
+    const handleMessage = (ev: any) => push(ev.data);
+    const handleError = () => close(new Error("Socket Error"));
+    const handleClose = () => close();
+    socket.addEventListener("message", handleMessage);
+    socket.addEventListener("error", handleError);
+    socket.addEventListener("close", handleClose);
     await stop;
     socket.close();
+    socket.removeEventListener("message", handleMessage);
+    socket.removeEventListener("error", handleError);
+    socket.removeEventListener("close", handleClose);
   }, buffer);
 }
 
@@ -86,14 +92,12 @@ async function subscribe(
   socket: Socket,
   action: Subscribe,
 ): Promise<void> {
-  const close = new Promise<void>((resolve) =>
-    socket.addEventListener("close", () => {
-      resolve();
-    }),
-  );
   send(socket, { type: "ack", id: action.id, reqId: action.reqId });
+  const stop = new Promise<void>((resolve) =>
+    socket.addEventListener("close", () => resolve()),
+  );
   for await (const messages of race([
-    close,
+    stop,
     conn.subscribe(action.id, action.start),
   ])) {
     if (messages != null) {
@@ -109,6 +113,7 @@ async function subscribe(
 
 export async function proxy(conn: Connection, socket: Socket): Promise<void> {
   const chan = listen(socket);
+  let subErr: any;
   for await (const data of chan) {
     const action: Action = JSON.parse(data);
     switch (action.type) {
@@ -131,13 +136,16 @@ export async function proxy(conn: Connection, socket: Socket): Promise<void> {
       case "sub": {
         subscribe(conn, socket, action)
           .catch((err) => chan.throw(err))
-          .catch(() => {});
+          .catch((err) => (subErr = err));
         break;
       }
       default: {
         throw new Error(`Invalid action type: ${action.type}`);
       }
     }
+  }
+  if (subErr != null) {
+    throw subErr;
   }
 }
 
