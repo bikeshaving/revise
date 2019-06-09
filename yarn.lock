@@ -760,32 +760,32 @@
     lodash "^4.17.11"
     to-fast-properties "^2.0.0"
 
-"@channel/channel@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@channel/channel/-/channel-0.1.1.tgz#8b4eb586f9be904837ebc26a5bd54681c9af8121"
-  integrity sha512-BYvqllIy9x2NT6+DSO1NpgagaT121eq0wual6oIGo3lt/Uc4/vzcvfGnHG2gGE6wL04sbcshg+atloZnkw1utw==
+"@channel/channel@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@channel/channel/-/channel-1.0.0.tgz#f6962d568b0da222690610a30ab745a7991e7cd7"
+  integrity sha512-FlKrECaN/2ZMTQvWc8vmRTZ2yJAPpE6TpPYep20dQfPtYAAPgI/PkfsKfEEWSzAJZLshuUlMWPQbCfEhsXfnSg==
 
-"@channel/limiters@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@channel/limiters/-/limiters-0.1.1.tgz#fed295c15dafca0861c780ba633164fe696aa41e"
-  integrity sha512-r5g0/C3/+nk3NyTNI3dHQPZIxJhQjNyxnuEE2c4uLgKDdtITLrvMvmTrfkYmtvGddOSkg7g8kfYLyl6ROb0gBQ==
+"@channel/limiters@^0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@channel/limiters/-/limiters-0.2.1.tgz#dd2827b468249819451bf77319589ad6a24c6a26"
+  integrity sha512-JGN13OipJwwsubBNPEizmIfZ6oTdT6OZXGgoKA9rcBfuPNBZY9myF0PTzNb4VQsF5zsiQRZdSlPy7jVU+4r9TA==
   dependencies:
-    "@channel/channel" "^0.1.1"
-    "@channel/timers" "^0.1.1"
+    "@channel/channel" "^1.0.0"
+    "@channel/timers" "^0.2.1"
 
-"@channel/pubsub@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@channel/pubsub/-/pubsub-0.1.1.tgz#9b315536fa306b1a32c165311a294a875eca0a35"
-  integrity sha512-ctDszlZiB/oajnJopgTp3ZKGsNcjJFmhTbUU5JIimRdOgwFkNAALDMxB64KivUJlNyE/6yHuIHKj3SVhRQiOQw==
+"@channel/pubsub@^0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@channel/pubsub/-/pubsub-0.2.1.tgz#ea3da11138ff76c5ccec1332bf6dae0b4d7d43c2"
+  integrity sha512-IHtS8mVHOD1XJK0MVvEaCyJe00k35JAyJviChrRDMtjUCucDpx4zSgn9bN/IcfFdHuCM9CxQN5YC9Or10wld8Q==
   dependencies:
-    "@channel/channel" "^0.1.1"
+    "@channel/channel" "^1.0.0"
 
-"@channel/timers@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@channel/timers/-/timers-0.1.1.tgz#2ae1f91ba3c4ba1a67ae26b6055ae9b8376e59d8"
-  integrity sha512-FRm8iC0G6S4owIpbbQAyxzcbPkYGenl36FFCgsNXeSCymlcJgc/cL8nbCUgocdG6eW43HxoE7ycGGFZWVfa3rA==
+"@channel/timers@^0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@channel/timers/-/timers-0.2.1.tgz#8b0495545205f5debc6cd2ca3e7bb628f0b3e92c"
+  integrity sha512-5iTEmWIG1Nyt3sCy6c/hErBkVC3pL77OARQMIHZdsXt3Imw/7ZBVYJEu9KOgJfLlAYjqYrUS+I7tdlVSRSJUlQ==
   dependencies:
-    "@channel/channel" "^0.1.1"
+    "@channel/channel" "^1.0.0"
 
 "@cnakazawa/watch@^1.0.3":
   version "1.0.3"

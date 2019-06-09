@@ -15,10 +15,10 @@ export function listen(
   socket: Socket,
   buffer?: ChannelBuffer<any>,
 ): Channel<any> {
-  return new Channel(async (push, close, stop) => {
+  return new Channel(async (push, stop) => {
     const handleMessage = (ev: any) => push(ev.data);
-    const handleError = () => close(new Error("Socket Error"));
-    const handleClose = () => close();
+    const handleError = () => stop(new Error("Socket Error"));
+    const handleClose = () => stop();
     socket.addEventListener("message", handleMessage);
     socket.addEventListener("error", handleError);
     socket.addEventListener("close", handleClose);
@@ -250,7 +250,7 @@ export class SocketConnection implements Connection {
     start: number,
     buffer?: ChannelBuffer<Message[]>,
   ): Channel<Message[]> {
-    return new Channel<Message[]>(async (resolve, reject, stop) => {
+    return new Channel<Message[]>(async (push, stop) => {
       const action: Action = {
         type: "sub",
         id,
@@ -258,7 +258,7 @@ export class SocketConnection implements Connection {
         start,
       };
       await Promise.race([this.send(action), stop]);
-      this.reqs[action.reqId] = { resolve, reject };
+      this.reqs[action.reqId] = { resolve: push, reject: stop };
       await stop;
       delete this.reqs[action.reqId];
     }, buffer);
