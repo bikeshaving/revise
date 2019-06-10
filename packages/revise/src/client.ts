@@ -23,7 +23,7 @@ export class Client {
     options: { wait?: number } = {},
   ) {
     const { wait = 3000 } = options;
-    this.throttle = throttler(wait);
+    this.throttle = throttler(wait, { cooldown: true });
   }
 
   protected async fetchReplica(id: string): Promise<Replica> {

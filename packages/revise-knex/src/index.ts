@@ -128,11 +128,11 @@ export class KnexConnection implements Connection {
     let version: number;
     let inserted = false;
     await this.knex.transaction(async (trx) => {
-      ({ version } = await this.knex("revise_message")
+      ({ version } = (await this.knex("revise_message")
         .transacting(trx)
         .where("doc_id", id)
         .max("version as version")
-        .first());
+        .first()) || { version: -1 });
       version = version == null ? -1 : version;
       const locals = await fetchLocals(
         this.knex("revise_message").transacting(trx),
