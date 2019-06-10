@@ -25,6 +25,9 @@ export class InMemoryConnection implements Connection {
     id: string,
     before?: number,
   ): Promise<Checkpoint | undefined> {
+    if (this.closed) {
+      throw new Error("Connection closed");
+    }
     const checkpoints: Checkpoint[] | undefined =
       this.items[id] && this.items[id].checkpoints;
     if (checkpoints == null || !checkpoints.length) {
@@ -40,20 +43,26 @@ export class InMemoryConnection implements Connection {
     start?: number,
     end?: number,
   ): Promise<Message[] | undefined> {
-    const item = this.items[id];
-    if (start != null && start < 0) {
+    if (this.closed) {
+      throw new Error("Connection closed");
+    } else if (start != null && start < 0) {
       throw new RangeError(`start (${start}) cannot be less than 0`);
     } else if (end != null && end < 0) {
       throw new RangeError(`end (${end}) cannot be less than 0`);
     } else if (start != null && end != null && end <= start) {
       throw new RangeError(`end (${end}) cannot be less than start (${start})`);
-    } else if (item == null) {
+    }
+    const item = this.items[id];
+    if (item == null) {
       return;
     }
     return item.messages.slice(start, end);
   }
 
   async sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
+    if (this.closed) {
+      throw new Error("Connection closed");
+    }
     const item = this.items[id];
     if (
       (item == null && checkpoint.version !== 0) ||
@@ -68,6 +77,9 @@ export class InMemoryConnection implements Connection {
   }
 
   async sendMessages(id: string, messages: Message[]): Promise<void> {
+    if (this.closed) {
+      throw new Error("Connection closed");
+    }
     let item = this.items[id];
     if (item == null) {
       item = {
@@ -104,7 +116,9 @@ export class InMemoryConnection implements Connection {
     id: string,
     start: number = 0,
   ): AsyncIterableIterator<Message[]> {
-    if (start < 0) {
+    if (this.closed) {
+      throw new Error("Connection closed");
+    } else if (start < 0) {
       throw new RangeError("start cannot be less than 0");
     }
     const messages = await this.fetchMessages(id, start);

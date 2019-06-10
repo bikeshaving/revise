@@ -7,7 +7,7 @@ import { Replica } from "./replica";
 export interface ClientItem {
   replica: Promise<Replica>;
   subscription?: AsyncIterator<Message[]>;
-  inflight?: Promise<void>;
+  inflight?: Promise<void> | void;
 }
 
 export class Client {

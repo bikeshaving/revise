@@ -18,8 +18,8 @@ export interface Connection {
     start?: number,
     end?: number,
   ): Promise<Message[] | undefined>;
-  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void>;
-  sendMessages(id: string, messages: Message[]): Promise<void>;
+  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> | void;
+  sendMessages(id: string, messages: Message[]): Promise<void> | void;
   subscribe(id: string, start?: number): AsyncIterableIterator<Message[]>;
-  close(): void;
+  close(): Promise<void> | void;
 }

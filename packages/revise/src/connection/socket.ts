@@ -8,13 +8,13 @@ import {
   SendMessages,
   Subscribe,
 } from "./actions";
-import { race } from "../utils";
+
 export type Socket = WebSocket | RTCDataChannel;
 
-export function listen(
+export function listen<T = any>(
   socket: Socket,
-  buffer?: ChannelBuffer<any>,
-): Channel<any> {
+  buffer?: ChannelBuffer<T>,
+): Channel<T> {
   return new Channel(async (push, stop) => {
     const handleMessage = (ev: any) => push(ev.data);
     const handleError = () => stop(new Error("Socket Error"));
@@ -30,6 +30,7 @@ export function listen(
   }, buffer);
 }
 
+// TODO: pass in serialize function
 function send(socket: Socket, action: Action): void {
   socket.send(JSON.stringify(action));
 }
@@ -93,13 +94,11 @@ async function subscribe(
   action: Subscribe,
 ): Promise<void> {
   send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-  const stop = new Promise<void>((resolve) =>
+  const close = new Promise<void>((resolve) =>
     socket.addEventListener("close", () => resolve()),
   );
-  for await (const messages of race([
-    stop,
-    conn.subscribe(action.id, action.start),
-  ])) {
+  const subscription = conn.subscribe(action.id, action.start);
+  for await (const messages of Channel.race([subscription, close])) {
     if (messages != null) {
       send(socket, {
         type: "sm",
@@ -111,6 +110,7 @@ async function subscribe(
   }
 }
 
+// TODO: pass in hooks for authorization
 export async function proxy(conn: Connection, socket: Socket): Promise<void> {
   const chan = listen(socket);
   let subErr: any;
