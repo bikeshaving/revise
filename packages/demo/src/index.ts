@@ -60,10 +60,12 @@ fastify.ready((err) => {
     throw err;
   }
   // const conn = new InMemoryConnection();
-  const conn = new KnexConnection(Knex({
-    client: "pg",
-    connection: "postgresql://brian:poop@localhost/revise_knex",
-  }));
+  const conn = new KnexConnection(
+    Knex({
+      client: "pg",
+      connection: "postgresql://brian:poop@localhost/revise_knex",
+    }),
+  );
   fastify.wss.on("connection", (socket: WebSocket) => {
     const proxy = new SocketProxy(socket, conn);
     proxy.stop.catch((err) => fastify.log.error(err));

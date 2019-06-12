@@ -60,7 +60,7 @@ function Editor() {
         return;
       }
       const value = text.value;
-      let version = { commit: value.commit, change: value.change };
+      let version: Version = { commit: value.commit, change: value.change };
       cm.setValue(value.text);
       cm.setOption("readOnly", false);
       handleChange = (cm, change) => {
