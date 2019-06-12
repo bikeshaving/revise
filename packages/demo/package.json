@@ -28,12 +28,6 @@
   },
   "devDependencies": {
     "@channel/timers": "^0.2.1",
-    "@types/codemirror": "^0.0.74",
-    "@types/next": "^8.0.5",
-    "@types/react": "^16.8.19",
-    "@types/react-dom": "16.8.4",
-    "@types/uuid": "^3.4.4",
-    "@types/ws": "^6.0.1",
     "nodemon": "^1.19.1",
     "pino-pretty": "^3.1.0"
   }
