@@ -2,6 +2,10 @@ import { InMemoryConnection } from "../connection/in-memory";
 import { Client } from "../client";
 describe("Client", () => {
   describe("sync", () => {
+    test("typechecks", () => {
+      Client;
+    });
+
     // TODO: remove specific replica stuff for better testing
     test.skip("syncing without ingesting messages", async () => {
       const conn = new InMemoryConnection();

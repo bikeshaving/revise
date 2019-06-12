@@ -19,7 +19,7 @@ export class Client {
   // TODO: allow clients to be populated with replicas which have been persisted locally
   constructor(
     public readonly id: string,
-    public connection: Connection,
+    public conn: Connection,
     options: { wait?: number } = {},
   ) {
     const { wait = 3000 } = options;
@@ -30,10 +30,10 @@ export class Client {
     if (this.items[id]) {
       return this.items[id].replica;
     }
-    const checkpoint = await this.connection.fetchCheckpoint(id);
+    const checkpoint = await this.conn.fetchCheckpoint(id);
     // TODO: paramaterize Replica constructor
     const replica = new Replica(this.id, checkpoint);
-    const messages = await this.connection.fetchMessages(
+    const messages = await this.conn.fetchMessages(
       id,
       checkpoint == null ? 0 : checkpoint.version + 1,
     );
@@ -56,7 +56,7 @@ export class Client {
         throw new Error("Unknown id");
       }
       const replica = await this.getReplica(id);
-      const subscription = this.connection.subscribe(id, replica.received + 1);
+      const subscription = this.conn.subscribe(id, replica.received + 1);
       this.items[id].subscription = subscription;
       for await (const messages of subscription) {
         for (const message of messages) {
@@ -70,8 +70,6 @@ export class Client {
           } else if (message.version < replica.received + 1) {
             continue;
           }
-          // TODO: this won’t work the way we want it to because replicas ingest messages synchronously while the pubsub publishes asynchronously
-          // we need to one, switch to an EventEmitter implementation which calls callbacks synchronously or two, make sure all consumers keep track of version numbers
           replica.ingest(message);
           this.pubsub.publish(id, message);
         }
@@ -116,7 +114,7 @@ export class Client {
     }
     const pending = replica.pending();
     if (pending.length) {
-      item.inflight = this.connection.sendMessages(id, pending);
+      item.inflight = this.conn.sendMessages(id, pending);
     }
     return item.inflight;
   }
