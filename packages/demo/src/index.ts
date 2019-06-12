@@ -64,8 +64,8 @@ fastify.ready((err) => {
     client: "pg",
     connection: "postgresql://brian:poop@localhost/revise_knex",
   }));
-  fastify.wss.on("connection", (socket: WebSocket) => {
-    proxy(conn, socket);
+  fastify.wss.on("connection", (socket) => {
+    proxy(conn, socket as WebSocket).catch((err) => fastify.log.error(err));
   });
 });
 
@@ -78,13 +78,11 @@ fastify.listen(port, (err) => {
 });
 
 process.on("uncaughtException", (err) => {
-  fastify.log.error("uncaughtException");
   fastify.log.error(err);
   throw err;
 });
 
 process.on("unhandledRejection", (reason) => {
-  fastify.log.error("unhandledRejection");
   fastify.log.error(reason!);
   throw reason;
 });
