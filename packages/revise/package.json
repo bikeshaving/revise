@@ -16,5 +16,8 @@
     "@channel/channel": "^1.0.0",
     "@channel/limiters": "^0.2.1",
     "@channel/pubsub": "^0.2.1"
+  },
+  "devDependencies": {
+    "ws": "^7.0.0"
   }
 }

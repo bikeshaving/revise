@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@channel/channel": "^1.0.0",
-    "@createx/revise": "^0.1.0",
-    "@createx/revise-knex": "^0.1.0",
+    "@createx/revise": "*",
+    "@createx/revise-knex": "*",
     "@zeit/next-css": "^1.0.1",
     "@zeit/next-typescript": "^1.1.1",
     "codemirror": "^5.47.0",
