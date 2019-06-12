@@ -2,11 +2,11 @@ import { Channel, ChannelBuffer } from "@channel/channel";
 import { Checkpoint, Connection, Message } from "./index";
 import {
   Action,
-  FetchCheckpoint,
-  FetchMessages,
-  SendCheckpoint,
-  SendMessages,
-  Subscribe,
+  FetchCheckpointAction,
+  FetchMessagesAction,
+  SendCheckpointAction,
+  SendMessagesAction,
+  SubscribeAction,
 } from "./actions";
 
 export type Socket = WebSocket | RTCDataChannel;
@@ -30,198 +30,235 @@ export function listen<T = any>(
   }, buffer);
 }
 
-// TODO: pass in serialize function
-function send(socket: Socket, action: Action): void {
-  socket.send(JSON.stringify(action));
-}
-
-async function fetchCheckpoint(
-  conn: Connection,
-  socket: Socket,
-  action: FetchCheckpoint,
-): Promise<void> {
-  const checkpoint = await conn.fetchCheckpoint(action.id, action.start);
-  if (checkpoint == null) {
-    send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-  } else {
-    send(socket, {
-      type: "sc",
-      id: action.id,
-      reqId: action.reqId,
-      checkpoint,
-    });
-  }
-}
-
-async function fetchMessages(
-  conn: Connection,
-  socket: Socket,
-  action: FetchMessages,
-): Promise<void> {
-  const messages = await conn.fetchMessages(
-    action.id,
-    action.start,
-    action.end,
-  );
-  if (messages == null) {
-    send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-  } else {
-    send(socket, { type: "sm", id: action.id, reqId: action.reqId, messages });
-  }
-}
-
-async function sendCheckpoint(
-  conn: Connection,
-  socket: Socket,
-  action: SendCheckpoint,
-): Promise<void> {
-  await conn.sendCheckpoint(action.id, action.checkpoint!);
-  send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-}
-
-async function sendMessages(
-  conn: Connection,
-  socket: Socket,
-  action: SendMessages,
-): Promise<void> {
-  await conn.sendMessages(action.id, action.messages!);
-  send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-}
-
-async function subscribe(
-  conn: Connection,
-  socket: Socket,
-  action: Subscribe,
-): Promise<void> {
-  send(socket, { type: "ack", id: action.id, reqId: action.reqId });
-  const close = new Promise<void>((resolve) =>
-    socket.addEventListener("close", () => resolve()),
-  );
-  const subscription = conn.subscribe(action.id, action.start);
-  for await (const messages of Channel.race([subscription, close])) {
-    if (messages != null) {
-      send(socket, {
-        type: "sm",
-        id: action.id,
-        reqId: action.reqId,
-        messages,
-      });
-    }
-  }
-}
-
 // TODO: pass in hooks for authorization
-export async function proxy(conn: Connection, socket: Socket): Promise<void> {
-  const chan = listen(socket);
-  let subErr: any;
-  for await (const data of chan) {
-    const action: Action = JSON.parse(data);
-    switch (action.type) {
-      case "fc": {
-        await fetchCheckpoint(conn, socket, action);
-        break;
-      }
-      case "fm": {
-        await fetchMessages(conn, socket, action);
-        break;
-      }
-      case "sc": {
-        await sendCheckpoint(conn, socket, action);
-        break;
-      }
-      case "sm": {
-        await sendMessages(conn, socket, action);
-        break;
-      }
-      case "sub": {
-        subscribe(conn, socket, action)
-          .catch((err) => chan.throw(err))
-          .catch((err) => (subErr = err));
-        break;
-      }
-      default: {
-        throw new Error(`Invalid action type: ${action.type}`);
+export class SocketProxy {
+  stop: Promise<void>;
+  constructor(private socket: Socket, private conn: Connection) {
+    this.stop = this.connect();
+  }
+
+  private async connect(): Promise<void> {
+    for await (const data of listen(this.socket)) {
+      const action: Action = JSON.parse(data);
+      try {
+        switch (action.type) {
+          case "fc": {
+            await this.fetchCheckpoint(action);
+            break;
+          }
+          case "fm": {
+            await this.fetchMessages(action);
+            break;
+          }
+          case "sc": {
+            await this.sendCheckpoint(action);
+            break;
+          }
+          case "sm": {
+            await this.sendMessages(action);
+            break;
+          }
+          case "sub": {
+            this.subscribe(action).catch((err) => this.sendError(action, err));
+            break;
+          }
+          default: {
+            throw new Error(`Invalid action type: ${action.type}`);
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error) {
+          this.sendError(action, err);
+        }
+        this.sendError(action, new Error("Unknown error"));
       }
     }
   }
-  if (subErr != null) {
-    throw subErr;
+
+  private send(action: Action): void {
+    // TODO: serialize hook
+    this.socket.send(JSON.stringify(action));
+  }
+
+  private async fetchCheckpoint(action: FetchCheckpointAction): Promise<void> {
+    const { id, reqId, start } = action;
+    const checkpoint = await this.conn.fetchCheckpoint(id, start);
+    if (checkpoint == null) {
+      this.send({ type: "ack", id, reqId });
+    } else {
+      this.send({ type: "sc", id, reqId, checkpoint });
+    }
+  }
+
+  private async fetchMessages(action: FetchMessagesAction): Promise<void> {
+    const { id, reqId, start, end } = action;
+    const messages = await this.conn.fetchMessages(id, start, end);
+    if (messages == null) {
+      this.send({ type: "ack", id, reqId });
+    } else {
+      this.send({ type: "sm", id, reqId, messages });
+    }
+  }
+
+  private async sendCheckpoint(action: SendCheckpointAction): Promise<void> {
+    const { id, reqId, checkpoint } = action;
+    await this.conn.sendCheckpoint(id, checkpoint);
+    this.send({ type: "ack", id, reqId });
+  }
+
+  private async sendMessages(action: SendMessagesAction): Promise<void> {
+    const { id, reqId, messages } = action;
+    await this.conn.sendMessages(id, messages);
+    this.send({ type: "ack", id, reqId });
+  }
+
+  private async subscribe(action: SubscribeAction): Promise<void> {
+    const { id, reqId, start } = action;
+    this.send({ type: "ack", id, reqId });
+    for await (const messages of Channel.race([
+      this.conn.subscribe(id, start),
+      this.stop,
+    ])) {
+      if (messages != null) {
+        this.send({ type: "sm", id, reqId, messages });
+      }
+    }
+    this.send({ type: "ack", id, reqId });
+  }
+
+  private sendError(action: Action, err: Error): void {
+    const { id, reqId } = action;
+    const { name, message } = err;
+    this.send({ type: "err", id, reqId, name, message });
   }
 }
 
-interface Request {
+interface Procedure {
+  type: "procedure";
   resolve(value?: any): void;
   reject(reason: any): void;
-  promise?: Promise<any>;
+  promise: Promise<any>;
+}
+
+interface Subscription {
+  type: "subscription";
+  push(value: any): void;
+  stop(reason?: any): void;
+}
+
+type Request = Procedure | Subscription;
+
+export enum SocketConnectionState {
+  CONNECTING,
+  OPEN,
+  CLOSED,
 }
 
 export class SocketConnection implements Connection {
-  protected opened = false;
   protected buffer: Action[] = [];
   protected reqs: Request[] = [];
   protected nextReqId = 0;
+  protected state = SocketConnectionState.CONNECTING;
   constructor(protected socket: Socket) {
-    socket.onopen = () => {
-      this.opened = true;
+    socket.addEventListener("open", () => {
+      this.state = SocketConnectionState.OPEN;
       for (const action of this.buffer) {
         this.send(action);
       }
       this.buffer = [];
-    };
-    // TODO: catch rejection
-    this.connect(socket);
+    });
+    this.connect()
+      .then(() => this.close())
+      .catch((err) => this.close(err));
   }
 
-  protected async connect(socket: Socket): Promise<void> {
-    for await (const data of listen(socket)) {
-      let action: Action;
-      try {
-        // TODO: validate action
-        action = JSON.parse(data);
-      } catch (err) {
-        // TOOD: close the connection???
-        continue;
-      }
+  protected async connect(): Promise<void> {
+    for await (const data of listen(this.socket)) {
+      // TODO: validate action
+      // TODO: deserialize hook
+      const action: Action = JSON.parse(data);
       const req = this.reqs[action.reqId];
       if (req == null) {
         continue;
-      } else if (req.promise != null) {
+      } else if (req.type === "procedure") {
         delete this.reqs[action.reqId];
       }
       switch (action.type) {
         case "ack": {
-          req.resolve();
+          if (req.type === "procedure") {
+            req.resolve();
+          } else {
+            req.stop();
+            delete this.reqs[action.reqId];
+          }
+          break;
+        }
+        case "err": {
+          if (req.type === "procedure") {
+            req.reject(new Error(action.message));
+          } else {
+            req.stop(new Error(action.message));
+          }
           break;
         }
         case "sm": {
-          req.resolve(action.messages);
+          if (req.type === "procedure") {
+            req.resolve(action.messages);
+          } else {
+            req.push(action.messages);
+          }
           break;
         }
         case "sc": {
-          req.resolve(action.checkpoint);
+          if (req.type === "procedure") {
+            req.resolve(action.checkpoint);
+          } else {
+            req.stop(new Error("Invalid value received"));
+          }
           break;
         }
         default: {
-          req.reject(`Invalid action type: ${action.type}`);
+          const error = new Error(`Invalid action type: ${action.type}`);
+          if (req.type === "procedure") {
+            req.reject(error);
+          } else {
+            req.stop(error);
+          }
         }
       }
     }
   }
 
   protected async send(action: Action): Promise<any> {
-    if (this.opened) {
+    if (this.state >= SocketConnectionState.CLOSED) {
+      throw new Error("Connection closed");
+    } else if (this.state >= SocketConnectionState.OPEN) {
+      // TODO: serialize hook
       this.socket.send(JSON.stringify(action));
     } else {
       this.buffer.push(action);
     }
 
-    if (this.reqs[action.reqId] != null) {
-      return this.reqs[action.reqId].promise;
+    const req = this.reqs[action.reqId];
+    if (req != null) {
+      if (req.type === "subscription") {
+        throw new Error("Procedure expected for reqId but subscription found");
+      }
+      return req.promise;
     }
-    const promise = new Promise((resolve, reject) => {
-      this.reqs[action.reqId] = { resolve, reject };
+
+    let resolve: (value: any) => void;
+    let reject: (err: any) => void;
+    const promise = new Promise((resolve1, reject1) => {
+      resolve = resolve1;
+      reject = reject1;
     });
-    this.reqs[action.reqId].promise = promise;
+    this.reqs[action.reqId] = {
+      type: "procedure",
+      resolve: resolve!,
+      reject: reject!,
+      promise,
+    };
     return promise;
   }
 
@@ -250,7 +287,10 @@ export class SocketConnection implements Connection {
     start: number,
     buffer?: ChannelBuffer<Message[]>,
   ): Channel<Message[]> {
-    return new Channel<Message[]>(async (push, stop) => {
+    const chan = new Channel<Message[]>(async (push, stop) => {
+      if (this.state >= SocketConnectionState.CLOSED) {
+        throw new Error("Connection closed");
+      }
       const action: Action = {
         type: "sub",
         id,
@@ -258,13 +298,28 @@ export class SocketConnection implements Connection {
         start,
       };
       await Promise.race([this.send(action), stop]);
-      this.reqs[action.reqId] = { resolve: push, reject: stop };
+      this.reqs[action.reqId] = { type: "subscription", push, stop };
       await stop;
       delete this.reqs[action.reqId];
     }, buffer);
+    return chan;
   }
 
-  close(): void {
+  close(err?: any): void {
+    if (this.state >= SocketConnectionState.CLOSED) {
+      return;
+    }
+    this.state = SocketConnectionState.CLOSED;
     this.socket.close();
+    for (const req of this.reqs) {
+      if (req != null) {
+        if (req.type === "subscription") {
+          req.stop(err);
+        } else {
+          req.reject(err || new Error("Connection closed"));
+        }
+      }
+    }
+    this.reqs = [];
   }
 }

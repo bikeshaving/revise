@@ -1,9 +1,46 @@
+import { Server } from "ws";
+
 import { Checkpoint, Message } from "../../connection";
 import { InMemoryConnection } from "../in-memory";
+import { listen, SocketConnection, SocketProxy } from "../socket";
 
-describe("InMemoryConnection", () => {
+describe("SocketConnection", () => {
+  const port = 6969;
+  const url = `ws://localhost:${port}`;
+
+  let server: Server;
+  beforeEach((done) => (server = new Server({ port }, done)));
+  afterEach((done) => server.close(done));
+
+  test("listen closes", async () => {
+    server.once("connection", (socket: WebSocket) => {
+      socket.close();
+    });
+    const socket = new WebSocket(url);
+    const chan = listen(socket);
+    await expect(chan.next()).resolves.toEqual({ done: true });
+  });
+
+  test("listen listens", async () => {
+    server.once("connection", (socket: WebSocket) => {
+      socket.send("hello");
+      socket.send("world");
+      socket.close();
+    });
+    const socket = new WebSocket(url);
+    const chan = listen(socket);
+    await expect(chan.next()).resolves.toEqual({ value: "hello", done: false });
+    await expect(chan.next()).resolves.toEqual({ value: "world", done: false });
+    await expect(chan.next()).resolves.toEqual({ done: true });
+  });
+
   test("messages", async () => {
-    const conn = new InMemoryConnection();
+    const storage = new InMemoryConnection();
+    server.on("connection", (socket: WebSocket) => {
+      new SocketProxy(socket, storage);
+    });
+    const socket = new WebSocket(url);
+    const conn = new SocketConnection(socket);
     const messages: Message[] = [
       { data: "a", client: "client1", local: 0, received: -1 },
       { data: "b", client: "client1", local: 1, received: -1 },
@@ -16,10 +53,16 @@ describe("InMemoryConnection", () => {
       version,
     }));
     expect(messages2).toEqual(messages1);
+    socket.close();
   });
 
   test("checkpoints", async () => {
-    const conn = new InMemoryConnection();
+    const storage = new InMemoryConnection();
+    server.on("connection", (socket: WebSocket) => {
+      new SocketProxy(socket, storage);
+    });
+    const socket = new WebSocket(url);
+    const conn = new SocketConnection(socket);
     await conn.sendMessages("doc1", [
       { data: "hi", client: "client1", local: 0, received: -1 },
       { data: "hi", client: "client1", local: 1, received: -1 },
@@ -30,7 +73,6 @@ describe("InMemoryConnection", () => {
     await expect(
       conn.sendCheckpoint("doc1", checkpointB),
     ).rejects.toBeDefined();
-
     await conn.sendMessages("doc1", [
       { data: "hello", client: "client1", local: 2, received: 2 },
     ]);
@@ -44,10 +86,16 @@ describe("InMemoryConnection", () => {
     expect(checkpointB).toEqual(checkpointB1);
     expect(checkpointC).toEqual(checkpointC1);
     await expect(conn.fetchCheckpoint("doc1", 0)).resolves.toBeUndefined();
+    socket.close();
   });
 
   test("subscribe", async () => {
-    const conn = new InMemoryConnection();
+    const storage = new InMemoryConnection();
+    server.on("connection", (socket: WebSocket) => {
+      new SocketProxy(socket, storage);
+    });
+    const socket = new WebSocket(url);
+    const conn = new SocketConnection(socket);
     const subscription = conn.subscribe("doc", 0);
     const messages: Promise<Message[]> = (async () => {
       let messages: Message[] = [];
@@ -68,7 +116,7 @@ describe("InMemoryConnection", () => {
     const messages3 = messages1
       .concat(messages2)
       .map((message, version) => ({ ...message, version }));
-    conn.close();
+    socket.close();
     await expect(messages).resolves.toEqual(messages3);
   });
 });

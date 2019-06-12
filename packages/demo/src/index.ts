@@ -5,7 +5,7 @@ import * as Knex from "knex";
 import * as next from "next";
 // import { InMemoryConnection } from "@createx/revise/lib/connection/in-memory";
 import { KnexConnection } from "@createx/revise-knex";
-import { proxy } from "@createx/revise/lib/connection/socket";
+import { SocketProxy } from "@createx/revise/lib/connection/socket";
 
 declare module "fastify" {
   export interface FastifyInstance {
@@ -64,8 +64,9 @@ fastify.ready((err) => {
     client: "pg",
     connection: "postgresql://brian:poop@localhost/revise_knex",
   }));
-  fastify.wss.on("connection", (socket) => {
-    proxy(conn, socket as WebSocket).catch((err) => fastify.log.error(err));
+  fastify.wss.on("connection", (socket: WebSocket) => {
+    const proxy = new SocketProxy(socket, conn);
+    proxy.stop.catch((err) => fastify.log.error(err));
   });
 });
 

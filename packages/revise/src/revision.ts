@@ -77,7 +77,7 @@ export function rebase(
 
 export function rearrange(
   revs: Revision[],
-  test: (rev: Revision) => boolean,
+  predicate: (rev: Revision) => boolean,
 ): Revision[] {
   if (!revs.length) {
     return revs;
@@ -87,7 +87,7 @@ export function rearrange(
   let expandSeq: Subseq | undefined;
   for (let rev of invert(revs)) {
     let { client, inserted, insertSeq, deleteSeq, revertSeq } = rev;
-    if (test(rev)) {
+    if (predicate(rev)) {
       if (expandSeq == null) {
         hiddenSeq = revertSeq;
         expandSeq = insertSeq;

@@ -6,40 +6,47 @@ export interface AbstractAction {
   reqId: number;
 }
 
-export interface Acknowledge extends AbstractAction {
+export interface AcknowledgeAction extends AbstractAction {
   type: "ack";
 }
 
-export interface FetchCheckpoint extends AbstractAction {
+export interface FetchCheckpointAction extends AbstractAction {
   type: "fc";
   start?: number;
 }
 
-export interface FetchMessages extends AbstractAction {
+export interface FetchMessagesAction extends AbstractAction {
   type: "fm";
   start?: number;
   end?: number;
 }
 
-export interface SendCheckpoint extends AbstractAction {
+export interface SendCheckpointAction extends AbstractAction {
   type: "sc";
   checkpoint: Checkpoint;
 }
 
-export interface SendMessages extends AbstractAction {
+export interface SendMessagesAction extends AbstractAction {
   type: "sm";
   messages: Message[];
 }
 
-export interface Subscribe extends AbstractAction {
+export interface SubscribeAction extends AbstractAction {
   type: "sub";
   start?: number;
 }
 
+export interface ErrorAction extends AbstractAction {
+  type: "err";
+  name: string;
+  message: string;
+}
+
 export type Action =
-  | Acknowledge
-  | FetchCheckpoint
-  | FetchMessages
-  | SendCheckpoint
-  | SendMessages
-  | Subscribe;
+  | AcknowledgeAction
+  | ErrorAction
+  | FetchCheckpointAction
+  | FetchMessagesAction
+  | SendCheckpointAction
+  | SendMessagesAction
+  | SubscribeAction;
