@@ -17,9 +17,9 @@ function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
 }
 
 export class InMemoryConnection implements Connection {
-  closed = false;
-  protected pubsub = new InMemoryPubSub<number>();
-  protected items: Record<string, InMemoryConnectionItem> = {};
+  private closed = false;
+  private pubsub = new InMemoryPubSub<number>();
+  private items: Record<string, InMemoryConnectionItem> = {};
 
   async fetchCheckpoint(
     id: string,

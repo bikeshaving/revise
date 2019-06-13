@@ -155,10 +155,10 @@ export enum SocketConnectionState {
 }
 
 export class SocketConnection implements Connection {
-  protected buffer: Action[] = [];
-  protected reqs: Request[] = [];
-  protected nextReqId = 0;
-  protected state = SocketConnectionState.CONNECTING;
+  private buffer: Action[] = [];
+  private reqs: Request[] = [];
+  private nextReqId = 0;
+  private state = SocketConnectionState.CONNECTING;
   constructor(protected socket: Socket) {
     socket.addEventListener("open", () => {
       this.state = SocketConnectionState.OPEN;
@@ -172,7 +172,7 @@ export class SocketConnection implements Connection {
       .catch((err) => this.close(err));
   }
 
-  protected async connect(): Promise<void> {
+  private async connect(): Promise<void> {
     for await (const data of listen(this.socket)) {
       // TODO: validate action
       // TODO: deserialize hook
@@ -229,7 +229,7 @@ export class SocketConnection implements Connection {
     }
   }
 
-  protected async send(action: Action): Promise<any> {
+  private async send(action: Action): Promise<any> {
     if (this.state >= SocketConnectionState.CLOSED) {
       throw new Error("Connection closed");
     } else if (this.state >= SocketConnectionState.OPEN) {

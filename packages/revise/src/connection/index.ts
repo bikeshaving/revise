@@ -11,6 +11,12 @@ export interface Checkpoint {
   version: number;
 }
 
+export enum ConnectState {
+  CONNECTING,
+  OPEN,
+  CLOSED,
+}
+
 export interface Connection {
   fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined>;
   fetchMessages(
