@@ -36,8 +36,11 @@ describe("SocketConnection", () => {
 
   test("messages", async () => {
     const storage = new InMemoryConnection();
-    server.on("connection", (socket: WebSocket) => {
-      new SocketProxy(socket, storage);
+    const result = new Promise((resolve) => {
+      server.on("connection", (socket: WebSocket) => {
+        const proxy = new SocketProxy(socket, storage);
+        resolve(proxy.connect());
+      });
     });
     const socket = new WebSocket(url);
     const conn = new SocketConnection(socket);
@@ -54,12 +57,16 @@ describe("SocketConnection", () => {
     }));
     expect(messages2).toEqual(messages1);
     socket.close();
+    await expect(result).resolves.toBeUndefined();
   });
 
   test("checkpoints", async () => {
     const storage = new InMemoryConnection();
-    server.on("connection", (socket: WebSocket) => {
-      new SocketProxy(socket, storage);
+    const result = new Promise((resolve) => {
+      server.on("connection", (socket: WebSocket) => {
+        const proxy = new SocketProxy(socket, storage);
+        resolve(proxy.connect());
+      });
     });
     const socket = new WebSocket(url);
     const conn = new SocketConnection(socket);
@@ -87,12 +94,16 @@ describe("SocketConnection", () => {
     expect(checkpointC).toEqual(checkpointC1);
     await expect(conn.fetchCheckpoint("doc1", 0)).resolves.toBeUndefined();
     socket.close();
+    await expect(result).resolves.toBeUndefined();
   });
 
   test("subscribe", async () => {
     const storage = new InMemoryConnection();
-    server.on("connection", (socket: WebSocket) => {
-      new SocketProxy(socket, storage);
+    const result = new Promise((resolve) => {
+      server.on("connection", (socket: WebSocket) => {
+        const proxy = new SocketProxy(socket, storage);
+        resolve(proxy.connect());
+      });
     });
     const socket = new WebSocket(url);
     const conn = new SocketConnection(socket);
@@ -118,5 +129,6 @@ describe("SocketConnection", () => {
       .map((message, version) => ({ ...message, version }));
     socket.close();
     await expect(messages).resolves.toEqual(messages3);
+    await expect(result).resolves.toBeUndefined();
   });
 });

@@ -1,13 +1,56 @@
 import { Channel, ChannelBuffer } from "@channel/channel";
 import { Checkpoint, Connection, Message } from "./index";
-import {
-  Action,
-  FetchCheckpointAction,
-  FetchMessagesAction,
-  SendCheckpointAction,
-  SendMessagesAction,
-  SubscribeAction,
-} from "./actions";
+
+export interface AbstractAction {
+  type: string;
+  id: string;
+  reqId: number;
+}
+
+export interface AcknowledgeAction extends AbstractAction {
+  type: "ack";
+}
+
+export interface FetchCheckpointAction extends AbstractAction {
+  type: "fc";
+  start?: number;
+}
+
+export interface FetchMessagesAction extends AbstractAction {
+  type: "fm";
+  start?: number;
+  end?: number;
+}
+
+export interface SendCheckpointAction extends AbstractAction {
+  type: "sc";
+  checkpoint: Checkpoint;
+}
+
+export interface SendMessagesAction extends AbstractAction {
+  type: "sm";
+  messages: Message[];
+}
+
+export interface SubscribeAction extends AbstractAction {
+  type: "sub";
+  start?: number;
+}
+
+export interface ErrorAction extends AbstractAction {
+  type: "err";
+  name: string;
+  message: string;
+}
+
+export type Action =
+  | AcknowledgeAction
+  | ErrorAction
+  | FetchCheckpointAction
+  | FetchMessagesAction
+  | SendCheckpointAction
+  | SendMessagesAction
+  | SubscribeAction;
 
 export type Socket = WebSocket | RTCDataChannel;
 
@@ -30,50 +73,11 @@ export function listen<T = any>(
   }, buffer);
 }
 
-// TODO: pass in hooks for authorization
-export class SocketProxy {
-  stop: Promise<void>;
-  constructor(private socket: Socket, private conn: Connection) {
-    this.stop = this.connect();
-  }
+type Hook = (action: Action) => Promise<void> | void;
 
-  private async connect(): Promise<void> {
-    for await (const data of listen(this.socket)) {
-      const action: Action = JSON.parse(data);
-      try {
-        switch (action.type) {
-          case "fc": {
-            await this.fetchCheckpoint(action);
-            break;
-          }
-          case "fm": {
-            await this.fetchMessages(action);
-            break;
-          }
-          case "sc": {
-            await this.sendCheckpoint(action);
-            break;
-          }
-          case "sm": {
-            await this.sendMessages(action);
-            break;
-          }
-          case "sub": {
-            this.subscribe(action).catch((err) => this.sendError(action, err));
-            break;
-          }
-          default: {
-            throw new Error(`Invalid action type: ${action.type}`);
-          }
-        }
-      } catch (err) {
-        if (err instanceof Error) {
-          this.sendError(action, err);
-        }
-        this.sendError(action, new Error("Unknown error"));
-      }
-    }
-  }
+export class SocketProxy {
+  private hooks: Set<Hook> = new Set();
+  constructor(private socket: Socket, private conn: Connection) {}
 
   private send(action: Action): void {
     // TODO: serialize hook
@@ -115,10 +119,7 @@ export class SocketProxy {
   private async subscribe(action: SubscribeAction): Promise<void> {
     const { id, reqId, start } = action;
     this.send({ type: "ack", id, reqId });
-    for await (const messages of Channel.race([
-      this.conn.subscribe(id, start),
-      this.stop,
-    ])) {
+    for await (const messages of this.conn.subscribe(id, start)) {
       if (messages != null) {
         this.send({ type: "sm", id, reqId, messages });
       }
@@ -126,10 +127,66 @@ export class SocketProxy {
     this.send({ type: "ack", id, reqId });
   }
 
-  private sendError(action: Action, err: Error): void {
+  private sendError(action: Action, err: unknown): void {
     const { id, reqId } = action;
-    const { name, message } = err;
+    let name = "Error";
+    let message = "Unknown error";
+    if (err instanceof Error) {
+      ({ name, message } = err);
+    }
     this.send({ type: "err", id, reqId, name, message });
+  }
+
+  async connect(): Promise<void> {
+    for await (const data of listen(this.socket)) {
+      // TODO: handle parsing/validation errors
+      let action: Action = JSON.parse(data);
+      try {
+        for (const hook of this.hooks) {
+          await hook(action);
+        }
+        switch (action.type) {
+          case "fc": {
+            await this.fetchCheckpoint(action);
+            break;
+          }
+          case "fm": {
+            await this.fetchMessages(action);
+            break;
+          }
+          case "sc": {
+            await this.sendCheckpoint(action);
+            break;
+          }
+          case "sm": {
+            await this.sendMessages(action);
+            break;
+          }
+          case "sub": {
+            this.subscribe(action).catch((err) => this.sendError(action, err));
+            break;
+          }
+          default: {
+            throw new Error(`Invalid action type: ${action.type}`);
+          }
+        }
+      } catch (err) {
+        this.sendError(action, err);
+      }
+    }
+    return this.conn.close();
+  }
+
+  addHook(hook: Hook): void {
+    this.hooks.add(hook);
+  }
+
+  removeHook(hook: Hook): void {
+    this.hooks.delete(hook);
+  }
+
+  close(): void {
+    this.socket.close();
   }
 }
 
@@ -159,7 +216,7 @@ export class SocketConnection implements Connection {
   private reqs: Request[] = [];
   private nextReqId = 0;
   private state = SocketConnectionState.CONNECTING;
-  constructor(protected socket: Socket) {
+  constructor(private socket: Socket) {
     socket.addEventListener("open", () => {
       this.state = SocketConnectionState.OPEN;
       for (const action of this.buffer) {

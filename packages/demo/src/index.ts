@@ -66,9 +66,14 @@ fastify.ready((err) => {
       connection: "postgresql://brian:poop@localhost/revise_knex",
     }),
   );
-  fastify.wss.on("connection", (socket: WebSocket) => {
+
+  fastify.wss.on("connection", async (socket: WebSocket) => {
     const proxy = new SocketProxy(socket, conn);
-    proxy.stop.catch((err) => fastify.log.error(err));
+    try {
+      await proxy.connect();
+    } catch (err) {
+      fastify.log.error(err);
+    }
   });
 });
 
