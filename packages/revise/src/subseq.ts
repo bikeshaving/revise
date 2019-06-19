@@ -1,8 +1,9 @@
 /**
+ * TODO: make this more comprehensible
  * A Subseq is an array of numbers which represents a subsequence of elements
  * derived from another sequence. The numbers in the Subseq represent lengths
  * of contiguous segments from the sequence. The represented subsequence
- * “contains” a segment based on its index in the Subseq: segments
+ * “contains” a segment based on its index in the Subseq array: segments
  * alternate between not included and included, with the first length
  * representing a non-included segment. A Subseq will start with a 0 when the
  * sequence and subsequence share the same first element. The elements of the
@@ -17,11 +18,12 @@
  * [0, 1, 6, 1]             = "ah"
  * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
  */
+
 export type Subseq = number[];
 
 // TODO: implement and use a generic Seq type which covers arrays and strings
 
-// [length, ...flags[]]
+// [length: number, flags: ...boolean[]]
 export type Segment = [number, ...boolean[]];
 
 // TODO: is it possible to make this function variadic so we don’t need zip?
@@ -44,13 +46,13 @@ export function print(subseq: Subseq): string {
 }
 
 // WeakMap<Subseq, [falseCount: number, trueCount: number]>
-const countCache = new WeakMap<Subseq, [number, number]>();
+const counts = new WeakMap<Subseq, [number, number]>();
 
 export function count(subseq: Subseq, test?: boolean): number {
   let falseCount = 0;
   let trueCount = 0;
-  if (countCache.has(subseq)) {
-    [falseCount, trueCount] = countCache.get(subseq);
+  if (counts.has(subseq)) {
+    [falseCount, trueCount] = counts.get(subseq);
   } else {
     for (const [length, flag] of segments(subseq)) {
       if (flag) {
@@ -59,7 +61,7 @@ export function count(subseq: Subseq, test?: boolean): number {
         falseCount += length;
       }
     }
-    countCache.set(subseq, [falseCount, trueCount]);
+    counts.set(subseq, [falseCount, trueCount]);
   }
   return test == null ? trueCount + falseCount : test ? trueCount : falseCount;
 }
@@ -83,14 +85,14 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
       subseq.push(length);
     }
   }
-  if (countCache.has(subseq)) {
-    let [falseCount, trueCount] = countCache.get(subseq);
+  if (counts.has(subseq)) {
+    let [falseCount, trueCount] = counts.get(subseq);
     if (flag) {
       trueCount += length;
     } else {
       falseCount += length;
     }
-    countCache.set(subseq, [falseCount, trueCount]);
+    counts.set(subseq, [falseCount, trueCount]);
   } else {
     count(subseq);
   }
@@ -144,9 +146,9 @@ export function complement(subseq: Subseq): Subseq {
   } else {
     result = [0].concat(subseq);
   }
-  if (countCache.has(subseq)) {
-    const [trueCount, falseCount] = countCache.get(subseq);
-    countCache.set(result, [falseCount, trueCount]);
+  if (counts.has(subseq)) {
+    const [falseCount, trueCount] = counts.get(subseq);
+    counts.set(result, [trueCount, falseCount]);
   } else {
     count(result);
   }
@@ -379,7 +381,7 @@ export function shuffle(
   return split(merge(text1, text2, subseq1), subseq2);
 }
 
-// TODO: it would be nice if we could reuse union and shrink for consolidate/erase
+// TODO: it would be nice if we could figure out a way to reuse union and shrink for consolidate/erase
 export function consolidate(
   text1: string,
   text2: string,
@@ -425,4 +427,54 @@ export function erase(
     }
   }
   return [text1, subseq];
+}
+
+export function contains(subseq: Subseq, i: number): boolean {
+  if (i < 0) {
+    throw new RangeError("index out of range");
+  }
+  for (const [length, flag] of segments(subseq)) {
+    i -= length;
+    if (i < 0) {
+      return flag;
+    }
+  }
+  return false;
+}
+
+export function advance(i: number, subseq: Subseq): number {
+  if (i < 0) {
+    throw new RangeError("index out of range");
+  }
+  let consumed = 0;
+  for (const [length, flag] of segments(subseq)) {
+    if (consumed <= i) {
+      if (flag) {
+        i += length;
+      }
+    } else {
+      break;
+    }
+    consumed += length;
+  }
+  return i;
+}
+
+export function retreat(i: number, subseq: Subseq): number {
+  if (i < 0) {
+    throw new RangeError("index out of range");
+  }
+  let consumed = 0;
+  for (const [length, flag] of segments(subseq)) {
+    if (consumed <= i) {
+      if (flag) {
+        i = Math.max(consumed, i - length);
+      } else {
+        consumed += length;
+      }
+    } else {
+      break;
+    }
+  }
+  return i;
 }

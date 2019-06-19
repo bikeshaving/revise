@@ -257,4 +257,151 @@ describe("subseq", () => {
       expect(subseq.interleave(t, s)).toEqual([t2, s2]);
     });
   });
+
+  describe("contains", () => {
+    test("out of range", () => {
+      const s = [4, 3, 2, 3, 4];
+      expect(() => subseq.contains(s, -1)).toThrow(RangeError);
+      expect(() => subseq.contains(s, -1000)).toThrow(RangeError);
+    });
+
+    test("false first", () => {
+      // 0123456789012345
+      // ====+++==+++====
+      const s = [4, 3, 2, 3, 4];
+      let i = 0;
+      for (const [length, flag] of subseq.segments(s)) {
+        const end = i + length;
+        for (; i < end; i++) {
+          expect(subseq.contains(s, i)).toEqual(flag);
+        }
+      }
+    });
+
+    test("true first", () => {
+      // 0123456789012345
+      // ++++===++===++++
+      const s = [0, 4, 3, 2, 3, 4];
+      let i = 0;
+      for (const [length, flag] of subseq.segments(s)) {
+        const end = i + length;
+        for (; i < end; i++) {
+          expect(subseq.contains(s, i)).toEqual(flag);
+        }
+      }
+    });
+  });
+
+  describe("advance", () => {
+    test("out of range", () => {
+      const s = [4, 3, 2, 3, 4];
+      expect(() => subseq.advance(-1, s)).toThrow(RangeError);
+      expect(() => subseq.advance(-1000, s)).toThrow(RangeError);
+    });
+
+    test("false first", () => {
+      // 0123   45   6789
+      // 0123456789012345
+      // ====+++==+++====
+      const s = [4, 3, 2, 3, 4];
+      expect(subseq.advance(0, s)).toBe(0);
+      expect(subseq.advance(1, s)).toBe(1);
+      expect(subseq.advance(2, s)).toBe(2);
+      expect(subseq.advance(3, s)).toBe(3);
+      expect(subseq.advance(4, s)).toBe(7);
+      expect(subseq.advance(5, s)).toBe(8);
+      expect(subseq.advance(6, s)).toBe(12);
+      expect(subseq.advance(7, s)).toBe(13);
+      expect(subseq.advance(8, s)).toBe(14);
+      expect(subseq.advance(9, s)).toBe(15);
+      expect(subseq.advance(10, s)).toBe(16);
+      expect(subseq.advance(11, s)).toBe(17);
+      expect(subseq.advance(12, s)).toBe(18);
+    });
+
+    test("true first", () => {
+      //     012  345
+      // 0123456789012345
+      // ++++===++===++++
+      const s = [0, 4, 3, 2, 3, 4];
+      expect(subseq.advance(0, s)).toBe(4);
+      expect(subseq.advance(1, s)).toBe(5);
+      expect(subseq.advance(2, s)).toBe(6);
+      expect(subseq.advance(3, s)).toBe(9);
+      expect(subseq.advance(4, s)).toBe(10);
+      expect(subseq.advance(5, s)).toBe(11);
+      expect(subseq.advance(6, s)).toBe(16);
+      expect(subseq.advance(7, s)).toBe(17);
+      expect(subseq.advance(8, s)).toBe(18);
+    });
+  });
+
+  describe("retreat", () => {
+    test("out of range", () => {
+      const s = [4, 3, 2, 3, 4];
+      expect(() => subseq.retreat(-1, s)).toThrow(RangeError);
+      expect(() => subseq.retreat(-1000, s)).toThrow(RangeError);
+    });
+    test("false first", () => {
+      // 0123456789012345
+      // 0123444456666789
+      // ====+++==+++====
+      const s = [4, 3, 2, 3, 4];
+      expect(subseq.retreat(0, s)).toBe(0);
+      expect(subseq.retreat(1, s)).toBe(1);
+      expect(subseq.retreat(2, s)).toBe(2);
+      expect(subseq.retreat(3, s)).toBe(3);
+
+      expect(subseq.retreat(4, s)).toBe(4);
+      expect(subseq.retreat(5, s)).toBe(4);
+      expect(subseq.retreat(6, s)).toBe(4);
+
+      expect(subseq.retreat(7, s)).toBe(4);
+      expect(subseq.retreat(8, s)).toBe(5);
+
+      expect(subseq.retreat(9, s)).toBe(6);
+      expect(subseq.retreat(10, s)).toBe(6);
+      expect(subseq.retreat(11, s)).toBe(6);
+
+      expect(subseq.retreat(12, s)).toBe(6);
+      expect(subseq.retreat(13, s)).toBe(7);
+      expect(subseq.retreat(14, s)).toBe(8);
+      expect(subseq.retreat(15, s)).toBe(9);
+      expect(subseq.retreat(16, s)).toBe(10);
+      expect(subseq.retreat(17, s)).toBe(11);
+      expect(subseq.retreat(18, s)).toBe(12);
+    });
+
+    test("true first", () => {
+      // 0123456789012345
+      // 0000012333455555
+      // ++++===++===++++
+      const s = [0, 4, 3, 2, 3, 4];
+
+      expect(subseq.retreat(0, s)).toBe(0);
+      expect(subseq.retreat(1, s)).toBe(0);
+      expect(subseq.retreat(2, s)).toBe(0);
+      expect(subseq.retreat(3, s)).toBe(0);
+
+      expect(subseq.retreat(4, s)).toBe(0);
+      expect(subseq.retreat(5, s)).toBe(1);
+      expect(subseq.retreat(6, s)).toBe(2);
+
+      expect(subseq.retreat(7, s)).toBe(3);
+      expect(subseq.retreat(8, s)).toBe(3);
+
+      expect(subseq.retreat(9, s)).toBe(3);
+      expect(subseq.retreat(10, s)).toBe(4);
+      expect(subseq.retreat(11, s)).toBe(5);
+
+      expect(subseq.retreat(12, s)).toBe(6);
+      expect(subseq.retreat(13, s)).toBe(6);
+      expect(subseq.retreat(14, s)).toBe(6);
+      expect(subseq.retreat(15, s)).toBe(6);
+
+      expect(subseq.retreat(16, s)).toBe(6);
+      expect(subseq.retreat(17, s)).toBe(7);
+      expect(subseq.retreat(18, s)).toBe(8);
+    });
+  });
 });
