@@ -1,18 +1,18 @@
 import { InMemoryPubSub } from "@channel/pubsub";
 import { throttler, Token } from "@channel/limiters";
-import { Connection, Message } from "./connection";
+import { Connection, Revision } from "./connection";
 // TODO: parameterize this or something
 import { Replica } from "./replica";
 
 export interface ClientItem {
   replica: Promise<Replica>;
-  subscription?: AsyncIterator<Message[]>;
+  subscription?: AsyncIterator<Revision[]>;
   inflight?: Promise<void> | void;
 }
 
 export class Client {
   protected items: Record<string, ClientItem> = {};
-  protected pubsub = new InMemoryPubSub<Message>();
+  protected pubsub = new InMemoryPubSub<Revision>();
   protected throttle: AsyncIterableIterator<Token>;
   protected closed = false;
 
@@ -33,7 +33,7 @@ export class Client {
     const checkpoint = await this.conn.fetchCheckpoint(id);
     // TODO: paramaterize Replica constructor
     const replica = new Replica(this.id, checkpoint);
-    const messages = await this.conn.fetchMessages(
+    const messages = await this.conn.fetchRevisions(
       id,
       checkpoint == null ? 0 : checkpoint.version + 1,
     );
@@ -88,7 +88,7 @@ export class Client {
     delete this.items[id].subscription;
   }
 
-  subscribe(id: string): AsyncIterableIterator<Message> {
+  subscribe(id: string): AsyncIterableIterator<Revision> {
     this.connect(id);
     return this.pubsub.subscribe(id);
   }
@@ -114,7 +114,7 @@ export class Client {
     }
     const pending = replica.pending();
     if (pending.length) {
-      item.inflight = this.conn.sendMessages(id, pending);
+      item.inflight = this.conn.sendRevisions(id, pending);
     }
     return item.inflight;
   }

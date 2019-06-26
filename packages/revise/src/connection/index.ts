@@ -1,31 +1,32 @@
-export interface Message {
-  data: any;
-  client: string;
-  local: number;
-  received: number;
-  version?: number;
+export interface Checkpoint {
+  version: number;
+  snapshot: any;
 }
 
-export interface Checkpoint {
-  data: any;
+export interface Revision {
   version: number;
+  local: number;
+  received: number;
+  client: string;
+  patch: any;
 }
 
 export enum ConnectState {
   CONNECTING,
   OPEN,
+  CLOSING,
   CLOSED,
 }
 
 export interface Connection {
   fetchCheckpoint(id: string, start?: number): Promise<Checkpoint | undefined>;
-  fetchMessages(
+  fetchRevisions(
     id: string,
     start?: number,
     end?: number,
-  ): Promise<Message[] | undefined>;
-  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> | void;
-  sendMessages(id: string, messages: Message[]): Promise<void> | void;
-  subscribe(id: string, start?: number): AsyncIterableIterator<Message[]>;
-  close(): Promise<void> | void;
+  ): Promise<Revision[] | undefined>;
+  sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void>;
+  sendRevisions(id: string, revs: Revision[]): Promise<void>;
+  subscribe(id: string, start?: number): AsyncIterableIterator<Revision[]>;
+  close(): void;
 }

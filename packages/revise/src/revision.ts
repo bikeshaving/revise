@@ -1,127 +1,116 @@
+import { factor, Patch, synthesize } from "./patch";
 import {
   difference,
   expand,
   interleave,
-  intersection,
   shrink,
   Subseq,
   union,
 } from "./subseq";
-import { invert } from "./utils";
 
-export interface Revision {
-  readonly client: string;
-  // readonly patch: Patch
-  readonly inserted: string;
-  readonly insertSeq: Subseq;
-  readonly deleteSeq: Subseq;
-  readonly revertSeq: Subseq;
-}
-
-export function rewind(hiddenSeq: Subseq, revs: Revision[]) {
-  for (let { insertSeq, deleteSeq, revertSeq } of invert(revs)) {
-    deleteSeq = difference(deleteSeq, revertSeq);
+export function rewind(hiddenSeq: Subseq, patches: Patch[]): Subseq {
+  for (let i = patches.length - 1; i >= 0; i--) {
+    const { insertSeq, deleteSeq } = factor(patches[i]);
     hiddenSeq = difference(hiddenSeq, deleteSeq);
     hiddenSeq = shrink(hiddenSeq, insertSeq);
   }
   return hiddenSeq;
 }
 
-export function compare(rev1: Revision, rev2: Revision): number {
-  return rev1.client < rev2.client ? -1 : rev1.client > rev2.client ? 1 : 0;
+export function fastForward(hiddenSeq: Subseq, patches: Patch[]): Subseq {
+  for (let i = 0; i < patches.length; i++) {
+    const { insertSeq, deleteSeq } = factor(patches[i]);
+    hiddenSeq = expand(hiddenSeq, insertSeq);
+    hiddenSeq = union(hiddenSeq, deleteSeq);
+  }
+  return hiddenSeq;
 }
 
 export function rebase(
-  rev: Revision,
-  revs: Revision[],
-  compareFn: typeof compare = compare,
-): [Revision, Revision[]] {
-  if (!revs.length) {
-    return [rev, revs];
+  patch: Patch,
+  patches: Patch[],
+  before: (i: number) => boolean,
+): [Patch, Patch[]] {
+  if (!patches.length) {
+    return [patch, patches];
   }
-  let { client, inserted, insertSeq, deleteSeq, revertSeq } = rev;
-  let revs1: Revision[] = [];
-  for (const rev1 of revs) {
+  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  patches = patches.map((patch1, i) => {
     let {
-      client: client1,
       inserted: inserted1,
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
-      revertSeq: revertSeq1,
-    } = rev1;
-    const c = compareFn(rev, rev1);
-    if (c < 0) {
+    } = factor(patch1);
+    if (before(i)) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
-    } else if (c > 0) {
-      [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
     } else {
-      throw new Error("compare function identified two revisions as equal");
+      [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
     }
     deleteSeq = expand(deleteSeq, insertSeq1);
     deleteSeq1 = expand(deleteSeq1, insertSeq);
-    // TODO: figure out if this is necessary
-    const intersecting = intersection(deleteSeq, deleteSeq1);
-    revertSeq = union(expand(revertSeq, insertSeq1), intersecting);
-    revertSeq1 = union(expand(revertSeq1, insertSeq), intersecting);
-    revs1.push({
-      client: client1,
+    // TODO: delete this when we set the snapshot to latest commit
+    deleteSeq1 = difference(deleteSeq1, deleteSeq);
+    return synthesize({
       inserted: inserted1,
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
-      revertSeq: revertSeq1,
     });
-  }
-  rev = { client, inserted, insertSeq, deleteSeq, revertSeq };
-  return [rev, revs1];
+  });
+  patch = synthesize({ inserted, insertSeq, deleteSeq });
+  return [patch, patches];
 }
 
-export function rearrange(
-  revs: Revision[],
-  predicate: (rev: Revision) => boolean,
-): Revision[] {
-  if (!revs.length) {
-    return revs;
-  }
-  const result: Revision[] = [];
-  let hiddenSeq: Subseq | undefined;
+// TODO: Deal with the larger philosophical issue which is that we’re relying on the call order of the callbacks rather than treating predicates as a pure function. Also, rearrange removes patches from the array, so indexes can’t be shared between rearrange and rebase, which are called in succession.
+export function slideForward(
+  patches: Patch[],
+  predicate: (i: number) => boolean,
+): Patch[] {
+  const patches1: Patch[] = [];
   let expandSeq: Subseq | undefined;
-  for (let rev of invert(revs)) {
-    let { client, inserted, insertSeq, deleteSeq, revertSeq } = rev;
-    if (predicate(rev)) {
-      if (expandSeq == null) {
-        hiddenSeq = revertSeq;
-        expandSeq = insertSeq;
-      } else if (expandSeq != null && hiddenSeq != null) {
-        hiddenSeq = union(hiddenSeq, expand(revertSeq, expandSeq));
-        expandSeq = expand(insertSeq, expandSeq, { union: true });
-      }
-    } else {
-      if (expandSeq != null && hiddenSeq != null) {
+  for (let i = patches.length - 1; i >= 0; i--) {
+    let patch = patches[i];
+    let { inserted, insertSeq, deleteSeq } = factor(patch);
+    if (predicate(i)) {
+      if (expandSeq != null) {
         deleteSeq = expand(deleteSeq, expandSeq);
         insertSeq = expand(insertSeq, expandSeq);
-        revertSeq = union(expand(revertSeq, expandSeq), hiddenSeq);
         expandSeq = shrink(expandSeq, insertSeq);
-        hiddenSeq = shrink(hiddenSeq, insertSeq);
-        rev = { client, inserted, insertSeq, deleteSeq, revertSeq };
+        patch = synthesize({ inserted, insertSeq, deleteSeq });
       }
-      result.unshift(rev);
+      patches1.unshift(patch);
+    } else {
+      expandSeq =
+        expandSeq == null
+          ? insertSeq
+          : expand(insertSeq, expandSeq, { union: true });
     }
   }
-  return result;
+  return patches1;
 }
 
-export function summarize(revs: Revision[]): Subseq {
-  if (revs.length === 0) {
-    throw new Error("summarize called with empty array");
+export function slideBackward(
+  patches: Patch[],
+  predicate: (i: number) => boolean,
+): Patch[] {
+  const patches1: Patch[] = [];
+  let expandSeq: Subseq | undefined;
+  for (let i = 0; i < patches.length; i++) {
+    let patch = patches[i];
+    let { inserted, insertSeq, deleteSeq } = factor(patch);
+    if (predicate(i)) {
+      if (expandSeq != null) {
+        expandSeq = expand(expandSeq, insertSeq);
+        insertSeq = shrink(insertSeq, expandSeq);
+        deleteSeq = shrink(deleteSeq, expandSeq);
+        patch = synthesize({ inserted, insertSeq, deleteSeq });
+      }
+      patches1.push(patch);
+    } else {
+      expandSeq =
+        expandSeq == null
+          ? insertSeq
+          : expand(expandSeq, insertSeq, { union: true });
+    }
   }
-  let expandSeq = revs[0].insertSeq;
-  for (const rev of revs.slice(1)) {
-    expandSeq = expand(expandSeq, rev.insertSeq, { union: true });
-  }
-  return expandSeq;
-}
-
-export function normalize(rev: Revision, hiddenSeq: Subseq): Revision {
-  hiddenSeq = expand(hiddenSeq, rev.insertSeq);
-  return { ...rev, revertSeq: intersection(rev.deleteSeq, hiddenSeq) };
+  return patches1;
 }

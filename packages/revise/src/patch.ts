@@ -2,6 +2,7 @@ import {
   clear,
   consolidate,
   count,
+  difference,
   erase,
   expand,
   interleave,
@@ -300,5 +301,12 @@ export function shrinkHidden(patch: Patch, hiddenSeq: Subseq): Patch {
   hiddenSeq = union(hiddenSeq, intersection(insertSeq, deleteSeq));
   [inserted, insertSeq] = erase(inserted, insertSeq, hiddenSeq);
   deleteSeq = shrink(deleteSeq, hiddenSeq);
+  return synthesize({ inserted, insertSeq, deleteSeq });
+}
+
+export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
+  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  hiddenSeq = expand(hiddenSeq, insertSeq);
+  deleteSeq = difference(deleteSeq, hiddenSeq);
   return synthesize({ inserted, insertSeq, deleteSeq });
 }

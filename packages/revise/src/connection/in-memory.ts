@@ -1,18 +1,18 @@
 import { InMemoryPubSub } from "@channel/pubsub";
-import { Checkpoint, Connection, Message } from "../connection";
+import { Checkpoint, Connection, Revision } from "../connection";
 import { findLast } from "../utils";
 
 interface InMemoryConnectionItem {
-  checkpoints: Checkpoint[];
   clients: Record<string, number>;
-  messages: Message[];
+  checkpoints: Checkpoint[];
+  revisions: Revision[];
 }
 
 function cloneItem(item: InMemoryConnectionItem): InMemoryConnectionItem {
   return {
     checkpoints: item.checkpoints.slice(),
     clients: { ...item.clients },
-    messages: item.messages.slice(),
+    revisions: item.revisions.slice(),
   };
 }
 
@@ -38,11 +38,11 @@ export class InMemoryConnection implements Connection {
     return findLast(checkpoints, (checkpoint) => checkpoint.version <= before);
   }
 
-  async fetchMessages(
+  async fetchRevisions(
     id: string,
     start?: number,
     end?: number,
-  ): Promise<Message[] | undefined> {
+  ): Promise<Revision[] | undefined> {
     if (this.closed) {
       throw new Error("Connection closed");
     } else if (start != null && start < 0) {
@@ -56,7 +56,7 @@ export class InMemoryConnection implements Connection {
     if (item == null) {
       return;
     }
-    return item.messages.slice(start, end);
+    return item.revisions.slice(start, end);
   }
 
   async sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
@@ -66,9 +66,9 @@ export class InMemoryConnection implements Connection {
     const item = this.items[id];
     if (
       (item == null && checkpoint.version !== 0) ||
-      checkpoint.version > item.messages.length
+      checkpoint.version > item.revisions.length
     ) {
-      throw new Error("Missing message");
+      throw new Error("Missing revision");
     }
     // TODO: maybe use binary search to insert
     // https://stackoverflow.com/questions/1344500/efficient-way-to-insert-a-number-into-a-sorted-array-of-numbers
@@ -76,7 +76,7 @@ export class InMemoryConnection implements Connection {
     item.checkpoints.sort((a, b) => a.version - b.version);
   }
 
-  async sendMessages(id: string, messages: Message[]): Promise<void> {
+  async sendRevisions(id: string, revisions: Revision[]): Promise<void> {
     if (this.closed) {
       throw new Error("Connection closed");
     }
@@ -84,28 +84,26 @@ export class InMemoryConnection implements Connection {
     if (item == null) {
       item = {
         clients: {},
-        messages: [],
         checkpoints: [],
+        revisions: [],
       };
     } else {
       item = cloneItem(item);
     }
     this.items[id] = item;
     let version: number | undefined;
-    for (const message of messages) {
+    for (const rev of revisions) {
       const expectedLocal =
-        (item.clients[message.client] == null
-          ? -1
-          : item.clients[message.client]) + 1;
-      if (message.local > expectedLocal) {
-        throw new Error("Missing message");
-      } else if (message.local < expectedLocal) {
+        (item.clients[rev.client] == null ? -1 : item.clients[rev.client]) + 1;
+      if (rev.local > expectedLocal) {
+        throw new Error("Missing revision");
+      } else if (rev.local < expectedLocal) {
         continue;
       } else {
-        item.clients[message.client] = message.local;
+        item.clients[rev.client] = rev.local;
       }
-      version = item.messages.length;
-      item.messages.push({ ...message, version });
+      version = item.revisions.length;
+      item.revisions.push({ ...rev, version });
     }
     if (version != null) {
       this.pubsub.publish(id, version);
@@ -115,22 +113,22 @@ export class InMemoryConnection implements Connection {
   async *subscribe(
     id: string,
     start: number = 0,
-  ): AsyncIterableIterator<Message[]> {
+  ): AsyncIterableIterator<Revision[]> {
     if (this.closed) {
       throw new Error("Connection closed");
     } else if (start < 0) {
       throw new RangeError("start cannot be less than 0");
     }
-    const messages = await this.fetchMessages(id, start);
-    if (messages != null && messages.length) {
-      yield messages;
-      start = messages[messages.length - 1].version! + 1;
+    const revisions = await this.fetchRevisions(id, start);
+    if (revisions != null && revisions.length) {
+      yield revisions;
+      start = revisions[revisions.length - 1].version! + 1;
     }
     for await (const end of this.pubsub.subscribe(id)) {
       if (end >= start) {
-        const messages = await this.fetchMessages(id, start);
-        if (messages != null && messages.length) {
-          yield messages;
+        const revisions = await this.fetchRevisions(id, start);
+        if (revisions != null && revisions.length) {
+          yield revisions;
         }
         start = end + 1;
       }

@@ -1,6 +1,6 @@
 import { Server } from "ws";
 
-import { Checkpoint, Message } from "../../connection";
+import { Checkpoint, Revision } from "../../connection";
 import { InMemoryConnection } from "../in-memory";
 import { listen, SocketConnection, SocketProxy } from "../socket";
 
@@ -34,7 +34,7 @@ describe("SocketConnection", () => {
     await expect(chan.next()).resolves.toEqual({ done: true });
   });
 
-  test("messages", async () => {
+  test("revisions", async () => {
     const storage = new InMemoryConnection();
     const result = new Promise((resolve) => {
       server.on("connection", (socket: WebSocket) => {
@@ -44,18 +44,18 @@ describe("SocketConnection", () => {
     });
     const socket = new WebSocket(url);
     const conn = new SocketConnection(socket);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: 0 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: 1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: 2 },
     ];
-    await conn.sendMessages("doc1", messages);
-    const messages1 = await conn.fetchMessages("doc1");
-    const messages2 = messages.map((message, version) => ({
-      ...message,
+    await conn.sendRevisions("doc1", revisions);
+    const revisions1 = await conn.fetchRevisions("doc1");
+    const revisions2 = revisions.map((rev, version) => ({
+      ...rev,
       version,
     }));
-    expect(messages2).toEqual(messages1);
+    expect(revisions2).toEqual(revisions1);
     socket.close();
     await expect(result).resolves.toBeUndefined();
   });
@@ -70,21 +70,21 @@ describe("SocketConnection", () => {
     });
     const socket = new WebSocket(url);
     const conn = new SocketConnection(socket);
-    await conn.sendMessages("doc1", [
-      { data: "hi", client: "client1", local: 0, received: -1 },
-      { data: "hi", client: "client1", local: 1, received: -1 },
+    await conn.sendRevisions("doc1", [
+      { patch: "hi", client: "client1", local: 0, received: -1, version: 0 },
+      { patch: "hi", client: "client1", local: 1, received: -1, version: 1 },
     ]);
-    const checkpointA: Checkpoint = { data: "hi", version: 2 };
+    const checkpointA: Checkpoint = { snapshot: "hi", version: 2 };
     await conn.sendCheckpoint("doc1", checkpointA);
-    const checkpointB: Checkpoint = { data: "hello", version: 3 };
+    const checkpointB: Checkpoint = { snapshot: "hello", version: 3 };
     await expect(
       conn.sendCheckpoint("doc1", checkpointB),
     ).rejects.toBeDefined();
-    await conn.sendMessages("doc1", [
-      { data: "hello", client: "client1", local: 2, received: 2 },
+    await conn.sendRevisions("doc1", [
+      { patch: "hello", client: "client1", local: 2, received: 2, version: 2 },
     ]);
     await conn.sendCheckpoint("doc1", checkpointB);
-    const checkpointC: Checkpoint = { data: "uhhh", version: 1 };
+    const checkpointC: Checkpoint = { snapshot: "uhhh", version: 1 };
     await conn.sendCheckpoint("doc1", checkpointC);
     const checkpointA1 = await conn.fetchCheckpoint("doc1", 2);
     const checkpointB1 = await conn.fetchCheckpoint("doc1");
@@ -108,27 +108,24 @@ describe("SocketConnection", () => {
     const socket = new WebSocket(url);
     const conn = new SocketConnection(socket);
     const subscription = conn.subscribe("doc", 0);
-    const messages: Promise<Message[]> = (async () => {
-      let messages: Message[] = [];
-      for await (const messages1 of subscription) {
-        messages = messages.concat(messages1);
+    const revisions: Promise<Revision[]> = (async () => {
+      let revisions: Revision[] = [];
+      for await (const revisions1 of subscription) {
+        revisions = revisions.concat(revisions1);
       }
-      return messages;
+      return revisions;
     })();
-    const messages1 = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
+    const revisions1: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: 0 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: 1 },
     ];
-    await conn.sendMessages("doc", messages1);
-    const messages2 = [
-      { data: "c", client: "client1", local: 2, received: -1 },
+    await conn.sendRevisions("doc", revisions1);
+    const revisions2: Revision[] = [
+      { patch: "c", client: "client1", local: 2, received: -1, version: 2 },
     ];
-    await conn.sendMessages("doc", messages2);
-    const messages3 = messages1
-      .concat(messages2)
-      .map((message, version) => ({ ...message, version }));
+    await conn.sendRevisions("doc", revisions2);
     socket.close();
-    await expect(messages).resolves.toEqual(messages3);
+    await expect(revisions).resolves.toEqual(revisions1.concat(revisions2));
     await expect(result).resolves.toBeUndefined();
   });
 });

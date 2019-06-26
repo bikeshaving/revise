@@ -20,9 +20,3 @@ export function findLast<T>(
   }
   return arr[i];
 }
-
-export function* invert<T>(arr: T[]): IterableIterator<T> {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    yield arr[i];
-  }
-}

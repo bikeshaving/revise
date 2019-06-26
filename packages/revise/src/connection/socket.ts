@@ -1,5 +1,5 @@
 import { Channel, ChannelBuffer } from "@channel/channel";
-import { Checkpoint, Connection, Message } from "./index";
+import { Checkpoint, Connection, Revision } from "./index";
 
 export interface AbstractAction {
   type: string;
@@ -16,8 +16,8 @@ export interface FetchCheckpointAction extends AbstractAction {
   start?: number;
 }
 
-export interface FetchMessagesAction extends AbstractAction {
-  type: "fm";
+export interface FetchRevisionsAction extends AbstractAction {
+  type: "fr";
   start?: number;
   end?: number;
 }
@@ -27,9 +27,9 @@ export interface SendCheckpointAction extends AbstractAction {
   checkpoint: Checkpoint;
 }
 
-export interface SendMessagesAction extends AbstractAction {
-  type: "sm";
-  messages: Message[];
+export interface SendRevisionsAction extends AbstractAction {
+  type: "sr";
+  revisions: Revision[];
 }
 
 export interface SubscribeAction extends AbstractAction {
@@ -47,9 +47,9 @@ export type Action =
   | AcknowledgeAction
   | ErrorAction
   | FetchCheckpointAction
-  | FetchMessagesAction
+  | FetchRevisionsAction
   | SendCheckpointAction
-  | SendMessagesAction
+  | SendRevisionsAction
   | SubscribeAction;
 
 export type Socket = WebSocket | RTCDataChannel;
@@ -59,15 +59,15 @@ export function listen<T = any>(
   buffer?: ChannelBuffer<T>,
 ): Channel<T> {
   return new Channel(async (push, stop) => {
-    const handleMessage = (ev: any) => push(ev.data);
+    const handleRevision = (ev: any) => push(ev.data);
     const handleError = () => stop(new Error("Socket Error"));
     const handleClose = () => stop();
-    socket.addEventListener("message", handleMessage);
+    socket.addEventListener("message", handleRevision);
     socket.addEventListener("error", handleError);
     socket.addEventListener("close", handleClose);
     await stop;
     socket.close();
-    socket.removeEventListener("message", handleMessage);
+    socket.removeEventListener("message", handleRevision);
     socket.removeEventListener("error", handleError);
     socket.removeEventListener("close", handleClose);
   }, buffer);
@@ -94,13 +94,13 @@ export class SocketProxy {
     }
   }
 
-  private async fetchMessages(action: FetchMessagesAction): Promise<void> {
+  private async fetchRevisions(action: FetchRevisionsAction): Promise<void> {
     const { id, reqId, start, end } = action;
-    const messages = await this.conn.fetchMessages(id, start, end);
-    if (messages == null) {
+    const revisions = await this.conn.fetchRevisions(id, start, end);
+    if (revisions == null) {
       this.send({ type: "ack", id, reqId });
     } else {
-      this.send({ type: "sm", id, reqId, messages });
+      this.send({ type: "sr", id, reqId, revisions });
     }
   }
 
@@ -110,18 +110,18 @@ export class SocketProxy {
     this.send({ type: "ack", id, reqId });
   }
 
-  private async sendMessages(action: SendMessagesAction): Promise<void> {
-    const { id, reqId, messages } = action;
-    await this.conn.sendMessages(id, messages);
+  private async sendRevisions(action: SendRevisionsAction): Promise<void> {
+    const { id, reqId, revisions } = action;
+    await this.conn.sendRevisions(id, revisions);
     this.send({ type: "ack", id, reqId });
   }
 
   private async subscribe(action: SubscribeAction): Promise<void> {
     const { id, reqId, start } = action;
     this.send({ type: "ack", id, reqId });
-    for await (const messages of this.conn.subscribe(id, start)) {
-      if (messages != null) {
-        this.send({ type: "sm", id, reqId, messages });
+    for await (const revisions of this.conn.subscribe(id, start)) {
+      if (revisions != null) {
+        this.send({ type: "sr", id, reqId, revisions });
       }
     }
     this.send({ type: "ack", id, reqId });
@@ -150,16 +150,16 @@ export class SocketProxy {
             await this.fetchCheckpoint(action);
             break;
           }
-          case "fm": {
-            await this.fetchMessages(action);
+          case "fr": {
+            await this.fetchRevisions(action);
             break;
           }
           case "sc": {
             await this.sendCheckpoint(action);
             break;
           }
-          case "sm": {
-            await this.sendMessages(action);
+          case "sr": {
+            await this.sendRevisions(action);
             break;
           }
           case "sub": {
@@ -258,11 +258,11 @@ export class SocketConnection implements Connection {
           }
           break;
         }
-        case "sm": {
+        case "sr": {
           if (req.type === "procedure") {
-            req.resolve(action.messages);
+            req.resolve(action.revisions);
           } else {
-            req.push(action.messages);
+            req.push(action.revisions);
           }
           break;
         }
@@ -323,28 +323,28 @@ export class SocketConnection implements Connection {
     return this.send({ type: "fc", id, reqId: this.nextReqId++, start });
   }
 
-  fetchMessages(
+  fetchRevisions(
     id: string,
     start?: number,
     end?: number,
-  ): Promise<Message[] | undefined> {
-    return this.send({ type: "fm", id, reqId: this.nextReqId++, start, end });
+  ): Promise<Revision[] | undefined> {
+    return this.send({ type: "fr", id, reqId: this.nextReqId++, start, end });
   }
 
   sendCheckpoint(id: string, checkpoint: Checkpoint): Promise<void> {
     return this.send({ type: "sc", id, reqId: this.nextReqId++, checkpoint });
   }
 
-  sendMessages(id: string, messages: Message[]): Promise<void> {
-    return this.send({ type: "sm", id, reqId: this.nextReqId++, messages });
+  sendRevisions(id: string, revisions: Revision[]): Promise<void> {
+    return this.send({ type: "sr", id, reqId: this.nextReqId++, revisions });
   }
 
   subscribe(
     id: string,
     start: number,
-    buffer?: ChannelBuffer<Message[]>,
-  ): Channel<Message[]> {
-    const chan = new Channel<Message[]>(async (push, stop) => {
+    buffer?: ChannelBuffer<Revision[]>,
+  ): Channel<Revision[]> {
+    const chan = new Channel<Revision[]>(async (push, stop) => {
       if (this.state >= SocketConnectionState.CLOSED) {
         throw new Error("Connection closed");
       }

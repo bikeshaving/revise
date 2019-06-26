@@ -1,4 +1,4 @@
-import { Message } from "./connection";
+import { Revision } from "./connection";
 import { Client } from "./client";
 import { build, Patch } from "./patch";
 import { Replica, Update, Version } from "./replica";
@@ -49,7 +49,7 @@ export class CollabText {
   }
 
   // TODO: return versions not messages and also listen for local edits
-  subscribe(): AsyncIterableIterator<Message> {
+  subscribe(): AsyncIterableIterator<Revision> {
     return this.client.subscribe(this.id);
   }
 }
