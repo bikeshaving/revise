@@ -50,6 +50,7 @@ function Editor() {
       lineWrapping: true,
       autofocus: true,
     });
+    cm.setSize("100%", "100%");
     let unmounted = false;
     let handleChange: (
       cm: CodeMirror.Editor & CodeMirror.Doc,
@@ -91,7 +92,12 @@ function Editor() {
       cm.off("change", handleChange);
     };
   }, []);
-  return <div ref={editor} />;
+  return (
+    <div
+      ref={editor}
+      style={{ margin: "0 auto", padding: 20, maxWidth: 600 }}
+    />
+  );
 }
 
 export default function IndexPage() {
