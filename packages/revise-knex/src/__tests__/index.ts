@@ -2,7 +2,7 @@ import * as Knex from "knex";
 import { KnexConnection } from "../index";
 // @ts-ignore
 import * as knexfile from "../../knexfile";
-import { Message } from "@createx/revise/lib/connection";
+import { Revision } from "@createx/revise/lib/connection";
 
 describe("KnexConnection", () => {
   let knex: Knex;
@@ -11,219 +11,212 @@ describe("KnexConnection", () => {
   });
 
   beforeEach(async () => {
-    await knex("revise_message").truncate();
+    await knex("revise_revision").truncate();
   });
 
   afterAll(async () => {
-    await knex("revise_message").truncate();
+    await knex("revise_revision").truncate();
     knex.destroy();
   });
 
-  test("messages", async () => {
+  test("revisions", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages);
-    const messages1 = await conn.fetchMessages("doc1");
-    const messages2 = messages.map((message, version) => ({
-      ...message,
-      version,
-    }));
-    expect(messages1).toEqual(messages2);
+    await conn.sendRevisions("doc1", revisions);
+    const revisions1 = await conn.fetchRevisions("doc1");
+    const revisions2 = revisions.map((rev, version) => ({ ...rev, version }));
+    expect(revisions1).toEqual(revisions2);
   });
 
-  test("multiple sendMessages", async () => {
+  test("multiple sendRevisions", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages.slice(0, 2));
-    await conn.sendMessages("doc1", messages.slice(2));
-    const messages1 = await conn.fetchMessages("doc1");
-    const messages2 = messages.map((message, version) => ({
-      ...message,
-      version,
-    }));
-    expect(messages1).toEqual(messages2);
+    await conn.sendRevisions("doc1", revisions.slice(0, 2));
+    await conn.sendRevisions("doc1", revisions.slice(2));
+    const revisions1 = await conn.fetchRevisions("doc1");
+    const revisions2 = revisions.map((rev, version) => ({ ...rev, version }));
+    expect(revisions1).toEqual(revisions2);
   });
 
-  test("sendMessages idempotent", async () => {
+  test("sendRevisions idempotent", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages.slice(0, 3));
-    await conn.sendMessages("doc1", messages.slice(2));
-    const messages1 = await conn.fetchMessages("doc1");
-    const messages2 = messages.map((message, version) => ({
-      ...message,
-      version,
-    }));
-    expect(messages1).toEqual(messages2);
+    await conn.sendRevisions("doc1", revisions.slice(0, 3));
+    await conn.sendRevisions("doc1", revisions.slice(2));
+    const revisions1 = await conn.fetchRevisions("doc1");
+    const revisions2 = revisions.map((rev, version) => ({ ...rev, version }));
+    expect(revisions1).toEqual(revisions2);
   });
 
   test("multiple clients", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: 2 },
-      { data: "d", client: "client1", local: 3, received: 2 },
-      { data: "e", client: "client1", local: 4, received: 2 },
-      { data: "1", client: "client2", local: 0, received: 2 },
-      { data: "2", client: "client2", local: 1, received: 2 },
-      { data: "3", client: "client2", local: 2, received: 2 },
-      { data: "4", client: "client2", local: 3, received: 2 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: 2, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: 2, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: 2, version: -1 },
+      { patch: "1", client: "client2", local: 0, received: 2, version: -1 },
+      { patch: "2", client: "client2", local: 1, received: 2, version: -1 },
+      { patch: "3", client: "client2", local: 2, received: 2, version: -1 },
+      { patch: "4", client: "client2", local: 3, received: 2, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages.slice(0, 2));
-    await conn.sendMessages("doc1", messages.slice(5, 8));
-    await conn.sendMessages(
+    await conn.sendRevisions("doc1", revisions.slice(0, 2));
+    await conn.sendRevisions("doc1", revisions.slice(5, 8));
+    await conn.sendRevisions(
       "doc1",
-      messages.slice(2, 4).concat(messages.slice(8)),
+      revisions.slice(2, 4).concat(revisions.slice(8)),
     );
   });
 
-  test("missing message throws", async () => {
+  test("missing rev throws", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
-    await expect(conn.sendMessages("doc1", messages)).rejects.toThrow();
+    await expect(conn.sendRevisions("doc1", revisions)).rejects.toThrow();
   });
 
-  test("missing message with multiple clients throws", async () => {
+  test("missing rev with multiple clients throws", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: 2 },
-      { data: "d", client: "client1", local: 3, received: 2 },
-      { data: "e", client: "client1", local: 4, received: 2 },
-      { data: "1", client: "client2", local: 0, received: 2 },
-      { data: "2", client: "client2", local: 1, received: 2 },
-      { data: "4", client: "client2", local: 3, received: 2 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: 2, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: 2, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: 2, version: -1 },
+      { patch: "1", client: "client2", local: 0, received: 2, version: -1 },
+      { patch: "2", client: "client2", local: 1, received: 2, version: -1 },
+      { patch: "4", client: "client2", local: 3, received: 2, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages.slice(0, 2));
-    await conn.sendMessages("doc1", messages.slice(5, 7));
+    await conn.sendRevisions("doc1", revisions.slice(0, 2));
+    await conn.sendRevisions("doc1", revisions.slice(5, 7));
     await expect(
-      conn.sendMessages("doc1", messages.slice(2, 5).concat(messages.slice(7))),
+      conn.sendRevisions(
+        "doc1",
+        revisions.slice(2, 5).concat(revisions.slice(7)),
+      ),
     ).rejects.toThrow();
   });
 
-  test("messages with start", async () => {
+  test("revisions with start", async () => {
     const conn = new KnexConnection(knex);
 
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages);
-    const messages1 = await conn.fetchMessages("doc1", 1);
-    const messages2 = messages.slice(1).map((message, version) => ({
-      ...message,
+    await conn.sendRevisions("doc1", revisions);
+    const revisions1 = await conn.fetchRevisions("doc1", 1);
+    const revisions2 = revisions.slice(1).map((rev, version) => ({
+      ...rev,
       version: version + 1,
     }));
-    expect(messages1).toEqual(messages2);
+    expect(revisions1).toEqual(revisions2);
   });
 
-  test("messages with end", async () => {
+  test("revisions with end", async () => {
     const conn = new KnexConnection(knex);
 
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
-    await conn.sendMessages("doc1", messages);
+    await conn.sendRevisions("doc1", revisions);
 
-    const messages1 = await conn.fetchMessages("doc1", undefined, 2);
-    const messages2 = messages.slice(0, 2).map((message, version) => ({
-      ...message,
+    const revisions1 = await conn.fetchRevisions("doc1", undefined, 2);
+    const revisions2 = revisions.slice(0, 2).map((rev, version) => ({
+      ...rev,
       version: version,
     }));
-    expect(messages1).toEqual(messages2);
+    expect(revisions1).toEqual(revisions2);
   });
 
-  test("messages with start and end", async () => {
+  test("revisions with start and end", async () => {
     const conn = new KnexConnection(knex);
-    const messages: Message[] = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: -1 },
-      { data: "d", client: "client1", local: 3, received: -1 },
-      { data: "e", client: "client1", local: 4, received: -1 },
+    const revisions: Revision[] = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: -1, version: -1 },
+      { patch: "d", client: "client1", local: 3, received: -1, version: -1 },
+      { patch: "e", client: "client1", local: 4, received: -1, version: -1 },
     ];
 
-    await conn.sendMessages("doc1", messages);
+    await conn.sendRevisions("doc1", revisions);
 
-    const messages1 = await conn.fetchMessages("doc1", 1, 2);
-    const messages2 = messages.slice(1, 2).map((message, version) => ({
-      ...message,
+    const revisions1 = await conn.fetchRevisions("doc1", 1, 2);
+    const revisions2 = revisions.slice(1, 2).map((rev, version) => ({
+      ...rev,
       version: version + 1,
     }));
-    expect(messages1).toEqual(messages2);
+    expect(revisions1).toEqual(revisions2);
   });
 
-  test("fetchMessages with negative indexes", async () => {
+  test("fetchRevisions with negative indexes", async () => {
     const conn = new KnexConnection(knex);
 
-    await expect(conn.fetchMessages("doc1", -1)).rejects.toThrow(RangeError);
-    await expect(conn.fetchMessages("doc1", 1, -2)).rejects.toThrow(RangeError);
+    await expect(conn.fetchRevisions("doc1", -1)).rejects.toThrow(RangeError);
+    await expect(conn.fetchRevisions("doc1", 1, -2)).rejects.toThrow(
+      RangeError,
+    );
   });
 
-  test("fetchMessages with end less than or equal to start", async () => {
+  test("fetchRevisions with end less than or equal to start", async () => {
     const conn = new KnexConnection(knex);
 
-    await expect(conn.fetchMessages("doc1", 2, 2)).rejects.toThrow(RangeError);
-    await expect(conn.fetchMessages("doc1", 5, 3)).rejects.toThrow(RangeError);
+    await expect(conn.fetchRevisions("doc1", 2, 2)).rejects.toThrow(RangeError);
+    await expect(conn.fetchRevisions("doc1", 5, 3)).rejects.toThrow(RangeError);
   });
 
   test("subscribe", async () => {
     const conn = new KnexConnection(knex);
 
     const subscription = conn.subscribe("doc", 0);
-    const messages: Promise<Message[]> = (async () => {
-      let messages: Message[] = [];
-      for await (const messages1 of subscription) {
-        messages = messages.concat(messages1);
-        if (messages.length === 3) {
+    const revisions: Promise<Revision[]> = (async () => {
+      let revisions: Revision[] = [];
+      for await (const revisions1 of subscription) {
+        revisions = revisions.concat(revisions1);
+        if (revisions.length === 3) {
           break;
         }
       }
-      return messages;
+      return revisions;
     })();
-    const messages1 = [
-      { data: "a", client: "client1", local: 0, received: -1 },
-      { data: "b", client: "client1", local: 1, received: -1 },
-      { data: "c", client: "client1", local: 2, received: 1 },
+    const revisions1 = [
+      { patch: "a", client: "client1", local: 0, received: -1, version: -1 },
+      { patch: "b", client: "client1", local: 1, received: -1, version: -1 },
+      { patch: "c", client: "client1", local: 2, received: 1, version: -1 },
     ];
-    await conn.sendMessages("doc", messages1.slice(0, 2));
-    await conn.sendMessages("doc", messages1.slice(2));
-    const messages2 = messages1.map((message, version) => ({
-      ...message,
-      version,
-    }));
-    await expect(messages).resolves.toEqual(messages2);
+    await conn.sendRevisions("doc", revisions1.slice(0, 2));
+    await conn.sendRevisions("doc", revisions1.slice(2));
+    const revisions2 = revisions1.map((rev, version) => ({ ...rev, version }));
+    await expect(revisions).resolves.toEqual(revisions2);
   });
 });
