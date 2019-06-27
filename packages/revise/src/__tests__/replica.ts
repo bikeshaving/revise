@@ -2,21 +2,6 @@ import { apply } from "../patch";
 import { Replica } from "../replica";
 
 describe("Replica", () => {
-  describe("Replica.hiddenSeqAt", () => {
-    test("edits", () => {
-      const replica = new Replica("client1");
-      replica.edit(["hello world", 0]);
-      replica.edit(["H", 1, 6, "W", 7, 11]);
-      replica.edit([0, 5, ", Brian", 11]);
-      replica.edit([0, 5, ", Dr. Evil", 11], { change: 0 });
-      expect(replica.hiddenSeqAt({ change: -1 })).toEqual([]);
-      expect(replica.hiddenSeqAt({ change: 0 })).toEqual([11]);
-      expect(replica.hiddenSeqAt({ change: 1 })).toEqual([1, 1, 6, 1, 4]);
-      expect(replica.hiddenSeqAt({ change: 2 })).toEqual([1, 1, 11, 7]);
-      expect(replica.hiddenSeqAt({ change: 3 })).toEqual([1, 1, 21, 7]);
-    });
-  });
-
   describe("Replica.snapshotAt", () => {
     test("edits", () => {
       const replica = new Replica("client1");
@@ -234,31 +219,131 @@ describe("Replica", () => {
         replica2.ingest({ ...message, version });
         version++;
       }
-      expect(replica1.hiddenSeqAt({ commit: -1, change: -1 })).toEqual([]);
-      expect(replica1.hiddenSeqAt({ commit: -1, change: 0 })).toEqual([4]);
-      expect(replica1.hiddenSeqAt({ commit: -1, change: 1 })).toEqual([5]);
-      expect(replica1.hiddenSeqAt({ commit: -1, change: 2 })).toEqual([6]);
-      expect(replica1.hiddenSeqAt({ commit: -1, change: 3 })).toEqual([7]);
-      expect(replica1.hiddenSeqAt({ commit: 0, change: -1 })).toEqual([4]);
-      expect(replica1.hiddenSeqAt({ commit: 0, change: 0 })).toEqual([4]);
-      expect(replica1.hiddenSeqAt({ commit: 0, change: 1 })).toEqual([5]);
-      expect(replica1.hiddenSeqAt({ commit: 0, change: 2 })).toEqual([6]);
-      expect(replica1.hiddenSeqAt({ commit: 0, change: 3 })).toEqual([7]);
-      expect(replica1.hiddenSeqAt({ commit: 1, change: -1 })).toEqual([6]);
-      expect(replica1.hiddenSeqAt({ commit: 1, change: 0 })).toEqual([6]);
-      expect(replica1.hiddenSeqAt({ commit: 1, change: 1 })).toEqual([6]);
-      expect(replica1.hiddenSeqAt({ commit: 1, change: 2 })).toEqual([6]);
-      expect(replica1.hiddenSeqAt({ commit: 1, change: 3 })).toEqual([7]);
-      expect(replica1.hiddenSeqAt({ commit: 2, change: -1 })).toEqual([8]);
-      expect(replica1.hiddenSeqAt({ commit: 2, change: 0 })).toEqual([8]);
-      expect(replica1.hiddenSeqAt({ commit: 2, change: 1 })).toEqual([8]);
-      expect(replica1.hiddenSeqAt({ commit: 2, change: 2 })).toEqual([8]);
-      expect(replica1.hiddenSeqAt({ commit: 2, change: 3 })).toEqual([9]);
-      expect(replica1.hiddenSeqAt({ commit: 3, change: -1 })).toEqual([9]);
-      expect(replica1.hiddenSeqAt({ commit: 3, change: 0 })).toEqual([9]);
-      expect(replica1.hiddenSeqAt({ commit: 3, change: 1 })).toEqual([9]);
-      expect(replica1.hiddenSeqAt({ commit: 3, change: 2 })).toEqual([9]);
-      expect(replica1.hiddenSeqAt({ commit: 3, change: 3 })).toEqual([10]);
+      expect(replica1.snapshotAt({ commit: -1, change: -1 })).toEqual({
+        visible: "",
+        hidden: "",
+        hiddenSeq: [],
+      });
+      expect(replica1.snapshotAt({ commit: -1, change: 0 })).toEqual({
+        visible: "abij",
+        hidden: "",
+        hiddenSeq: [4],
+      });
+      expect(replica1.snapshotAt({ commit: -1, change: 1 })).toEqual({
+        visible: "abdij",
+        hidden: "",
+        hiddenSeq: [5],
+      });
+      expect(replica1.snapshotAt({ commit: -1, change: 2 })).toEqual({
+        visible: "abcdij",
+        hidden: "",
+        hiddenSeq: [6],
+      });
+      expect(replica1.snapshotAt({ commit: -1, change: 3 })).toEqual({
+        visible: "abcdfij",
+        hidden: "",
+        hiddenSeq: [7],
+      });
+      expect(replica1.snapshotAt({ commit: 0, change: -1 })).toEqual({
+        visible: "abij",
+        hidden: "",
+        hiddenSeq: [4],
+      });
+      expect(replica1.snapshotAt({ commit: 0, change: 0 })).toEqual({
+        visible: "abij",
+        hidden: "",
+        hiddenSeq: [4],
+      });
+      expect(replica1.snapshotAt({ commit: 0, change: 1 })).toEqual({
+        visible: "abdij",
+        hidden: "",
+        hiddenSeq: [5],
+      });
+      expect(replica1.snapshotAt({ commit: 0, change: 2 })).toEqual({
+        visible: "abcdij",
+        hidden: "",
+        hiddenSeq: [6],
+      });
+      expect(replica1.snapshotAt({ commit: 0, change: 3 })).toEqual({
+        visible: "abcdfij",
+        hidden: "",
+        hiddenSeq: [7],
+      });
+      expect(replica1.snapshotAt({ commit: 1, change: -1 })).toEqual({
+        visible: "abcdij",
+        hidden: "",
+        hiddenSeq: [6],
+      });
+      expect(replica1.snapshotAt({ commit: 1, change: 0 })).toEqual({
+        visible: "abcdij",
+        hidden: "",
+        hiddenSeq: [6],
+      });
+      expect(replica1.snapshotAt({ commit: 1, change: 1 })).toEqual({
+        visible: "abcdij",
+        hidden: "",
+        hiddenSeq: [6],
+      });
+      expect(replica1.snapshotAt({ commit: 1, change: 2 })).toEqual({
+        visible: "abcdij",
+        hidden: "",
+        hiddenSeq: [6],
+      });
+      expect(replica1.snapshotAt({ commit: 1, change: 3 })).toEqual({
+        visible: "abcdfij",
+        hidden: "",
+        hiddenSeq: [7],
+      });
+      expect(replica1.snapshotAt({ commit: 2, change: -1 })).toEqual({
+        visible: "abcdehij",
+        hidden: "",
+        hiddenSeq: [8],
+      });
+      expect(replica1.snapshotAt({ commit: 2, change: 0 })).toEqual({
+        visible: "abcdehij",
+        hidden: "",
+        hiddenSeq: [8],
+      });
+      expect(replica1.snapshotAt({ commit: 2, change: 1 })).toEqual({
+        visible: "abcdehij",
+        hidden: "",
+        hiddenSeq: [8],
+      });
+      expect(replica1.snapshotAt({ commit: 2, change: 2 })).toEqual({
+        visible: "abcdehij",
+        hidden: "",
+        hiddenSeq: [8],
+      });
+      expect(replica1.snapshotAt({ commit: 2, change: 3 })).toEqual({
+        visible: "abcdefhij",
+        hidden: "",
+        hiddenSeq: [9],
+      });
+      expect(replica1.snapshotAt({ commit: 3, change: -1 })).toEqual({
+        visible: "abcdeghij",
+        hidden: "",
+        hiddenSeq: [9],
+      });
+      expect(replica1.snapshotAt({ commit: 3, change: 0 })).toEqual({
+        visible: "abcdeghij",
+        hidden: "",
+        hiddenSeq: [9],
+      });
+      expect(replica1.snapshotAt({ commit: 3, change: 1 })).toEqual({
+        visible: "abcdeghij",
+        hidden: "",
+        hiddenSeq: [9],
+      });
+      expect(replica1.snapshotAt({ commit: 3, change: 2 })).toEqual({
+        visible: "abcdeghij",
+        hidden: "",
+        hiddenSeq: [9],
+      });
+      expect(replica1.snapshotAt({ commit: 3, change: 3 })).toEqual({
+        visible: "abcdefghij",
+        hidden: "",
+        hiddenSeq: [10],
+      });
     });
   });
 
