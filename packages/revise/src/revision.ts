@@ -29,7 +29,7 @@ export function fastForward(hiddenSeq: Subseq, patches: Patch[]): Subseq {
 export function rebase(
   patch: Patch,
   patches: Patch[],
-  before: (i: number) => boolean,
+  compare: (i: number) => number,
 ): [Patch, Patch[]] {
   if (!patches.length) {
     return [patch, patches];
@@ -41,7 +41,10 @@ export function rebase(
       insertSeq: insertSeq1,
       deleteSeq: deleteSeq1,
     } = factor(patch1);
-    if (before(i)) {
+    const c = compare(i);
+    if (c === 0) {
+      throw new Error("TODO: DO THE SLIDE FORWARD THING");
+    } else if (c < 0) {
       [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
     } else {
       [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);

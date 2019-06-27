@@ -17,6 +17,8 @@ export class Replica {
   // TODO: document what each of these members represent
   private snapshot: Snapshot;
   private commits: Revision[];
+
+  // These history properties probably could be grouped into their own class.
   private changes: Patch[] = [];
   private marks: number[] = [];
   private accepted: number[] = [];
@@ -50,14 +52,13 @@ export class Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple replicas with the same client id");
     }
-    const checkpoint: Checkpoint = {
+    return new Replica(client, {
       version: this.received,
       snapshot: this.snapshot,
-    };
-    return new Replica(client, checkpoint);
+    });
   }
 
-  private validateVersion(version: Partial<Version>): Version {
+  private completeVersion(version: Partial<Version>): Version {
     const {
       commit = this.commits.length - 1,
       change = this.changes.length - 1,
@@ -75,7 +76,7 @@ export class Replica {
   }
 
   snapshotAt(version: Partial<Version> = {}): Snapshot {
-    const { commit, change } = this.validateVersion(version);
+    const { commit, change } = this.completeVersion(version);
     const local = change === -1 ? -1 : this.marks.findIndex((m) => m > change);
     const commit1 =
       this.accepted[local] == null
@@ -121,7 +122,7 @@ export class Replica {
   }
 
   private patchesSince(version: Partial<Version> = {}): Patch[] {
-    const { commit, change } = this.validateVersion(version);
+    const { commit, change } = this.completeVersion(version);
     let patches: Patch[] = [];
     const known: Subseq = [];
     for (const rev of this.commits.slice(commit + 1)) {
@@ -151,30 +152,16 @@ export class Replica {
     });
   }
 
-  updateSince(version: Partial<Version> = {}): Update {
-    const patches = this.patchesSince(version);
-    if (patches.length) {
-      let patch = patches.reduce(squash);
-      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
-      return {
-        patch,
-        commit: this.commits.length - 1,
-        change: this.changes.length - 1,
-      };
-    }
-    return { commit: this.commits.length - 1, change: this.changes.length - 1 };
-  }
-
   // TODO: allow an edit to push a new mark so it isn’t squashed with other edits when sent
   edit(
     patch: Patch,
     options: { before?: boolean } & Partial<Version> = {},
   ): Update {
     const { before = false } = options;
-    const version = this.validateVersion(options);
+    const version = this.completeVersion(options);
     patch = expandHidden(patch, this.hiddenSeqAt(version), { before });
     let patches: Patch[] = this.patchesSince(version);
-    [patch, patches] = rebase(patch, patches, () => before);
+    [patch, patches] = rebase(patch, patches, () => (before ? -1 : 1));
     this.changes.push(patch);
     if (patches.length) {
       const hiddenSeq = rewind(this.hiddenSeqAt(), patches);
@@ -189,41 +176,65 @@ export class Replica {
   }
 
   ingest(rev: Revision): void {
-    if (rev.received < -1 || rev.received > this.received) {
-      throw new RangeError(`rev.received (${rev.received}) out of range`);
-    } else if (rev.version !== this.received + 1) {
-      throw new RangeError(`rev.version (${rev.version}) out of range`);
-    } else if (
-      rev.client === this.client &&
-      rev.local !== this.accepted.length
-    ) {
-      throw new RangeError(`rev.local (${rev.local}) out of range`);
+    let { version, received, client, local, patch } = rev;
+    if (received < -1 || received > this.received) {
+      throw new RangeError(`rev.received (${received}) out of range`);
+    } else if (version !== this.received + 1) {
+      throw new RangeError(`rev.version (${version}) out of range`);
+    } else if (client === this.client && local !== this.accepted.length) {
+      throw new RangeError(`rev.local (${local}) out of range`);
     }
-    // TODO: get the rearranged/rebased patches by client id
-    let commits = this.commits.slice(rev.received + 1);
+    const commits = this.commits.slice(received + 1);
     let clients: string[] = [];
     const patches = slideForward(commits.map((commit) => commit.patch), (i) => {
-      const { client } = commits[i];
-      if (rev.client !== client) {
+      const client1 = commits[i].client;
+      if (client !== client1) {
         // TODO: stop relying on side-effects
-        clients.unshift(client);
+        clients.unshift(client1);
       }
-      return rev.client !== client;
+      return client !== client1;
     });
-    let patch = rev.patch;
-    [patch] = rebase(patch, patches, (i) => rev.client < clients[i]);
+    [patch] = rebase(patch, patches, (i) => {
+      const client1 = clients[i];
+      if (client < client1) {
+        return -1;
+      } else if (client > client1) {
+        return 1;
+      }
+      return 0;
+    });
     patch = normalize(patch, this.hiddenSeqAt({ change: -1 }));
-    // TODO: cache the rearranged/rebased patches by client id
-    if (rev.client === this.client) {
-      this.accepted.push(rev.version);
+    if (client === this.client) {
+      this.accepted.push(version);
     } else {
       const change = this.marks[this.accepted.length - 1] || 0;
-      let patches = this.changes.slice(change);
-      [, patches] = rebase(patch, patches, () => rev.client < this.client);
-      this.changes = this.changes.slice(0, change).concat(patches);
+      const [, changes] = rebase(patch, this.changes.slice(change), () =>
+        rev.client < this.client ? -1 : 1,
+      );
+      this.changes = this.changes.slice(0, change).concat(changes);
     }
     this.snapshot = apply(this.snapshot, patch);
-    this.commits.push({ ...rev, patch });
+    this.commits.push({
+      version,
+      local,
+      received: this.received,
+      client,
+      patch,
+    });
+  }
+
+  updateSince(version: Partial<Version> = {}): Update {
+    const patches = this.patchesSince(version);
+    if (patches.length) {
+      let patch = patches.reduce(squash);
+      patch = shrinkHidden(patch, this.hiddenSeqAt(version));
+      return {
+        patch,
+        commit: this.commits.length - 1,
+        change: this.changes.length - 1,
+      };
+    }
+    return { commit: this.commits.length - 1, change: this.changes.length - 1 };
   }
 
   pending(): Revision[] {
@@ -236,13 +247,12 @@ export class Replica {
     let start = this.marks[this.sent] || 0;
     const messages: Revision[] = [];
     for (const [i, end] of this.marks.slice(this.sent + 1).entries()) {
-      const patch = this.changes.slice(start, end).reduce(squash);
       messages.push({
         version: this.received + i + 1,
         local: this.sent + i + 1,
         received: this.received,
         client: this.client,
-        patch,
+        patch: this.changes.slice(start, end).reduce(squash),
       });
       start = end;
     }
