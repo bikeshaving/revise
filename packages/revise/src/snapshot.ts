@@ -25,7 +25,7 @@ export const INITIAL_SNAPSHOT: Snapshot = Object.freeze({
 
 export function apply(snapshot: Snapshot, patch: Patch): Snapshot {
   let { visible, hidden, hiddenSeq } = snapshot;
-  const { inserted, insertSeq, deleteSeq } = factor(patch);
+  const [inserted, insertSeq, deleteSeq] = factor(patch);
   if (inserted.length) {
     hiddenSeq = expand(hiddenSeq, insertSeq);
     const insertSeq1 = shrink(insertSeq, hiddenSeq);
@@ -42,7 +42,7 @@ export function apply(snapshot: Snapshot, patch: Patch): Snapshot {
 export function unapply(snapshot: Snapshot, patch: Patch): Snapshot {
   let { visible, hidden, hiddenSeq } = snapshot;
   let merged = merge(visible, hidden, hiddenSeq);
-  const { insertSeq, deleteSeq } = factor(patch);
+  const [, insertSeq, deleteSeq] = factor(patch);
   [merged] = split(merged, insertSeq);
   hiddenSeq = shrink(difference(hiddenSeq, deleteSeq), insertSeq);
   [visible, hidden] = split(merged, hiddenSeq);

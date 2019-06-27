@@ -10,7 +10,7 @@ import {
 
 export function rewind(hiddenSeq: Subseq, patches: Patch[]): Subseq {
   for (let i = patches.length - 1; i >= 0; i--) {
-    const { insertSeq, deleteSeq } = factor(patches[i]);
+    const [, insertSeq, deleteSeq] = factor(patches[i]);
     hiddenSeq = difference(hiddenSeq, deleteSeq);
     hiddenSeq = shrink(hiddenSeq, insertSeq);
   }
@@ -19,7 +19,7 @@ export function rewind(hiddenSeq: Subseq, patches: Patch[]): Subseq {
 
 export function fastForward(hiddenSeq: Subseq, patches: Patch[]): Subseq {
   for (let i = 0; i < patches.length; i++) {
-    const { insertSeq, deleteSeq } = factor(patches[i]);
+    const [, insertSeq, deleteSeq] = factor(patches[i]);
     hiddenSeq = expand(hiddenSeq, insertSeq);
     hiddenSeq = union(hiddenSeq, deleteSeq);
   }
@@ -31,35 +31,26 @@ export function rebase(
   patches: Patch[],
   compare: (i: number) => number,
 ): [Patch, Patch[]] {
-  if (!patches.length) {
-    return [patch, patches];
-  }
-  let { inserted, insertSeq, deleteSeq } = factor(patch);
-  patches = patches.map((patch1, i) => {
-    let {
-      inserted: inserted1,
-      insertSeq: insertSeq1,
-      deleteSeq: deleteSeq1,
-    } = factor(patch1);
-    const c = compare(i);
-    if (c === 0) {
-      throw new Error("TODO: DO THE SLIDE FORWARD THING");
-    } else if (c < 0) {
-      [insertSeq, insertSeq1] = interleave(insertSeq, insertSeq1);
-    } else {
-      [insertSeq1, insertSeq] = interleave(insertSeq1, insertSeq);
-    }
-    deleteSeq = expand(deleteSeq, insertSeq1);
-    deleteSeq1 = expand(deleteSeq1, insertSeq);
-    // TODO: delete this when we set the snapshot to latest commit
-    deleteSeq1 = difference(deleteSeq1, deleteSeq);
-    return synthesize({
-      inserted: inserted1,
-      insertSeq: insertSeq1,
-      deleteSeq: deleteSeq1,
+  if (patches.length) {
+    let [inserted1, insertSeq1, deleteSeq1] = factor(patch);
+    patches = patches.map((patch1, i) => {
+      let [inserted2, insertSeq2, deleteSeq2] = factor(patch1);
+      const c = compare(i);
+      if (c === 0) {
+        throw new Error("TODO: DO THE SLIDE FORWARD THING");
+      } else if (c < 0) {
+        [insertSeq1, insertSeq2] = interleave(insertSeq1, insertSeq2);
+      } else {
+        [insertSeq2, insertSeq1] = interleave(insertSeq2, insertSeq1);
+      }
+      deleteSeq1 = expand(deleteSeq1, insertSeq2);
+      deleteSeq2 = expand(deleteSeq2, insertSeq1);
+      // TODO: delete this when we set the snapshot to latest commit
+      deleteSeq2 = difference(deleteSeq2, deleteSeq1);
+      return synthesize(inserted2, insertSeq2, deleteSeq2);
     });
-  });
-  patch = synthesize({ inserted, insertSeq, deleteSeq });
+    patch = synthesize(inserted1, insertSeq1, deleteSeq1);
+  }
   return [patch, patches];
 }
 
@@ -72,13 +63,13 @@ export function slideForward(
   let expandSeq: Subseq | undefined;
   for (let i = patches.length - 1; i >= 0; i--) {
     let patch = patches[i];
-    let { inserted, insertSeq, deleteSeq } = factor(patch);
+    let [inserted, insertSeq, deleteSeq] = factor(patch);
     if (predicate(i)) {
       if (expandSeq != null) {
         deleteSeq = expand(deleteSeq, expandSeq);
         insertSeq = expand(insertSeq, expandSeq);
         expandSeq = shrink(expandSeq, insertSeq);
-        patch = synthesize({ inserted, insertSeq, deleteSeq });
+        patch = synthesize(inserted, insertSeq, deleteSeq);
       }
       patches1.unshift(patch);
     } else {
@@ -99,13 +90,13 @@ export function slideBackward(
   let expandSeq: Subseq | undefined;
   for (let i = 0; i < patches.length; i++) {
     let patch = patches[i];
-    let { inserted, insertSeq, deleteSeq } = factor(patch);
+    let [inserted, insertSeq, deleteSeq] = factor(patch);
     if (predicate(i)) {
       if (expandSeq != null) {
         expandSeq = expand(expandSeq, insertSeq);
         insertSeq = shrink(insertSeq, expandSeq);
         deleteSeq = shrink(deleteSeq, expandSeq);
-        patch = synthesize({ inserted, insertSeq, deleteSeq });
+        patch = synthesize(inserted, insertSeq, deleteSeq);
       }
       patches1.push(patch);
     } else {

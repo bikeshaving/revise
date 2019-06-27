@@ -1,5 +1,4 @@
 import {
-  clear,
   consolidate,
   count,
   difference,
@@ -29,6 +28,7 @@ import {
  * represents the length of the text before modification.
  */
 export type Patch = (number | string)[];
+
 // TODO: implement revives
 // TODO: implement moves
 // TODO: parameterize string to abstract Seq type
@@ -51,7 +51,8 @@ export interface InsertOperation {
   inserted: string;
 }
 
-// ToggleOperation represents insertions which are immediately deleted. It is useful for representing squashed patches or patches made against a snapshot.
+// ToggleOperation represents insertions which are immediately deleted. It is
+// useful for representing squashed patches or patches made against a snapshot.
 export interface ToggleOperation {
   type: "toggle";
   start: number;
@@ -117,20 +118,7 @@ export function* operations(patch: Patch): IterableIterator<Operation> {
   }
 }
 
-// TODO: add moves interface
-// export interface Moves {
-//   [to: number]: Subseq;
-// }
-
-export interface FactoredPatch {
-  inserted: string;
-  insertSeq: Subseq;
-  deleteSeq: Subseq;
-  // reviveSeq: Subseq;
-  // moves: Moves;
-}
-
-export function factor(patch: Patch): FactoredPatch {
+export function factor(patch: Patch): [string, Subseq, Subseq] {
   const length = patch[patch.length - 1];
   if (typeof length !== "number") {
     throw new Error("Malformed patch");
@@ -164,14 +152,7 @@ export function factor(patch: Patch): FactoredPatch {
       }
     }
   }
-  return { inserted, insertSeq, deleteSeq };
-}
-
-export function complete(patch: Partial<FactoredPatch>): FactoredPatch {
-  let { inserted = "", insertSeq, deleteSeq } = patch;
-  insertSeq = insertSeq || (deleteSeq && clear(deleteSeq)) || [];
-  deleteSeq = deleteSeq || (insertSeq && clear(insertSeq)) || [];
-  return { inserted, insertSeq, deleteSeq };
+  return [inserted, insertSeq, deleteSeq];
 }
 
 export function push(patch: Patch, op: string | number): number {
@@ -192,8 +173,11 @@ export function push(patch: Patch, op: string | number): number {
   return patch.length;
 }
 
-export function synthesize(factored: Partial<FactoredPatch>): Patch {
-  const { inserted, insertSeq, deleteSeq } = complete(factored);
+export function synthesize(
+  inserted: string,
+  insertSeq: Subseq,
+  deleteSeq: Subseq,
+): Patch {
   const patch: Patch = [];
   let insertIndex = 0;
   let retainIndex = 0;
@@ -231,26 +215,23 @@ export function synthesize(factored: Partial<FactoredPatch>): Patch {
 }
 
 export function squash(patch1: Patch, patch2: Patch): Patch {
-  let factored1 = factor(patch1);
-  let factored2 = factor(patch2);
+  const [inserted1, insertSeq1, deleteSeq1] = factor(patch1);
+  const [inserted2, insertSeq2, deleteSeq2] = factor(patch2);
   const [inserted, insertSeq] = consolidate(
-    factored1.inserted,
-    factored2.inserted,
-    expand(factored1.insertSeq, factored2.insertSeq),
-    factored2.insertSeq,
+    inserted1,
+    inserted2,
+    expand(insertSeq1, insertSeq2),
+    insertSeq2,
   );
-  const deleteSeq = union(
-    expand(factored1.deleteSeq, factored2.insertSeq),
-    factored2.deleteSeq,
-  );
-  return synthesize({ inserted, insertSeq, deleteSeq });
+  const deleteSeq = union(expand(deleteSeq1, insertSeq2), deleteSeq2);
+  return synthesize(inserted, insertSeq, deleteSeq);
 }
 
 export function apply(text: string, patch: Patch): string {
   if (text.length !== patch[patch.length - 1]) {
     throw new Error("Length mismatch");
   }
-  const { inserted, insertSeq, deleteSeq } = factor(patch);
+  const [inserted, insertSeq, deleteSeq] = factor(patch);
   text = merge(text, inserted, insertSeq);
   [text] = split(text, deleteSeq);
   return text;
@@ -276,7 +257,7 @@ export function build(
   pushSegment(insertSeq, start, false);
   pushSegment(insertSeq, inserted.length, true);
   pushSegment(insertSeq, length - start, false);
-  return synthesize({ inserted, insertSeq, deleteSeq });
+  return synthesize(inserted, insertSeq, deleteSeq);
 }
 
 export function expandHidden(
@@ -285,28 +266,28 @@ export function expandHidden(
   options: { before?: boolean } = {},
 ): Patch {
   const { before = false } = options;
-  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  let [inserted, insertSeq, deleteSeq] = factor(patch);
   if (before) {
     [insertSeq, hiddenSeq] = interleave(insertSeq, hiddenSeq);
   } else {
     [hiddenSeq, insertSeq] = interleave(hiddenSeq, insertSeq);
   }
   deleteSeq = expand(deleteSeq, hiddenSeq);
-  return synthesize({ inserted, insertSeq, deleteSeq });
+  return synthesize(inserted, insertSeq, deleteSeq);
 }
 
 export function shrinkHidden(patch: Patch, hiddenSeq: Subseq): Patch {
-  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  let [inserted, insertSeq, deleteSeq] = factor(patch);
   hiddenSeq = expand(hiddenSeq, insertSeq);
   hiddenSeq = union(hiddenSeq, intersection(insertSeq, deleteSeq));
   [inserted, insertSeq] = erase(inserted, insertSeq, hiddenSeq);
   deleteSeq = shrink(deleteSeq, hiddenSeq);
-  return synthesize({ inserted, insertSeq, deleteSeq });
+  return synthesize(inserted, insertSeq, deleteSeq);
 }
 
 export function normalize(patch: Patch, hiddenSeq: Subseq): Patch {
-  let { inserted, insertSeq, deleteSeq } = factor(patch);
+  let [inserted, insertSeq, deleteSeq] = factor(patch);
   hiddenSeq = expand(hiddenSeq, insertSeq);
   deleteSeq = difference(deleteSeq, hiddenSeq);
-  return synthesize({ inserted, insertSeq, deleteSeq });
+  return synthesize(inserted, insertSeq, deleteSeq);
 }
