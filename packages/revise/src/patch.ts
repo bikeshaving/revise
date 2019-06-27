@@ -31,7 +31,7 @@ import {
 export type Patch = (number | string)[];
 // TODO: implement revives
 // TODO: implement moves
-// TODO: extend to Seq
+// TODO: parameterize string to abstract Seq type
 
 export interface RetainOperation {
   type: "retain";

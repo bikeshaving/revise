@@ -1,29 +1,8 @@
 import { Checkpoint, Revision } from "./connection";
-import {
-  expandHidden,
-  factor,
-  normalize,
-  Patch,
-  shrinkHidden,
-  squash,
-} from "./patch";
-import {
-  fastForward,
-  rebase,
-  rewind,
-  slideBackward,
-  slideForward,
-} from "./revision";
-import { apply, INITIAL_SNAPSHOT, Snapshot } from "./snapshot";
-import {
-  contains,
-  difference,
-  merge,
-  shrink,
-  split,
-  Subseq,
-  push,
-} from "./subseq";
+import { expandHidden, normalize, Patch, shrinkHidden, squash } from "./patch";
+import { rebase, rewind, slideBackward, slideForward } from "./revision";
+import { apply, INITIAL_SNAPSHOT, Snapshot, unapply } from "./snapshot";
+import { contains, Subseq, push } from "./subseq";
 
 export interface Version {
   readonly commit: number;
@@ -92,44 +71,7 @@ export class Replica {
   }
 
   hiddenSeqAt(version: Partial<Version> = {}): Subseq {
-    const { commit, change } = this.validateVersion(version);
-    const local = change === -1 ? -1 : this.marks.findIndex((m) => m > change);
-    const commit1 =
-      this.accepted[local] == null
-        ? change === -1
-          ? -1
-          : this.commits.length - 1
-        : this.accepted[local];
-    const commits = this.commits.slice(commit + 1);
-    let changes: Patch[] = [];
-    if (commit <= commit1) {
-      const known: Subseq = [];
-      for (const rev of commits.slice(0, commit1 - commit)) {
-        if (rev.client === this.client && rev.local === local) {
-          const changes1 = this.changes.slice(
-            this.marks[rev.local - 1],
-            Math.min(this.marks[rev.local], change + 1),
-          );
-          changes = changes.concat(changes1);
-          push(known, changes1.length, true);
-        } else {
-          changes.push(rev.patch);
-          push(known, 1, rev.client === this.client);
-        }
-      }
-      const changes1 = this.changes.slice(
-        this.marks[this.accepted.length - 1],
-        change + 1,
-      );
-      changes = changes.concat(changes1);
-      push(known, changes1.length, true);
-      changes = slideBackward(changes, (i) => contains(known, i));
-    }
-    const hiddenSeq = rewind(
-      this.snapshot.hiddenSeq,
-      commits.map((commit) => commit.patch),
-    );
-    return fastForward(hiddenSeq, changes);
+    return this.snapshotAt(version).hiddenSeq;
   }
 
   snapshotAt(version: Partial<Version> = {}): Snapshot {
@@ -168,15 +110,8 @@ export class Replica {
     }
     let snapshot = this.snapshot;
     if (commits.length) {
-      let { visible, hidden, hiddenSeq } = snapshot;
-      let merged = merge(visible, hidden, hiddenSeq);
       const patch = commits.map((commit) => commit.patch).reduce(squash);
-      const { insertSeq, deleteSeq } = factor(patch);
-      [merged] = split(merged, insertSeq);
-      hiddenSeq = difference(hiddenSeq, deleteSeq);
-      hiddenSeq = shrink(hiddenSeq, insertSeq);
-      [visible, hidden] = split(merged, hiddenSeq);
-      snapshot = { visible, hidden, hiddenSeq };
+      snapshot = unapply(snapshot, patch);
     }
     if (changes.length) {
       const patch = changes.reduce(squash);

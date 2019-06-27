@@ -1,5 +1,15 @@
 import { factor, Patch } from "./patch";
-import { count, expand, merge, shrink, shuffle, Subseq, union } from "./subseq";
+import {
+  count,
+  difference,
+  expand,
+  merge,
+  shrink,
+  shuffle,
+  split,
+  Subseq,
+  union,
+} from "./subseq";
 
 export interface Snapshot {
   readonly visible: string;
@@ -26,5 +36,15 @@ export function apply(snapshot: Snapshot, patch: Patch): Snapshot {
     [visible, hidden] = shuffle(visible, hidden, hiddenSeq, hiddenSeq1);
     hiddenSeq = hiddenSeq1;
   }
+  return { visible, hidden, hiddenSeq };
+}
+
+export function unapply(snapshot: Snapshot, patch: Patch): Snapshot {
+  let { visible, hidden, hiddenSeq } = snapshot;
+  let merged = merge(visible, hidden, hiddenSeq);
+  const { insertSeq, deleteSeq } = factor(patch);
+  [merged] = split(merged, insertSeq);
+  hiddenSeq = shrink(difference(hiddenSeq, deleteSeq), insertSeq);
+  [visible, hidden] = split(merged, hiddenSeq);
   return { visible, hidden, hiddenSeq };
 }
