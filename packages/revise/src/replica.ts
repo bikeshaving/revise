@@ -1,8 +1,16 @@
 import { Checkpoint, Revision } from "./connection";
-import { expandHidden, normalize, Patch, shrinkHidden, squash } from "./patch";
+import {
+  factor,
+  expandHidden,
+  normalize,
+  Patch,
+  shrinkHidden,
+  squash,
+  synthesize,
+} from "./patch";
 import { rebase, rewind, slideBackward, slideForward } from "./revision";
 import { apply, INITIAL_SNAPSHOT, Snapshot, unapply } from "./snapshot";
-import { contains, Subseq, push } from "./subseq";
+import { contains, difference, Subseq, push } from "./subseq";
 
 export interface Version {
   readonly commit: number;
@@ -18,7 +26,7 @@ export class Replica {
   private snapshot: Snapshot;
   private commits: Revision[];
 
-  // These history properties probably could be grouped into their own class.
+  // These properties could probably could be grouped into a history class.
   private changes: Patch[] = [];
   private marks: number[] = [];
   private accepted: number[] = [];
@@ -52,10 +60,8 @@ export class Replica {
     if (client === this.client) {
       throw new Error("Cannot have multiple replicas with the same client id");
     }
-    return new Replica(client, {
-      version: this.received,
-      snapshot: this.snapshot,
-    });
+    const checkpoint = { version: this.received, snapshot: this.snapshot };
+    return new Replica(client, checkpoint);
   }
 
   private completeVersion(version: Partial<Version>): Version {
@@ -164,12 +170,17 @@ export class Replica {
     [patch, patches] = rebase(patch, patches, () => (before ? -1 : 1));
     this.changes.push(patch);
     if (patches.length) {
-      const hiddenSeq = rewind(this.hiddenSeqAt(), patches);
-      const patch1 = patches.reduce(squash);
+      // TODO: there must be a better way to do this
+      let patch1 = patches.reduce(squash);
+      let [inserted1, insertSeq1, deleteSeq1] = factor(patch1);
+      deleteSeq1 = difference(deleteSeq1, factor(patch)[2]);
+      patch1 = synthesize(inserted1, insertSeq1, deleteSeq1);
+      const hiddenSeq = rewind(this.hiddenSeqAt(), [patch1]);
+      patch1 = shrinkHidden(patch1, hiddenSeq);
       return {
         commit: this.commits.length - 1,
         change: this.changes.length - 1,
-        patch: shrinkHidden(patch1, hiddenSeq),
+        patch: patch1,
       };
     }
     return { commit: this.commits.length - 1, change: this.changes.length - 1 };
@@ -185,17 +196,8 @@ export class Replica {
       throw new RangeError(`rev.local (${local}) out of range`);
     }
     const commits = this.commits.slice(received + 1);
-    let clients: string[] = [];
-    const patches = slideForward(commits.map((commit) => commit.patch), (i) => {
+    [patch] = rebase(patch, commits.map((c) => c.patch), (i) => {
       const client1 = commits[i].client;
-      if (client !== client1) {
-        // TODO: stop relying on side-effects
-        clients.unshift(client1);
-      }
-      return client !== client1;
-    });
-    [patch] = rebase(patch, patches, (i) => {
-      const client1 = clients[i];
       if (client < client1) {
         return -1;
       } else if (client > client1) {

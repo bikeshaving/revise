@@ -27,34 +27,32 @@ export function fastForward(hiddenSeq: Subseq, patches: Patch[]): Subseq {
 }
 
 export function rebase(
-  patch: Patch,
+  patch1: Patch,
   patches: Patch[],
-  compare: (i: number) => number,
+  comparator: (i: number) => number,
 ): [Patch, Patch[]] {
+  const patches1: Patch[] = [];
   if (patches.length) {
-    let [inserted1, insertSeq1, deleteSeq1] = factor(patch);
-    patches = patches.map((patch1, i) => {
-      let [inserted2, insertSeq2, deleteSeq2] = factor(patch1);
-      const c = compare(i);
-      if (c === 0) {
-        throw new Error("TODO: DO THE SLIDE FORWARD THING");
-      } else if (c < 0) {
-        [insertSeq1, insertSeq2] = interleave(insertSeq1, insertSeq2);
-      } else {
-        [insertSeq2, insertSeq1] = interleave(insertSeq2, insertSeq1);
+    let [inserted1, insertSeq1, deleteSeq1] = factor(patch1);
+    for (let i = 0; i < patches.length; i++) {
+      let [inserted2, insertSeq2, deleteSeq2] = factor(patches[i]);
+      const c = comparator(i);
+      if (c !== 0) {
+        if (c < 0) {
+          [insertSeq1, insertSeq2] = interleave(insertSeq1, insertSeq2);
+        } else {
+          [insertSeq2, insertSeq1] = interleave(insertSeq2, insertSeq1);
+        }
+        deleteSeq1 = expand(deleteSeq1, insertSeq2);
+        deleteSeq2 = expand(deleteSeq2, insertSeq1);
+        patches1.push(synthesize(inserted2, insertSeq2, deleteSeq2));
       }
-      deleteSeq1 = expand(deleteSeq1, insertSeq2);
-      deleteSeq2 = expand(deleteSeq2, insertSeq1);
-      // TODO: delete this when we set the snapshot to latest commit
-      deleteSeq2 = difference(deleteSeq2, deleteSeq1);
-      return synthesize(inserted2, insertSeq2, deleteSeq2);
-    });
-    patch = synthesize(inserted1, insertSeq1, deleteSeq1);
+    }
+    patch1 = synthesize(inserted1, insertSeq1, deleteSeq1);
   }
-  return [patch, patches];
+  return [patch1, patches1];
 }
 
-// TODO: Deal with the larger philosophical issue which is that we’re relying on the call order of the callbacks rather than treating predicates as a pure function. Also, rearrange removes patches from the array, so indexes can’t be shared between rearrange and rebase, which are called in succession.
 export function slideForward(
   patches: Patch[],
   predicate: (i: number) => boolean,
@@ -73,10 +71,11 @@ export function slideForward(
       }
       patches1.unshift(patch);
     } else {
-      expandSeq =
-        expandSeq == null
-          ? insertSeq
-          : expand(insertSeq, expandSeq, { union: true });
+      if (expandSeq == null) {
+        expandSeq = insertSeq;
+      } else {
+        expandSeq = expand(insertSeq, expandSeq, { union: true });
+      }
     }
   }
   return patches1;
@@ -100,10 +99,11 @@ export function slideBackward(
       }
       patches1.push(patch);
     } else {
-      expandSeq =
-        expandSeq == null
-          ? insertSeq
-          : expand(expandSeq, insertSeq, { union: true });
+      if (expandSeq == null) {
+        expandSeq = insertSeq;
+      } else {
+        expandSeq = expand(expandSeq, insertSeq, { union: true });
+      }
     }
   }
   return patches1;
