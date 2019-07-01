@@ -208,12 +208,13 @@ export class Replica {
     });
     [patch] = rebase(patch, patches, (i) => {
       const client1 = clients[i];
-      if (client < client1) {
+      if (client === client1) {
+        throw new Error("slideForward failed to remove patch with the same client");
+      } else if (client < client1) {
         return -1;
-      } else if (client > client1) {
+      } else {
         return 1;
       }
-      return 0;
     });
     patch = normalize(patch, this.hiddenSeqAt({ change: -1 }));
     if (client === this.client) {

@@ -4,7 +4,7 @@ import { parse } from "../snapshot";
 
 describe("Replica", () => {
   describe("Replica.snapshotAt", () => {
-    test("edits", () => {
+    test("edit", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
@@ -88,7 +88,7 @@ describe("Replica", () => {
       );
     });
 
-    test("edits and ingests 2", () => {
+    test("edit and ingest 2", () => {
       const replica1 = new Replica("client1");
       const replica2 = new Replica("client2");
       replica2.edit(["hello world", 0]);
@@ -245,7 +245,7 @@ describe("Replica", () => {
   });
 
   describe("Replica.updateSince", () => {
-    test("edits", () => {
+    test("edit", () => {
       const replica = new Replica("client1");
       replica.edit(["hello world", 0]);
       replica.edit(["H", 1, 6, "W", 7, 11]);
@@ -730,18 +730,41 @@ describe("Replica", () => {
       const replica2 = new Replica("client2");
       replica1.edit(["a", 0]);
       const a = { ...replica1.pending()[0], version: 0 };
-      replica1.edit([0, 1, "s", 1]);
-      const s = { ...replica1.pending()[0], version: 2 };
-      replica2.edit(["d", 0]);
-      const d = { ...replica2.pending()[0], version: 1 };
+      replica1.edit([0, 1, "d", 1]);
+      const d = { ...replica1.pending()[0], version: 2 };
+      replica2.edit(["s", 0]);
+      const s = { ...replica2.pending()[0], version: 1 };
+      replica2.edit([0, 1, "f", 1]);
+      const f = { ...replica2.pending()[0], version: 3 };
+      replica1.ingest(a);
+      replica2.ingest(a);
+      replica1.ingest(s);
+      replica2.ingest(s);
+      replica1.ingest(d);
+      replica2.ingest(d);
+      replica1.ingest(f);
+      replica2.ingest(f);
+      expect(replica1.snapshotAt()).toEqual(replica2.snapshotAt());
+      expect(replica1.hiddenSeqAt({ commit: 0, change: 0 })).toEqual([1]);
+    });
+
+    test("concurrent 8", () => {
+      const replica1 = new Replica("client1");
+      const replica2 = new Replica("client2");
+      replica1.edit(["a", 0]);
+      const a = { ...replica1.pending()[0], version: 0 };
+      replica1.edit([0, 1, "d", 1]);
+      const d = { ...replica1.pending()[0], version: 2 };
+      replica2.edit(["s", 0]);
+      const s = { ...replica2.pending()[0], version: 1 };
       replica1.ingest(a);
       replica2.ingest(a);
       replica2.edit([0, 2, "f", 2]);
       const f = { ...replica2.pending()[0], version: 3 };
-      replica1.ingest(d);
-      replica2.ingest(d);
       replica1.ingest(s);
       replica2.ingest(s);
+      replica1.ingest(d);
+      replica2.ingest(d);
       replica1.ingest(f);
       replica2.ingest(f);
       expect(replica1.snapshotAt()).toEqual(replica2.snapshotAt());
