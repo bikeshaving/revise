@@ -4,6 +4,7 @@ import {
   difference,
   expand,
   merge,
+  push,
   shrink,
   shuffle,
   split,
@@ -47,4 +48,24 @@ export function unapply(snapshot: Snapshot, patch: Patch): Snapshot {
   hiddenSeq = shrink(difference(hiddenSeq, deleteSeq), insertSeq);
   [visible, hidden] = split(merged, hiddenSeq);
   return { visible, hidden, hiddenSeq };
+}
+
+export function parse(str: string): Snapshot {
+  const segments = str.split("|");
+  const snapshot = {
+    visible: "",
+    hidden: "",
+    hiddenSeq: [],
+  };
+  let flag = false;
+  for (const seg of segments) {
+    if (flag) {
+      snapshot.visible += seg;
+    } else {
+      snapshot.hidden += seg;
+    }
+    push(snapshot.hiddenSeq, seg.length, !flag);
+    flag = !flag;
+  }
+  return snapshot;
 }
