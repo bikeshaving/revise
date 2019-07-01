@@ -196,8 +196,18 @@ export class Replica {
       throw new RangeError(`rev.local (${local}) out of range`);
     }
     const commits = this.commits.slice(received + 1);
-    [patch] = rebase(patch, commits.map((c) => c.patch), (i) => {
+    let clients: string[] = [];
+    // TODO: stop relying on side-effects
+    // TODO: add more tests to see if this is required
+    const patches = slideForward(commits.map((commit) => commit.patch), (i) => {
       const client1 = commits[i].client;
+      if (client !== client1) {
+        clients.unshift(client1);
+      }
+      return client !== client1;
+    });
+    [patch] = rebase(patch, patches, (i) => {
+      const client1 = clients[i];
       if (client < client1) {
         return -1;
       } else if (client > client1) {
