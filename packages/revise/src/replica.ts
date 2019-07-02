@@ -85,10 +85,10 @@ export class Replica {
     const { commit, change } = this.completeVersion(version);
     const local = change === -1 ? -1 : this.marks.findIndex((m) => m > change);
     const commit1 =
-      this.accepted[local] == null
-        ? change === -1
-          ? -1
-          : this.commits.length - 1
+      change === -1
+        ? -1
+        : this.accepted[local] == null
+        ? this.commits.length - 1
         : this.accepted[local];
     const commits = this.commits.slice(commit + 1);
     let changes: Patch[] = [];
@@ -130,9 +130,10 @@ export class Replica {
   private patchesSince(version: Partial<Version> = {}): Patch[] {
     const { commit, change } = this.completeVersion(version);
     let patches: Patch[] = [];
+    const local = change === -1 ? -1 : this.marks.findIndex((m) => m > change);
     const known: Subseq = [];
     for (const rev of this.commits.slice(commit + 1)) {
-      if (rev.client === this.client) {
+      if (rev.client === this.client && rev.local === local) {
         const changes = this.changes.slice(
           this.marks[rev.local - 1],
           this.marks[rev.local],
@@ -209,7 +210,9 @@ export class Replica {
     [patch] = rebase(patch, patches, (i) => {
       const client1 = clients[i];
       if (client === client1) {
-        throw new Error("slideForward failed to remove patch with the same client");
+        throw new Error(
+          "slideForward failed to remove patch with the same client",
+        );
       } else if (client < client1) {
         return -1;
       } else {
