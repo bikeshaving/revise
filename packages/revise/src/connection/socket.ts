@@ -1,4 +1,4 @@
-import { Channel, ChannelBuffer } from "@channel/channel";
+import { Repeater, RepeaterBuffer } from "@repeaterjs/repeater";
 import { Checkpoint, Connection, Revision } from "./index";
 
 export interface AbstractAction {
@@ -56,9 +56,9 @@ export type Socket = WebSocket | RTCDataChannel;
 
 export function listen<T = any>(
   socket: Socket,
-  buffer?: ChannelBuffer<T>,
-): Channel<T> {
-  return new Channel(async (push, stop) => {
+  buffer?: RepeaterBuffer<T>,
+): Repeater<T> {
+  return new Repeater(async (push, stop) => {
     const handleRevision = (ev: any) => push(ev.data);
     const handleError = () => stop(new Error("Socket Error"));
     const handleClose = () => stop();
@@ -342,9 +342,9 @@ export class SocketConnection implements Connection {
   subscribe(
     id: string,
     start: number,
-    buffer?: ChannelBuffer<Revision[]>,
-  ): Channel<Revision[]> {
-    const chan = new Channel<Revision[]>(async (push, stop) => {
+    buffer?: RepeaterBuffer<Revision[]>,
+  ): Repeater<Revision[]> {
+    return new Repeater<Revision[]>(async (push, stop) => {
       if (this.state >= SocketConnectionState.CLOSED) {
         throw new Error("Connection closed");
       }
@@ -359,7 +359,6 @@ export class SocketConnection implements Connection {
       await stop;
       delete this.reqs[action.reqId];
     }, buffer);
-    return chan;
   }
 
   close(err?: any): void {

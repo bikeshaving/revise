@@ -1,5 +1,5 @@
-import { InMemoryPubSub } from "@channel/pubsub";
-import { throttler, Token } from "@channel/limiters";
+import { InMemoryPubSub } from "@repeaterjs/pubsub";
+import { throttler, Token } from "@repeaterjs/limiters";
 import { Connection, Revision } from "./connection";
 // TODO: parameterize this or something
 import { Replica } from "./replica";

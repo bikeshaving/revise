@@ -1,4 +1,4 @@
-import { InMemoryPubSub } from "@channel/pubsub";
+import { InMemoryPubSub } from "@repeaterjs/pubsub";
 import { Checkpoint, Connection, Revision } from "../connection";
 import { findLast } from "../utils";
 

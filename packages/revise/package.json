@@ -13,9 +13,9 @@
     "lint": "eslint --ext js,ts src"
   },
   "dependencies": {
-    "@channel/channel": "^1.0.0",
-    "@channel/limiters": "^0.2.1",
-    "@channel/pubsub": "^0.2.1"
+    "@repeaterjs/limiters": "^0.3.1",
+    "@repeaterjs/pubsub": "^0.3.2",
+    "@repeaterjs/repeater": "^2.0.0"
   },
   "devDependencies": {
     "ws": "^7.0.0"
