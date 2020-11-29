@@ -1,5 +1,5 @@
 import * as React from "react";
-import * as uuid from "uuid/v4";
+import { v4 as uuid } from "uuid";
 import { operations, Patch } from "@createx/revise/lib/patch";
 import { Version } from "@createx/revise/lib/replica";
 import { Client } from "@createx/revise/lib/client";

@@ -2,7 +2,7 @@
   "private": true,
   "scripts": {},
   "devDependencies": {
-    "@types/codemirror": "^0.0.74",
+    "@types/codemirror": "^0.0.99",
     "@types/dotenv": "^6.1.1",
     "@types/jest": "^24.0.13",
     "@types/jsdom": "^12.2.3",
@@ -10,7 +10,7 @@
     "@types/react": "^16.8.19",
     "@types/react-dom": "16.8.4",
     "@types/uuid": "^3.4.4",
-    "@types/ws": "^6.0.1",
+    "@types/ws": "^7.4.0",
     "@typescript-eslint/eslint-plugin": "^1.10.2",
     "@typescript-eslint/parser": "^1.10.2",
     "eslint": "^5.15.3",
@@ -20,10 +20,10 @@
     "jest": "^24.8.0",
     "lerna": "^3.15.0",
     "prettier": "^1.18.2",
-    "shx": "^0.3.2",
+    "shx": "^0.3.3",
     "ts-jest": "^24.0.0",
     "ts-node": "^8.2.0",
-    "typescript": "^3.5.1"
+    "typescript": "^4.1.2"
   },
   "workspaces": [
     "packages/*"

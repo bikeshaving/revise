@@ -52,7 +52,7 @@ export function count(subseq: Subseq, test?: boolean): number {
   let falseCount = 0;
   let trueCount = 0;
   if (counts.has(subseq)) {
-    [falseCount, trueCount] = counts.get(subseq);
+    [falseCount, trueCount] = counts.get(subseq)!;
   } else {
     for (const [length, flag] of segments(subseq)) {
       if (flag) {
@@ -86,7 +86,7 @@ export function push(subseq: Subseq, length: number, flag: boolean): number {
     }
   }
   if (counts.has(subseq)) {
-    let [falseCount, trueCount] = counts.get(subseq);
+    let [falseCount, trueCount] = counts.get(subseq)!;
     if (flag) {
       trueCount += length;
     } else {
@@ -147,7 +147,7 @@ export function complement(subseq: Subseq): Subseq {
     result = [0].concat(subseq);
   }
   if (counts.has(subseq)) {
-    const [falseCount, trueCount] = counts.get(subseq);
+    const [falseCount, trueCount] = counts.get(subseq)!;
     counts.set(result, [trueCount, falseCount]);
   } else {
     count(result);

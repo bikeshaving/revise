@@ -13,11 +13,11 @@
     "lint": "eslint --ext js,ts src"
   },
   "dependencies": {
-    "@repeaterjs/limiters": "^0.3.1",
-    "@repeaterjs/pubsub": "^0.3.2",
-    "@repeaterjs/repeater": "^2.0.0"
+    "@repeaterjs/limiters": "^0.3.3",
+    "@repeaterjs/pubsub": "^0.3.4",
+    "@repeaterjs/repeater": "^3.0.4"
   },
   "devDependencies": {
-    "ws": "^7.0.0"
+    "ws": "^7.4.0"
   }
 }
