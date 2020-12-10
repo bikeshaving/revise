@@ -7,41 +7,48 @@
   },
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "sourceType": "module"
+    "sourceType": "module",
+    "createDefaultProgram": true
   },
-  "extends": [
-    "eslint:recommended",
-    "plugin:prettier/recommended",
-    "plugin:@typescript-eslint/recommended",
-    "prettier/@typescript-eslint",
-    "plugin:jest/recommended"
-  ],
   "plugins": [
     "@typescript-eslint",
     "jest",
     "prettier"
   ],
+  "extends": [
+    "eslint:recommended",
+    "plugin:jest/recommended",
+    "plugin:prettier/recommended",
+    "prettier/@typescript-eslint"
+  ],
   "rules": {
+    "no-console": [
+      "error",
+      {
+        "allow": ["error"]
+      }
+    ],
+    "no-unused-vars": 0,
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "varsIgnorePattern": "^_",
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "no-dupe-class-members": 0,
+    "@typescript-eslint/no-dupe-class-members": 1,
+    "no-undef": 0,
+    "no-redeclare": 0,
     "prettier/prettier": [
       "error",
       {
         "trailingComma": "all",
-        "arrowParens": "always"
+        "arrowParens": "always",
+        "useTabs": true,
+        "bracketSpacing": false
       }
     ],
-    "linebreak-style": ["error", "unix"],
-    "@typescript-eslint/no-explicit-any": 0,
-    "@typescript-eslint/no-unused-vars": [
-      "error",
-      {
-        "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_"
-      }
-    ],
-    "@typescript-eslint/camelcase": 0,
-    "@typescript-eslint/explicit-function-return-type": 0,
-    "@typescript-eslint/explicit-member-accessibility": 0,
-    "@typescript-eslint/no-parameter-properties": 0,
-    "@typescript-eslint/no-non-null-assertion": 0
+    "linebreak-style": ["error", "unix"]
   }
 }

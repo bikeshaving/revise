@@ -1,18 +1,16 @@
 import * as ws from "ws";
-import * as Knex from "knex";
+//import * as Knex from "knex";
 import Fastify from "fastify";
 import FastifyPlugin from "fastify-plugin";
-import Next from "next";
+import FastifyNext from "fastify-nextjs";
 
-// import { InMemoryConnection } from "@createx/revise/lib/connection/in-memory";
-import { KnexConnection } from "@createx/revise-knex";
+import { InMemoryConnection } from "@createx/revise/lib/connection/in-memory";
+// import { KnexConnection } from "@createx/revise-knex";
 import { SocketProxy } from "@createx/revise/lib/connection/socket";
 
 declare module "fastify" {
   export interface FastifyInstance {
     wss: ws.Server;
-		// TODO: how do I access this type???
-    next: any;
   }
 }
 
@@ -27,55 +25,39 @@ fastify.register(
     fastify.addHook("onClose", (fastify, done) => {
       fastify.wss.close(done);
     });
-    return Promise.resolve();
+
+		return Promise.resolve();
   }),
 );
 
 const dev = process.env.NODE_ENV !== "production";
-fastify.register(
-  FastifyPlugin(async (fastify) => {
-    const app = Next({ dev, dir: __dirname });
-    await app.prepare();
-    fastify.decorate("next", app);
-
-    if (dev) {
-      fastify.get("/_next/*", async (req, rep) => {
-        await fastify.next.handleRequest(req.raw, rep.raw);
-        rep.sent = true;
-      });
-    }
-
-    fastify.setNotFoundHandler(async (req, rep) => {
-      await fastify.next.render404(req.raw, rep.raw);
-      rep.sent = true;
-    });
-  }),
-);
-
-fastify.get("/", async (req, rep) => {
-  await fastify.next.handleRequest(req.raw, rep.raw);
-  rep.sent = true;
+fastify.register(FastifyNext, {dev}).after(() => {
+	fastify.next("/");
 });
 
 fastify.ready((err) => {
   if (err) {
     throw err;
   }
-  // const conn = new InMemoryConnection();
-  const conn = new KnexConnection(
-    Knex({
-      client: "pg",
-      connection: "postgresql://brian:poop@localhost/revise_knex",
-    }),
-  );
+
+  const conn = new InMemoryConnection();
+  //const conn = new KnexConnection(
+  //  Knex({
+  //    client: "pg",
+  //    connection: "postgresql://brian:poop@localhost/revise_knex",
+  //  }),
+  //);
 
   fastify.wss.on("connection", async (socket: WebSocket) => {
+		console.log("SOCKET CONNECTING");
     const proxy = new SocketProxy(socket, conn);
     try {
       await proxy.connect();
     } catch (err) {
       fastify.log.error(err);
-    }
+    } finally {
+			socket.close();
+		}
   });
 });
 

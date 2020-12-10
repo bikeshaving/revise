@@ -10,7 +10,8 @@
     "watch": "yarn run build -w",
     "develop": "yarn test --watch",
     "test": "jest",
-    "lint": "eslint --ext js,ts src"
+    "lint": "eslint --ext js,ts src",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@repeaterjs/limiters": "^0.3.3",
@@ -18,6 +19,6 @@
     "@repeaterjs/repeater": "^3.0.4"
   },
   "devDependencies": {
-    "ws": "^7.4.0"
+    "ws": "^7.4.1"
   }
 }
