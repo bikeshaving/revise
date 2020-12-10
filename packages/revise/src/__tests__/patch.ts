@@ -1,8 +1,8 @@
 import * as subseq from "../subseq";
 import {apply, factor, operations, Patch, squash, synthesize} from "../patch";
 import {apply as snapshotApply, Snapshot} from "../snapshot";
-import {Patch1} from "../patch";
-import {Subseq1} from "../subseq";
+import {Patch1} from "../patch1";
+import {Subseq1} from "../subseq1";
 
 describe("patch", () => {
 	const text = "hello world";
@@ -227,7 +227,7 @@ describe("Patch", () => {
 			expect(new Patch1([1, 9, "era", 11]).operations).toEqual([
 				{type: "retain", start: 0, end: 1},
 				{type: "delete", start: 1, end: 9},
-				{type: "insert", start: 1, inserted: "era"},
+				{type: "insert", start: 1, value: "era"},
 				{type: "retain", start: 9, end: 11},
 			]);
 		});
@@ -235,7 +235,7 @@ describe("Patch", () => {
 		test("operations 2", () => {
 			expect(new Patch1([0, 2, "je", 5, 11]).operations).toEqual([
 				{type: "delete", start: 0, end: 2},
-				{type: "insert", start: 0, inserted: "je"},
+				{type: "insert", start: 0, value: "je"},
 				{type: "retain", start: 2, end: 5},
 				{type: "delete", start: 5, end: 11},
 			]);
@@ -244,10 +244,10 @@ describe("Patch", () => {
 		test("operations 3", () => {
 			expect(new Patch1([4, " ", 5, 11, "n Earth"]).operations).toEqual([
 				{type: "retain", start: 0, end: 4},
-				{type: "insert", start: 4, inserted: " "},
+				{type: "insert", start: 4, value: " "},
 				{type: "retain", start: 4, end: 5},
 				{type: "delete", start: 5, end: 11},
-				{type: "insert", start: 5, inserted: "n Earth"},
+				{type: "insert", start: 5, value: "n Earth"},
 			]);
 		});
 
@@ -255,7 +255,7 @@ describe("Patch", () => {
 			expect(new Patch1([6, 11, "buddy"]).operations).toEqual([
 				{type: "retain", start: 0, end: 6},
 				{type: "delete", start: 6, end: 11},
-				{type: "insert", start: 6, inserted: "buddy"},
+				{type: "insert", start: 6, value: "buddy"},
 			]);
 		});
 	});

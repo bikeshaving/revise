@@ -1,5 +1,5 @@
 import * as subseq from "../subseq";
-import {Subseq1} from "../subseq";
+import {Subseq1} from "../subseq1";
 
 describe("Subseq", () => {
 	describe("size", () => {
