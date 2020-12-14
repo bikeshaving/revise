@@ -224,7 +224,15 @@ describe("patch", () => {
 describe("Patch", () => {
 	describe("operations", () => {
 		test("operations 1", () => {
-			expect(new Patch1([1, 9, "era", 11]).operations).toEqual([
+			expect(new Patch1([5, "oo", 11]).operations()).toEqual([
+				{type: "retain", start: 0, end: 5},
+				{type: "insert", start: 5, value: "oo"},
+				{type: "retain", start: 5, end: 11},
+			]);
+		});
+
+		test("operations 2", () => {
+			expect(new Patch1([1, 9, "era", 11]).operations()).toEqual([
 				{type: "retain", start: 0, end: 1},
 				{type: "delete", start: 1, end: 9},
 				{type: "insert", start: 1, value: "era"},
@@ -232,8 +240,8 @@ describe("Patch", () => {
 			]);
 		});
 
-		test("operations 2", () => {
-			expect(new Patch1([0, 2, "je", 5, 11]).operations).toEqual([
+		test("operations 3", () => {
+			expect(new Patch1([0, 2, "je", 5, 11]).operations()).toEqual([
 				{type: "delete", start: 0, end: 2},
 				{type: "insert", start: 0, value: "je"},
 				{type: "retain", start: 2, end: 5},
@@ -241,8 +249,8 @@ describe("Patch", () => {
 			]);
 		});
 
-		test("operations 3", () => {
-			expect(new Patch1([4, " ", 5, 11, "n Earth"]).operations).toEqual([
+		test("operations 4", () => {
+			expect(new Patch1([4, " ", 5, 11, "n Earth"]).operations()).toEqual([
 				{type: "retain", start: 0, end: 4},
 				{type: "insert", start: 4, value: " "},
 				{type: "retain", start: 4, end: 5},
@@ -251,8 +259,8 @@ describe("Patch", () => {
 			]);
 		});
 
-		test("operations 4", () => {
-			expect(new Patch1([6, 11, "buddy"]).operations).toEqual([
+		test("operations 5", () => {
+			expect(new Patch1([6, 11, "buddy"]).operations()).toEqual([
 				{type: "retain", start: 0, end: 6},
 				{type: "delete", start: 6, end: 11},
 				{type: "insert", start: 6, value: "buddy"},
@@ -260,48 +268,63 @@ describe("Patch", () => {
 		});
 	});
 
-	describe("synthesizeee", () => {
+	describe("synthesize", () => {
 		test("synthesize 1", () => {
-			const insertSeq = new Subseq1([9, 3, 2]);
-			const deleteSeq = new Subseq1([1, 8, 2]);
-			const inserted = "era";
-			expect(Patch1.synthesize(insertSeq, deleteSeq, inserted)).toEqual(
-				new Patch1([1, 9, "era", 11]),
+			const insertSeq = new Subseq1([5, 2, 6]);
+			const deleteSeq = new Subseq1([11]);
+			const inserted = "oo";
+			const factored = {insertSeq, deleteSeq, inserted};
+			expect(Patch1.synthesize(factored)).toEqual(
+				new Patch1([5, "oo", 11]),
 			);
+			expect(Patch1.synthesize(factored).factor()).toEqual(factored);
 		});
 
 		test("synthesize 2", () => {
+			const insertSeq = new Subseq1([9, 3, 2]);
+			const deleteSeq = new Subseq1([1, 8, 2]);
+			const inserted = "era";
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted})).toEqual(
+				new Patch1([1, 9, "era", 11]),
+			);
+
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted}).factor()).toEqual({
+				insertSeq, deleteSeq, inserted,
+			});
+		});
+
+		test("synthesize 3", () => {
 			const insertSeq = new Subseq1([2, 2, 9]);
 			const deleteSeq = new Subseq1([0, 2, 3, 6]);
 			const inserted = "je";
-			expect(Patch1.synthesize(insertSeq, deleteSeq, inserted)).toEqual(
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted})).toEqual(
 				new Patch1([0, 2, "je", 5, 11]),
 			);
 		});
 
-		test("synthesize 3", () => {
+		test("synthesize 4", () => {
 			const insertSeq = new Subseq1([4, 1, 7, 7]);
 			const deleteSeq = new Subseq1([5, 6]);
 			const inserted = " n Earth";
-			expect(Patch1.synthesize(insertSeq, deleteSeq, inserted)).toEqual(
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted})).toEqual(
 				new Patch1([4, " ", 5, 11, "n Earth"]),
 			);
 		});
 
-		test("synthesize 4", () => {
+		test("synthesize 5", () => {
 			const insertSeq = new Subseq1([11, 5]);
 			const deleteSeq = new Subseq1([6, 5]);
 			const inserted = "buddy";
-			expect(Patch1.synthesize(insertSeq, deleteSeq, inserted)).toEqual(
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted})).toEqual(
 				new Patch1([6, 11, "buddy"]),
 			);
 		});
 
-		test("synthesize 5", () => {
+		test("synthesize 6", () => {
 			const insertSeq = new Subseq1([11, 4]);
 			const deleteSeq = new Subseq1([0, 6, 5]);
 			const inserted = "star";
-			expect(Patch1.synthesize(insertSeq, deleteSeq, inserted)).toEqual(
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted})).toEqual(
 				new Patch1([0, 6, 11, "star"]),
 			);
 		});
@@ -312,27 +335,37 @@ describe("Patch", () => {
 			// ===+++===+
 			const deleteSeq = new Subseq1([3, 3, 3, 1]);
 			const inserted = "foo";
-			expect(Patch1.synthesize(insertSeq, deleteSeq, inserted)).toEqual(
+			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted})).toEqual(
 				new Patch1([3, 6, "foo", 9, 10]),
 			);
 		});
 
 		test("mismatched inserted and insertSeq throws", () => {
 			expect(() => {
-				Patch1.synthesize(new Subseq1([2, 2]), new Subseq1([2]), "foo");
+				Patch1.synthesize({
+					insertSeq: new Subseq1([2, 2]),
+					deleteSeq: new Subseq1([2]),
+					inserted: "foo",
+				});
 			}).toThrow();
 		});
 
 		test("insertions after deletions", () => {
 			expect(
-				Patch1.synthesize(new Subseq1([11, 3]), new Subseq1([6, 5]), "bro"),
+				Patch1.synthesize({
+					insertSeq: new Subseq1([11, 3]),
+					deleteSeq: new Subseq1([6, 5]),
+					inserted: "bro"
+				}),
 			).toEqual(new Patch1([6, 11, "bro"]));
 		});
 
 		test("empty", () => {
-			expect(Patch1.synthesize(new Subseq1([]), new Subseq1([]), "")).toEqual(
-				new Patch1([0]),
-			);
+			expect(Patch1.synthesize({
+				insertSeq: new Subseq1([]),
+				deleteSeq: new Subseq1([]),
+				inserted: ""
+			})).toEqual(new Patch1([0]));
 		});
 	});
 });

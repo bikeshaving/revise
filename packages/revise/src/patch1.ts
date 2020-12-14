@@ -1,5 +1,5 @@
 // TODO: use this
-import {Subseq1} from "./subseq1";
+import {appendSegment, Subseq1} from "./subseq1";
 
 export interface RetainOperation {
 	type: "retain";
@@ -11,7 +11,7 @@ export interface DeleteOperation {
 	type: "delete";
 	start: number;
 	end: number;
-	value?: string;
+	value?: string | undefined;
 }
 
 export interface InsertOperation {
@@ -21,28 +21,26 @@ export interface InsertOperation {
 }
 
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
-// Should we make insertSeqs and deleteSeqs the same length
-// Pros:
-// - Can create patches with toggle operations
-// - Don’t need to expand the deleteSeq by the insertSeq
-//
-// Cons:
-// - Can create patches with toggle operations
-// - Ambiguity between whether deletes or insertions can occur in the same position
+
+export interface FactoredPatch {
+	insertSeq: Subseq1;
+	deleteSeq: Subseq1;
+	inserted: string;
+	deleted?: string;
+}
+
 export class Patch1 {
 	parts: Array<string | number>;
-	constructor(
-		parts: Array<string | number>,
-	) {
+	deleted?: string;
+	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
+		this.deleted = deleted;
 	}
 
 	static synthesize(
-		insertSeq: Subseq1,
-		deleteSeq: Subseq1,
-		inserted: string,
-		deleted?: string,
+		factored: FactoredPatch,
 	): Patch1 {
+		const {insertSeq, deleteSeq, inserted, deleted} = factored;
 		const parts: Array<string | number> = [];
 		let insertOffset = 0;
 		let retainOffset = 0;
@@ -50,7 +48,7 @@ export class Patch1 {
 		let prevInserting = false;
 		deleteSeq
 			.expand(insertSeq)
-			.align(insertSeq, (length, deleting, inserting) => {
+			.align(insertSeq).forEach(([length, deleting, inserting]) => {
 				if (inserting) {
 					if (!prevDeleting) {
 						parts.push(retainOffset);
@@ -79,10 +77,40 @@ export class Patch1 {
 			parts.push(retainOffset);
 		}
 
-		return new Patch1(parts);
+		return new Patch1(parts, deleted);
 	}
 
-	get operations(): Array<Operation> {
+	factor(): FactoredPatch {
+		const operations = this.operations();
+		const insertSegments: Array<number> = [];
+		const deleteSegments: Array<number> = [];
+		let inserted = "";
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
+			switch (op.type) {
+				case "retain":
+					appendSegment(insertSegments, op.end - op.start, false);
+					appendSegment(deleteSegments, op.end - op.start, false);
+					break;
+				case "delete":
+					appendSegment(insertSegments, op.end - op.start, false);
+					appendSegment(deleteSegments, op.end - op.start, true);
+					break;
+				case "insert":
+					appendSegment(insertSegments, op.value.length, true);
+					inserted += op.value;
+					break;
+				default:
+					throw new TypeError("Invalid operation type");
+			}
+		}
+
+		const insertSeq = new Subseq1(insertSegments);
+		const deleteSeq = new Subseq1(deleteSegments);
+		return {insertSeq, deleteSeq, inserted, deleted: this.deleted};
+	}
+
+	operations(): Array<Operation> {
 		const result: Array<Operation> = [];
 		let insertOffset = 0;
 		let retainOffset = 0;
@@ -92,7 +120,7 @@ export class Patch1 {
 			if (typeof part === "number") {
 				if (retaining) {
 					if (part < retainOffset) {
-						throw new Error("Malformed patch");
+						throw new TypeError("Malformed patch");
 					} else if (part > retainOffset) {
 						result.push({type: "retain", start: retainOffset, end: part});
 						insertOffset = part;
@@ -102,7 +130,7 @@ export class Patch1 {
 					retaining = false;
 				} else {
 					if (part <= retainOffset) {
-						throw new Error("Malformed patch");
+						throw new TypeError("Malformed patch");
 					}
 
 					result.push({type: "delete", start: retainOffset, end: part});
@@ -120,5 +148,13 @@ export class Patch1 {
 		}
 
 		return result;
+	}
+
+	compose(that: Patch1): Patch1 {
+		throw "TODO";
+	}
+
+	transform(that: Patch1): [Patch1, Patch1] {
+		throw "TODO";
 	}
 }
