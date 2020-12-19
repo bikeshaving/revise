@@ -39,26 +39,26 @@ export interface FactoredPatch {
  */
 function consolidate(
 	subseq1: Subseq,
-	text1: string,
+	str1: string,
 	subseq2: Subseq,
-	text2: string,
+	str2: string,
 ): string {
 	let i1 = 0;
 	let i2 = 0;
-	let text = "";
+	let result = "";
 	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
 		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
 		} else if (flag1) {
-			text += text1.slice(i1, size);
+			result += str1.slice(i1, size);
 			i1 += size;
 		} else if (flag2) {
-			text += text2.slice(i2, size);
+			result += str2.slice(i2, size);
 			i2 += size;
 		}
 	}
 
-	return text;
+	return result;
 }
 
 /**
@@ -69,13 +69,13 @@ function consolidate(
  * The subseqs must have the same size, and the included segments of the second
  * subseq must overlap with the first subseq’s included segments.
  */
-function erase(subseq1: Subseq, text: string, subseq2: Subseq): string {
+function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 	let i = 0;
-	let text1 = "";
+	let result = "";
 	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
 		if (flag1) {
 			if (!flag2) {
-				text1 += text.slice(i, i + size);
+				result += str.slice(i, i + size);
 			}
 
 			i += size;
@@ -84,16 +84,16 @@ function erase(subseq1: Subseq, text: string, subseq2: Subseq): string {
 		}
 	}
 
-	return text1;
+	return result;
 }
 
 /**
  * Returns the length of the common prefix of two strings.
  */
-function sharedPrefixLength(text1: string, text2: string): number {
-	const length = Math.min(text1.length, text2.length);
+function sharedPrefixLength(str1: string, str2: string): number {
+	const length = Math.min(str1.length, str2.length);
 	for (let i = 0; i < length; i++) {
-		if (text1[i] !== text2[i]) {
+		if (str1[i] !== str2[i]) {
 			return i;
 		}
 	}
@@ -112,9 +112,9 @@ function sharedPrefixLength(text1: string, text2: string): number {
  */
 function overlapping(
 	subseq1: Subseq,
-	text1: string,
+	str1: string,
 	subseq2: Subseq,
-	text2: string,
+	str2: string,
 ): [Subseq, Subseq] {
 	let i1 = 0;
 	let i2 = 0;
@@ -128,8 +128,8 @@ function overlapping(
 		}
 		if (prevFlag1 && flag2) {
 			const shared = sharedPrefixLength(
-				text1.slice(i1, prevLength),
-				text2.slice(i2, size),
+				str1.slice(i1, prevLength),
+				str2.slice(i2, size),
 			);
 			Subseq.pushSegment(sizes1, shared, true);
 			Subseq.pushSegment(sizes1, prevLength - shared, false);
@@ -184,8 +184,8 @@ export class Patch {
 					parts.push(retainOffset);
 				}
 
-				const text = inserted.slice(insertOffset, insertOffset + size);
-				parts.push(text);
+				const str = inserted.slice(insertOffset, insertOffset + size);
+				parts.push(str);
 				insertOffset += size;
 			} else {
 				if (deleting) {
@@ -208,36 +208,6 @@ export class Patch {
 		}
 
 		return new Patch(parts, deleted);
-	}
-
-	factor(): FactoredPatch {
-		const operations = this.operations();
-		const insertSizes: Array<number> = [];
-		const deleteSizes: Array<number> = [];
-		let inserted = "";
-		for (let i = 0; i < operations.length; i++) {
-			const op = operations[i];
-			switch (op.type) {
-				case "retain":
-					Subseq.pushSegment(insertSizes, op.end - op.start, false);
-					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
-					break;
-				case "delete":
-					Subseq.pushSegment(insertSizes, op.end - op.start, false);
-					Subseq.pushSegment(deleteSizes, op.end - op.start, true);
-					break;
-				case "insert":
-					Subseq.pushSegment(insertSizes, op.value.length, true);
-					inserted += op.value;
-					break;
-				default:
-					throw new TypeError("Invalid operation type");
-			}
-		}
-
-		const insertSeq = new Subseq(insertSizes);
-		const deleteSeq = new Subseq(deleteSizes);
-		return {insertSeq, deleteSeq, inserted, deleted: this.deleted};
 	}
 
 	operations(): Array<Operation> {
@@ -280,6 +250,36 @@ export class Patch {
 		return result;
 	}
 
+	factor(): FactoredPatch {
+		const operations = this.operations();
+		const insertSizes: Array<number> = [];
+		const deleteSizes: Array<number> = [];
+		let inserted = "";
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
+			switch (op.type) {
+				case "retain":
+					Subseq.pushSegment(insertSizes, op.end - op.start, false);
+					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
+					break;
+				case "delete":
+					Subseq.pushSegment(insertSizes, op.end - op.start, false);
+					Subseq.pushSegment(deleteSizes, op.end - op.start, true);
+					break;
+				case "insert":
+					Subseq.pushSegment(insertSizes, op.value.length, true);
+					inserted += op.value;
+					break;
+				default:
+					throw new TypeError("Invalid operation type");
+			}
+		}
+
+		const insertSeq = new Subseq(insertSizes);
+		const deleteSeq = new Subseq(deleteSizes);
+		return {insertSeq, deleteSeq, inserted, deleted: this.deleted};
+	}
+
 	/**
 	 * Composes two consecutive patches.
 	 */
@@ -296,8 +296,7 @@ export class Patch {
 			inserted: inserted2,
 			deleted: deleted2,
 		} = that.factor();
-		// Align all the subseqs, so that they all have the same size and share the
-		// same coordinate space.
+		// Align all the subseqs, so that they share the same coordinate space.
 		{
 			deleteSeq1 = deleteSeq1.expand(insertSeq1);
 			deleteSeq2 = deleteSeq2.expand(deleteSeq1);

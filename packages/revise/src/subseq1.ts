@@ -1,13 +1,3 @@
-// TODO: should we make subseqs mutable?
-// Pros:
-// - Lower memory footprint.
-// - No need to reassign subseq variables.
-// - Subseqs are typically stack allocated and thrown away.
-// Cons:
-// - Aliasing bugs.
-// - The size, includedSize and excludedSize might go out of sync.
-//   - Maybe we can solve this by making the size props getters.
-// - Most of the methods would no longer have useful return values.
 function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
 	if (size < 0) {
 		throw new RangeError("Negative size");
@@ -27,6 +17,21 @@ function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
 			sizes.push(size);
 		}
 	}
+}
+
+function measure(sizes: Array<number>): [number, number, number] {
+	let size = 0, includedSize = 0, excludedSize = 0;
+	for (let i = 0; i < sizes.length; i++) {
+		const s = sizes[i];
+		size += s;
+		if (i % 2 === 0) {
+			excludedSize += s;
+		} else {
+			includedSize += s;
+		}
+	}
+
+	return [size, includedSize, excludedSize];
 }
 
 /**
@@ -78,19 +83,7 @@ export class Subseq {
 	sizes: Array<number>;
 
 	constructor(sizes: Array<number>) {
-		let size = 0;
-		let includedSize = 0;
-		let excludedSize = 0;
-		for (let i = 0; i < sizes.length; i++) {
-			const s = sizes[i];
-			size += s;
-			if (i % 2 === 0) {
-				excludedSize += s;
-			} else {
-				includedSize += s;
-			}
-		}
-
+		const [size, includedSize, excludedSize] = measure(sizes);
 		this.sizes = sizes;
 		this.size = size;
 		this.includedSize = includedSize;
@@ -145,13 +138,15 @@ export class Subseq {
 		}
 
 		const result: Array<[number, boolean, boolean]> = [];
+		const length1 = this.sizes.length;
+		const length2 = that.sizes.length;
 		for (
 			let i1 = 0, i2 = 0, size1 = 0, size2 = 0, flag1 = true, flag2 = true;
-			i1 < this.sizes.length || i2 < that.sizes.length;
+			i1 < length1 || i2 < length2;
 
 		) {
 			if (size1 === 0) {
-				if (i1 >= this.sizes.length) {
+				if (i1 >= length1) {
 					throw new RangeError("Size mismatch");
 				}
 
@@ -160,7 +155,7 @@ export class Subseq {
 			}
 
 			if (size2 === 0) {
-				if (i2 >= that.sizes.length) {
+				if (i2 >= length2) {
 					throw new RangeError("Size mismatch");
 				}
 
@@ -190,6 +185,7 @@ export class Subseq {
 		for (const [size, flag1, flag2] of this.align(that)) {
 			pushSegment(sizes, size, flag1 || flag2);
 		}
+
 		return new Subseq(sizes);
 	}
 
@@ -198,6 +194,7 @@ export class Subseq {
 		for (const [size, flag1, flag2] of this.align(that)) {
 			pushSegment(sizes, size, flag1 && flag2);
 		}
+
 		return new Subseq(sizes);
 	}
 
@@ -206,6 +203,7 @@ export class Subseq {
 		for (const [size, flag1, flag2] of this.align(that)) {
 			pushSegment(sizes, size, flag1 && !flag2);
 		}
+
 		return new Subseq(sizes);
 	}
 
@@ -230,9 +228,11 @@ export class Subseq {
 		}
 
 		const sizes: Array<number> = [];
+		const length1 = this.sizes.length;
+		const length2 = that.sizes.length;
 		for (
 			let i1 = 0, i2 = 0, size1 = 0, flag1 = true, flag2 = true;
-			i2 < that.sizes.length;
+			i2 < length2;
 			i2++
 		) {
 			let size2 = that.sizes[i2];
@@ -242,7 +242,7 @@ export class Subseq {
 			} else {
 				while (size2) {
 					if (size1 === 0) {
-						if (i1 >= this.sizes.length) {
+						if (i1 >= length1) {
 							throw new RangeError("Size mismatch");
 						}
 
@@ -268,17 +268,19 @@ export class Subseq {
 
 		const sizes1: Array<number> = [];
 		const sizes2: Array<number> = [];
+		const length1 = this.sizes.length;
+		const length2 = that.sizes.length;
 		for (
 			let i1 = 0, i2 = 0, size1 = 0, size2 = 0, flag1 = true, flag2 = true;
-			i1 < this.sizes.length || i2 < that.sizes.length;
+			i1 < length1 || i2 < length2;
 
 		) {
-			if (size1 === 0 && i1 < this.sizes.length) {
+			if (size1 === 0 && i1 < length1) {
 				size1 = this.sizes[i1++];
 				flag1 = !flag1;
 			}
 
-			if (size2 === 0 && i2 < that.sizes.length) {
+			if (size2 === 0 && i2 < length2) {
 				size2 = that.sizes[i2++];
 				flag2 = !flag2;
 			}
