@@ -1,68 +1,72 @@
-// TODO: Maybe this should be a static function on the class???
-// TODO: Rename segments???
-export function appendSegment(
-	segments: Array<number>,
-	length: number,
-	flag: boolean,
-): void {
-	if (length < 0) {
-		throw new RangeError("Negative length");
-	} else if (length === 0) {
+// TODO: should we make subseqs mutable?
+// Pros:
+// - Lower memory footprint.
+// - No need to reassign subseq variables.
+// - Subseqs are typically stack allocated and thrown away.
+// Cons:
+// - Aliasing bugs.
+// - The size, includedSize and excludedSize might go out of sync.
+//   - Maybe we can solve this by making the size props getters.
+// - Most of the methods would no longer have useful return values.
+function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
+	if (size < 0) {
+		throw new RangeError("Negative size");
+	} else if (size === 0) {
 		return;
-	} else if (!segments.length) {
+	} else if (!sizes.length) {
 		if (flag) {
-			segments.push(0, length);
+			sizes.push(0, size);
 		} else {
-			segments.push(length);
+			sizes.push(size);
 		}
 	} else {
-		const flag1 = segments.length % 2 === 0;
+		const flag1 = sizes.length % 2 === 0;
 		if (flag === flag1) {
-			segments[segments.length - 1] += length;
+			sizes[sizes.length - 1] += size;
 		} else {
-			segments.push(length);
+			sizes.push(size);
 		}
 	}
 }
 
-// TODO: should we make subseqs mutable?
 /**
  * A data structure for representing subsequences. Subsequences are parts of
  * other sequences, created by removing zero or more elements from the original
  * sequence without changing the order of remaining elements.
  */
-export class Subseq1 {
-	/**
-	 * The sum of the segments of segments of the subsequence.
-	 */
-	readonly size: number;
+export class Subseq {
+	static pushSegment = pushSegment;
 
 	/**
-	 * The sum of the segments of the included segments of the subsequence.
+	 * The sum of the sizes of segments of the subsequence.
 	 */
-	readonly includedSize: number;
+	size: number;
 
 	/**
-	 * The sum of the segments of the excluded segments of the subsequence.
+	 * The sum of the sizes of the included segments of the subsequence.
 	 */
-	readonly excludedSize: number;
+	includedSize: number;
 
 	/**
-	 * An array of numbers, where each number represents the length of a
-	 * continguous, adjacent segment from the original sequence. The subsequence
-	 * “contains” a segment based on the index of that segment within the array.
-	 * Segments alternate between being excluded and included, with the first
-	 * number representing an excluded segment. In other words, the first segment
-	 * is excluded, the second included, the third excluded and so on.
+	 * The sum of the sizes of the excluded segments of the subsequence.
+	 */
+	excludedSize: number;
+
+	/**
+	 * An array of numbers, where each number represents the size of a
+	 * continguous segment from the original sequence. The subsequence “contains”
+	 * a segment based on its position in this array. Segments alternate between
+	 * excluded and included, with the first number representing the size of an
+	 * excluded segment. In other words, the first segment is excluded, the second
+	 * included, the third excluded and so on.
 	 *
 	 * Because the first segment is always an excluded segment, a subsequence
 	 * array will start with a 0 when the subsequence includes the first element
-	 * of the sequence. However, no segments will be of length zero elsewhere in
-	 * the array.
+	 * of the sequence. No other segments will be of size 0 in the array.
 	 *
 	 * @example
 	 * Given the following string sequence: "abcdefgh"
-	 * The following segment arrays represent the following subsequences:
+	 * The following size arrays represent the following subsequences:
 	 *
 	 * [0, 4, 4]                = "abcd"
 	 * [4, 4]                   = "efgh"
@@ -71,14 +75,14 @@ export class Subseq1 {
 	 * [0, 1, 6, 1]             = "ah"
 	 * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
 	 */
-	readonly segments: Array<number>;
+	sizes: Array<number>;
 
-	constructor(segments: Array<number>) {
+	constructor(sizes: Array<number>) {
 		let size = 0;
 		let includedSize = 0;
 		let excludedSize = 0;
-		for (let i = 0; i < segments.length; i++) {
-			const s = segments[i];
+		for (let i = 0; i < sizes.length; i++) {
+			const s = sizes[i];
 			size += s;
 			if (i % 2 === 0) {
 				excludedSize += s;
@@ -87,19 +91,19 @@ export class Subseq1 {
 			}
 		}
 
-		this.segments = segments;
+		this.sizes = sizes;
 		this.size = size;
 		this.includedSize = includedSize;
 		this.excludedSize = excludedSize;
 	}
 
-	toString(): string {
-		let result = "Subseq: ";
-		for (let i = 0; i < this.segments.length; i++) {
+	print(): string {
+		let result = "";
+		for (let i = 0; i < this.sizes.length; i++) {
 			if (i % 2 === 0) {
-				result += "=".repeat(this.segments[i]);
+				result += "=".repeat(this.sizes[i]);
 			} else {
-				result += "+".repeat(this.segments[i]);
+				result += "+".repeat(this.sizes[i]);
 			}
 		}
 
@@ -111,8 +115,8 @@ export class Subseq1 {
 			return false;
 		}
 
-		for (let i = 0; i < this.segments.length; i++) {
-			offset -= this.segments[i];
+		for (let i = 0; i < this.sizes.length; i++) {
+			offset -= this.sizes[i];
 			if (offset < 0) {
 				return i % 2 === 1;
 			}
@@ -121,191 +125,187 @@ export class Subseq1 {
 		return false;
 	}
 
-	clear(): Subseq1 {
-		const segments: Array<number> = [];
-		appendSegment(segments, this.size, false);
-		return new Subseq1(segments);
+	clear(): Subseq {
+		return new Subseq(this.size ? [this.size] : []);
 	}
 
-	fill(): Subseq1 {
-		const segments: Array<number> = [];
-		appendSegment(segments, this.size, true);
-		return new Subseq1(segments);
+	fill(): Subseq {
+		return new Subseq(this.size ? [0, this.size] : []);
 	}
 
-	complement(): Subseq1 {
-		const segments: Array<number> = [];
-		this.segments.forEach((l, i) => appendSegment(segments, l, i % 2 === 0));
-		return new Subseq1(segments);
+	complement(): Subseq {
+		const sizes =
+			this.sizes[0] === 0 ? this.sizes.slice(1) : [0, ...this.sizes];
+		return new Subseq(sizes);
 	}
 
-	align(that: Subseq1): Array<[number, boolean, boolean]> {
+	align(that: Subseq): Array<[number, boolean, boolean]> {
 		if (this.size !== that.size) {
 			throw new RangeError("Size mismatch");
 		}
 
 		const result: Array<[number, boolean, boolean]> = [];
 		for (
-			let i1 = 0, i2 = 0, l1 = 0, l2 = 0, f1 = true, f2 = true;
-			i1 < this.segments.length || i2 < that.segments.length;
+			let i1 = 0, i2 = 0, size1 = 0, size2 = 0, flag1 = true, flag2 = true;
+			i1 < this.sizes.length || i2 < that.sizes.length;
 
 		) {
-			if (l1 === 0) {
-				if (i1 >= this.segments.length) {
+			if (size1 === 0) {
+				if (i1 >= this.sizes.length) {
 					throw new RangeError("Size mismatch");
 				}
 
-				l1 = this.segments[i1++];
-				f1 = !f1;
+				size1 = this.sizes[i1++];
+				flag1 = !flag1;
 			}
 
-			if (l2 === 0) {
-				if (i2 >= that.segments.length) {
+			if (size2 === 0) {
+				if (i2 >= that.sizes.length) {
 					throw new RangeError("Size mismatch");
 				}
 
-				l2 = that.segments[i2++];
-				f2 = !f2;
+				size2 = that.sizes[i2++];
+				flag2 = !flag2;
 			}
 
-			if (l1 === l2) {
-				result.push([l1, f1, f2]);
-				l1 = l2 = 0;
-			} else if (l1 < l2) {
-				result.push([l1, f1, f2]);
-				l2 = l2 - l1;
-				l1 = 0;
+			if (size1 === size2) {
+				result.push([size1, flag1, flag2]);
+				size1 = size2 = 0;
+			} else if (size1 < size2) {
+				result.push([size1, flag1, flag2]);
+				size2 = size2 - size1;
+				size1 = 0;
 			} else {
-				result.push([l2, f1, f2]);
-				l1 = l1 - l2;
-				l2 = 0;
+				result.push([size2, flag1, flag2]);
+				size1 = size1 - size2;
+				size2 = 0;
 			}
 		}
 
 		return result;
 	}
 
-	union(that: Subseq1): Subseq1 {
-		const segments: Array<number> = [];
-		this.align(that).forEach(([l, f1, f2]) =>
-			appendSegment(segments, l, f1 || f2),
-		);
-		return new Subseq1(segments);
+	union(that: Subseq): Subseq {
+		const sizes: Array<number> = [];
+		for (const [size, flag1, flag2] of this.align(that)) {
+			pushSegment(sizes, size, flag1 || flag2);
+		}
+		return new Subseq(sizes);
 	}
 
-	intersection(that: Subseq1): Subseq1 {
-		const segments: Array<number> = [];
-		this.align(that).forEach(([l, f1, f2]) =>
-			appendSegment(segments, l, f1 && f2),
-		);
-		return new Subseq1(segments);
+	intersection(that: Subseq): Subseq {
+		const sizes: Array<number> = [];
+		for (const [size, flag1, flag2] of this.align(that)) {
+			pushSegment(sizes, size, flag1 && flag2);
+		}
+		return new Subseq(sizes);
 	}
 
-	difference(that: Subseq1): Subseq1 {
-		const segments: Array<number> = [];
-		this.align(that).forEach(([l, f1, f2]) =>
-			appendSegment(segments, l, f1 && !f2),
-		);
-		return new Subseq1(segments);
+	difference(that: Subseq): Subseq {
+		const sizes: Array<number> = [];
+		for (const [size, flag1, flag2] of this.align(that)) {
+			pushSegment(sizes, size, flag1 && !flag2);
+		}
+		return new Subseq(sizes);
 	}
 
-	shrink(that: Subseq1): Subseq1 {
+	shrink(that: Subseq): Subseq {
 		if (this.size !== that.size) {
 			throw new RangeError("Size mismatch");
 		}
 
-		const segments: Array<number> = [];
-		this.align(that).forEach(([l, f1, f2]) => {
-			if (!f2) {
-				appendSegment(segments, l, f1);
+		const sizes: Array<number> = [];
+		for (const [size, flag1, flag2] of this.align(that)) {
+			if (!flag2) {
+				pushSegment(sizes, size, flag1);
 			}
-		});
+		}
 
-		return new Subseq1(segments);
+		return new Subseq(sizes);
 	}
 
-	expand(that: Subseq1): Subseq1 {
+	expand(that: Subseq): Subseq {
 		if (this.size !== that.excludedSize) {
 			throw new RangeError("Size mismatch");
 		}
 
-		const segments: Array<number> = [];
+		const sizes: Array<number> = [];
 		for (
-			let i1 = 0, i2 = 0, l1 = 0, f1 = true, f2 = true;
-			i2 < that.segments.length;
+			let i1 = 0, i2 = 0, size1 = 0, flag1 = true, flag2 = true;
+			i2 < that.sizes.length;
 			i2++
 		) {
-			let l2 = that.segments[i2];
-			f2 = !f2;
-			if (f2) {
-				appendSegment(segments, l2, false);
+			let size2 = that.sizes[i2];
+			flag2 = !flag2;
+			if (flag2) {
+				pushSegment(sizes, size2, false);
 			} else {
-				while (l2) {
-					if (l1 === 0) {
-						if (i1 >= this.segments.length) {
+				while (size2) {
+					if (size1 === 0) {
+						if (i1 >= this.sizes.length) {
 							throw new RangeError("Size mismatch");
 						}
 
-						l1 = this.segments[i1++];
-						f1 = !f1;
+						size1 = this.sizes[i1++];
+						flag1 = !flag1;
 					}
 
-					const l = Math.min(l1, l2);
-					appendSegment(segments, l, f1);
-					l1 -= l;
-					l2 -= l;
+					const size = Math.min(size1, size2);
+					pushSegment(sizes, size, flag1);
+					size1 -= size;
+					size2 -= size;
 				}
 			}
 		}
 
-		return new Subseq1(segments);
+		return new Subseq(sizes);
 	}
 
-	interleave(that: Subseq1): [Subseq1, Subseq1] {
+	interleave(that: Subseq): [Subseq, Subseq] {
 		if (this.excludedSize !== that.excludedSize) {
 			throw new RangeError("Size mismatch");
 		}
 
-		const segments1: Array<number> = [];
-		const segments2: Array<number> = [];
+		const sizes1: Array<number> = [];
+		const sizes2: Array<number> = [];
 		for (
-			let i1 = 0, i2 = 0, l1 = 0, l2 = 0, f1 = true, f2 = true;
-			i1 < this.segments.length || i2 < that.segments.length;
+			let i1 = 0, i2 = 0, size1 = 0, size2 = 0, flag1 = true, flag2 = true;
+			i1 < this.sizes.length || i2 < that.sizes.length;
 
 		) {
-			if (l1 === 0 && i1 < this.segments.length) {
-				l1 = this.segments[i1++];
-				f1 = !f1;
+			if (size1 === 0 && i1 < this.sizes.length) {
+				size1 = this.sizes[i1++];
+				flag1 = !flag1;
 			}
 
-			if (l2 === 0 && i2 < that.segments.length) {
-				l2 = that.segments[i2++];
-				f2 = !f2;
+			if (size2 === 0 && i2 < that.sizes.length) {
+				size2 = that.sizes[i2++];
+				flag2 = !flag2;
 			}
 
-			if (f1 && f2) {
-				appendSegment(segments1, l1, true);
-				appendSegment(segments1, l2, false);
-				appendSegment(segments2, l1, false);
-				appendSegment(segments2, l2, true);
-				l1 = l2 = 0;
-			} else if (f1) {
-				appendSegment(segments1, l1, true);
-				appendSegment(segments2, l1, false);
-				l1 = 0;
-			} else if (f2) {
-				appendSegment(segments1, l2, false);
-				appendSegment(segments2, l2, true);
-				l2 = 0;
+			if (flag1 && flag2) {
+				pushSegment(sizes1, size1, true);
+				pushSegment(sizes1, size2, false);
+				pushSegment(sizes2, size1, false);
+				pushSegment(sizes2, size2, true);
+				size1 = size2 = 0;
+			} else if (flag1) {
+				pushSegment(sizes1, size1, true);
+				pushSegment(sizes2, size1, false);
+				size1 = 0;
+			} else if (flag2) {
+				pushSegment(sizes1, size2, false);
+				pushSegment(sizes2, size2, true);
+				size2 = 0;
 			} else {
-				const l = Math.min(l1, l2);
-				appendSegment(segments1, l, false);
-				appendSegment(segments2, l, false);
-				l1 -= l;
-				l2 -= l;
+				const size = Math.min(size1, size2);
+				pushSegment(sizes1, size, false);
+				pushSegment(sizes2, size, false);
+				size1 -= size;
+				size2 -= size;
 			}
 		}
 
-		return [new Subseq1(segments1), new Subseq1(segments2)];
+		return [new Subseq(sizes1), new Subseq(sizes2)];
 	}
 }

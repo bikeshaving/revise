@@ -1,5 +1,5 @@
 // TODO: use this
-import {appendSegment, Subseq1} from "./subseq1";
+import {Subseq} from "./subseq1";
 
 export interface RetainOperation {
 	type: "retain";
@@ -23,8 +23,8 @@ export interface InsertOperation {
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
 export interface FactoredPatch {
-	insertSeq: Subseq1;
-	deleteSeq: Subseq1;
+	insertSeq: Subseq;
+	deleteSeq: Subseq;
 	inserted: string;
 	deleted?: string;
 }
@@ -38,25 +38,25 @@ export interface FactoredPatch {
  * subseqs may not overlap.
  */
 function consolidate(
-	subseq1: Subseq1,
+	subseq1: Subseq,
 	text1: string,
-	subseq2: Subseq1,
+	subseq2: Subseq,
 	text2: string,
 ): string {
 	let i1 = 0;
 	let i2 = 0;
 	let text = "";
-	subseq1.align(subseq2).forEach(([l, f1, f2]) => {
-		if (f1 && f2) {
+	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
+		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
-		} else if (f1) {
-			text += text1.slice(i1, l);
-			i1 += l;
-		} else if (f2) {
-			text += text2.slice(i2, l);
-			i2 += l;
+		} else if (flag1) {
+			text += text1.slice(i1, size);
+			i1 += size;
+		} else if (flag2) {
+			text += text2.slice(i2, size);
+			i2 += size;
 		}
-	});
+	}
 
 	return text;
 }
@@ -69,20 +69,20 @@ function consolidate(
  * The subseqs must have the same size, and the included segments of the second
  * subseq must overlap with the first subseq’s included segments.
  */
-function erase(subseq1: Subseq1, text: string, subseq2: Subseq1): string {
+function erase(subseq1: Subseq, text: string, subseq2: Subseq): string {
 	let i = 0;
 	let text1 = "";
-	subseq1.align(subseq2).forEach(([l, f1, f2]) => {
-		if (f1) {
-			if (!f2) {
-				text1 += text.slice(i, i + l);
+	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
+		if (flag1) {
+			if (!flag2) {
+				text1 += text.slice(i, i + size);
 			}
 
-			i += l;
-		} else if (f2) {
+			i += size;
+		} else if (flag2) {
 			throw new Error("Non-overlapping subseqs");
 		}
-	});
+	}
 
 	return text1;
 }
@@ -90,7 +90,7 @@ function erase(subseq1: Subseq1, text: string, subseq2: Subseq1): string {
 /**
  * Returns the length of the common prefix of two strings.
  */
-function getSharedPrefixLength(text1: string, text2: string): number {
+function sharedPrefixLength(text1: string, text2: string): number {
 	const length = Math.min(text1.length, text2.length);
 	for (let i = 0; i < length; i++) {
 		if (text1[i] !== text2[i]) {
@@ -107,57 +107,57 @@ function getSharedPrefixLength(text1: string, text2: string): number {
  * of the first and second strings and returns two subseqs which represents
  * these overlapping sequences.
  *
- * The subseqs must have the same size, and may not overlap. These subseqs
- * would be produced from two subseqs having been interleaved with each other.
+ * The subseqs must have the same size, and may not overlap. These subseqs are
+ * typically produced from two interleaved subseqs.
  */
 function overlapping(
-	subseq1: Subseq1,
+	subseq1: Subseq,
 	text1: string,
-	subseq2: Subseq1,
+	subseq2: Subseq,
 	text2: string,
-): [Subseq1, Subseq1] {
+): [Subseq, Subseq] {
 	let i1 = 0;
 	let i2 = 0;
-	let prevL = 0;
-	let prevF1 = false;
-	const segments1: Array<number> = [];
-	const segments2: Array<number> = [];
-	subseq1.align(subseq2).forEach(([l, f1, f2]) => {
-		if (f1 && f2) {
+	let prevLength = 0;
+	let prevFlag1 = false;
+	const sizes1: Array<number> = [];
+	const sizes2: Array<number> = [];
+	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
+		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
 		}
-		if (prevF1 && f2) {
-			const shared = getSharedPrefixLength(
-				text1.slice(i1, prevL),
-				text2.slice(i2, l),
+		if (prevFlag1 && flag2) {
+			const shared = sharedPrefixLength(
+				text1.slice(i1, prevLength),
+				text2.slice(i2, size),
 			);
-			appendSegment(segments1, shared, true);
-			appendSegment(segments1, prevL - shared, false);
-			appendSegment(segments2, shared, true);
-			appendSegment(segments2, l - shared, false);
+			Subseq.pushSegment(sizes1, shared, true);
+			Subseq.pushSegment(sizes1, prevLength - shared, false);
+			Subseq.pushSegment(sizes2, shared, true);
+			Subseq.pushSegment(sizes2, size - shared, false);
 		} else {
-			appendSegment(segments1, prevL, false);
-			appendSegment(segments2, l, false);
+			Subseq.pushSegment(sizes1, prevLength, false);
+			Subseq.pushSegment(sizes2, size, false);
 		}
 
-		if (prevF1) {
-			i1 += prevL;
+		if (prevFlag1) {
+			i1 += prevLength;
 		}
 
-		if (f2) {
-			i2 += l;
+		if (flag2) {
+			i2 += size;
 		}
 
-		prevL = l;
-		prevF1 = f1;
-	});
+		prevLength = size;
+		prevFlag1 = flag1;
+	}
 
-	appendSegment(segments1, prevL, false);
-	return [new Subseq1(segments1), new Subseq1(segments2)];
+	Subseq.pushSegment(sizes1, prevLength, false);
+	return [new Subseq(sizes1), new Subseq(sizes2)];
 }
 
 // TODO: should the patch class be the FactoredPatch
-export class Patch1 {
+export class Patch {
 	parts: Array<string | number>;
 	deleted?: string;
 	constructor(parts: Array<string | number>, deleted?: string) {
@@ -165,36 +165,39 @@ export class Patch1 {
 		this.deleted = deleted;
 	}
 
-	static synthesize(factored: FactoredPatch): Patch1 {
-		const {insertSeq, deleteSeq, inserted, deleted} = factored;
+	static synthesize({
+		insertSeq,
+		deleteSeq,
+		inserted,
+		deleted,
+	}: FactoredPatch): Patch {
 		const parts: Array<string | number> = [];
 		let insertOffset = 0;
 		let retainOffset = 0;
 		let prevDeleting = false;
 		let prevInserting = false;
-		deleteSeq
+		for (const [size, deleting, inserting] of deleteSeq
 			.expand(insertSeq)
-			.align(insertSeq)
-			.forEach(([length, deleting, inserting]) => {
-				if (inserting) {
-					if (!prevDeleting) {
-						parts.push(retainOffset);
-					}
-
-					const text = inserted.slice(insertOffset, insertOffset + length);
-					parts.push(text);
-					insertOffset += length;
-				} else {
-					if (deleting) {
-						parts.push(retainOffset, retainOffset + length);
-					}
-
-					retainOffset += length;
+			.align(insertSeq)) {
+			if (inserting) {
+				if (!prevDeleting) {
+					parts.push(retainOffset);
 				}
 
-				prevDeleting = deleting;
-				prevInserting = inserting;
-			});
+				const text = inserted.slice(insertOffset, insertOffset + size);
+				parts.push(text);
+				insertOffset += size;
+			} else {
+				if (deleting) {
+					parts.push(retainOffset, retainOffset + size);
+				}
+
+				retainOffset += size;
+			}
+
+			prevDeleting = deleting;
+			prevInserting = inserting;
+		}
 
 		if (insertOffset !== inserted.length) {
 			throw new Error("Length mismatch");
@@ -204,27 +207,27 @@ export class Patch1 {
 			parts.push(retainOffset);
 		}
 
-		return new Patch1(parts, deleted);
+		return new Patch(parts, deleted);
 	}
 
 	factor(): FactoredPatch {
 		const operations = this.operations();
-		const insertSegments: Array<number> = [];
-		const deleteSegments: Array<number> = [];
+		const insertSizes: Array<number> = [];
+		const deleteSizes: Array<number> = [];
 		let inserted = "";
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i];
 			switch (op.type) {
 				case "retain":
-					appendSegment(insertSegments, op.end - op.start, false);
-					appendSegment(deleteSegments, op.end - op.start, false);
+					Subseq.pushSegment(insertSizes, op.end - op.start, false);
+					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
 					break;
 				case "delete":
-					appendSegment(insertSegments, op.end - op.start, false);
-					appendSegment(deleteSegments, op.end - op.start, true);
+					Subseq.pushSegment(insertSizes, op.end - op.start, false);
+					Subseq.pushSegment(deleteSizes, op.end - op.start, true);
 					break;
 				case "insert":
-					appendSegment(insertSegments, op.value.length, true);
+					Subseq.pushSegment(insertSizes, op.value.length, true);
 					inserted += op.value;
 					break;
 				default:
@@ -232,8 +235,8 @@ export class Patch1 {
 			}
 		}
 
-		const insertSeq = new Subseq1(insertSegments);
-		const deleteSeq = new Subseq1(deleteSegments);
+		const insertSeq = new Subseq(insertSizes);
+		const deleteSeq = new Subseq(deleteSizes);
 		return {insertSeq, deleteSeq, inserted, deleted: this.deleted};
 	}
 
@@ -280,7 +283,7 @@ export class Patch1 {
 	/**
 	 * Composes two consecutive patches.
 	 */
-	compose(that: Patch1): Patch1 {
+	compose(that: Patch): Patch {
 		let {
 			insertSeq: insertSeq1,
 			deleteSeq: deleteSeq1,
@@ -341,6 +344,6 @@ export class Patch1 {
 			deleted = consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2);
 		}
 
-		return Patch1.synthesize({insertSeq, deleteSeq, inserted, deleted});
+		return Patch.synthesize({insertSeq, deleteSeq, inserted, deleted});
 	}
 }
