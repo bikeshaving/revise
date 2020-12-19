@@ -1,5 +1,5 @@
 // TODO: use this
-import {Subseq} from "./subseq1";
+import {Subseq} from "./subseq";
 
 export interface RetainOperation {
 	type: "retain";
@@ -108,7 +108,7 @@ function sharedPrefixLength(str1: string, str2: string): number {
  * these overlapping sequences.
  *
  * The subseqs must have the same size, and may not overlap. These subseqs are
- * typically produced from two interleaved subseqs.
+ * typically the result of two interleaved subseqs.
  */
 function overlapping(
 	subseq1: Subseq,
@@ -118,7 +118,7 @@ function overlapping(
 ): [Subseq, Subseq] {
 	let i1 = 0;
 	let i2 = 0;
-	let prevLength = 0;
+	let prevSize = 0;
 	let prevFlag1 = false;
 	const sizes1: Array<number> = [];
 	const sizes2: Array<number> = [];
@@ -126,33 +126,34 @@ function overlapping(
 		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
 		}
+
 		if (prevFlag1 && flag2) {
 			const shared = sharedPrefixLength(
-				str1.slice(i1, prevLength),
+				str1.slice(i1, prevSize),
 				str2.slice(i2, size),
 			);
 			Subseq.pushSegment(sizes1, shared, true);
-			Subseq.pushSegment(sizes1, prevLength - shared, false);
+			Subseq.pushSegment(sizes1, prevSize - shared, false);
 			Subseq.pushSegment(sizes2, shared, true);
 			Subseq.pushSegment(sizes2, size - shared, false);
 		} else {
-			Subseq.pushSegment(sizes1, prevLength, false);
+			Subseq.pushSegment(sizes1, prevSize, false);
 			Subseq.pushSegment(sizes2, size, false);
 		}
 
 		if (prevFlag1) {
-			i1 += prevLength;
+			i1 += prevSize;
 		}
 
 		if (flag2) {
 			i2 += size;
 		}
 
-		prevLength = size;
+		prevSize = size;
 		prevFlag1 = flag1;
 	}
 
-	Subseq.pushSegment(sizes1, prevLength, false);
+	Subseq.pushSegment(sizes1, prevSize, false);
 	return [new Subseq(sizes1), new Subseq(sizes2)];
 }
 
@@ -171,9 +172,13 @@ export class Patch {
 		inserted,
 		deleted,
 	}: FactoredPatch): Patch {
+		if (insertSeq.includedSize !== inserted.length) {
+			throw new Error("Size mismatch");
+		}
+
 		const parts: Array<string | number> = [];
-		let insertOffset = 0;
-		let retainOffset = 0;
+		let ii = 0; // insert index
+		let ri = 0; // retain index
 		let prevDeleting = false;
 		let prevInserting = false;
 		for (const [size, deleting, inserting] of deleteSeq
@@ -181,30 +186,26 @@ export class Patch {
 			.align(insertSeq)) {
 			if (inserting) {
 				if (!prevDeleting) {
-					parts.push(retainOffset);
+					parts.push(ri);
 				}
 
-				const str = inserted.slice(insertOffset, insertOffset + size);
+				const str = inserted.slice(ii, ii + size);
 				parts.push(str);
-				insertOffset += size;
+				ii += size;
 			} else {
 				if (deleting) {
-					parts.push(retainOffset, retainOffset + size);
+					parts.push(ri, ri + size);
 				}
 
-				retainOffset += size;
+				ri += size;
 			}
 
 			prevDeleting = deleting;
 			prevInserting = inserting;
 		}
 
-		if (insertOffset !== inserted.length) {
-			throw new Error("Length mismatch");
-		}
-
 		if (!prevInserting && !prevDeleting) {
-			parts.push(retainOffset);
+			parts.push(ri);
 		}
 
 		return new Patch(parts, deleted);
@@ -212,35 +213,35 @@ export class Patch {
 
 	operations(): Array<Operation> {
 		const result: Array<Operation> = [];
-		let insertOffset = 0;
-		let retainOffset = 0;
+		let ii = 0; // insert index
+		let ri = 0; // retain index
 		let retaining = true;
 		for (let i = 0; i < this.parts.length; i++) {
 			const part = this.parts[i];
 			if (typeof part === "number") {
 				if (retaining) {
-					if (part < retainOffset) {
+					if (part < ri) {
 						throw new TypeError("Malformed patch");
-					} else if (part > retainOffset) {
-						result.push({type: "retain", start: retainOffset, end: part});
-						insertOffset = part;
-						retainOffset = part;
+					} else if (part > ri) {
+						result.push({type: "retain", start: ri, end: part});
+						ii = part;
+						ri = part;
 					}
 
 					retaining = false;
 				} else {
-					if (part <= retainOffset) {
+					if (part <= ri) {
 						throw new TypeError("Malformed patch");
 					}
 
-					result.push({type: "delete", start: retainOffset, end: part});
-					insertOffset = retainOffset;
-					retainOffset = part;
+					result.push({type: "delete", start: ri, end: part});
+					ii = ri;
+					ri = part;
 					retaining = true;
 				}
 			} else if (typeof part === "string") {
-				result.push({type: "insert", start: insertOffset, value: part});
-				insertOffset = retainOffset;
+				result.push({type: "insert", start: ii, value: part});
+				ii = ri;
 				retaining = true;
 			} else {
 				throw new TypeError("Malformed patch");
@@ -296,7 +297,7 @@ export class Patch {
 			inserted: inserted2,
 			deleted: deleted2,
 		} = that.factor();
-		// Align all the subseqs, so that they share the same coordinate space.
+		// Expand all subseqs so that they share the same coordinate space.
 		{
 			deleteSeq1 = deleteSeq1.expand(insertSeq1);
 			deleteSeq2 = deleteSeq2.expand(deleteSeq1);

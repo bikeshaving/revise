@@ -136,7 +136,7 @@ export class Subseq {
 
 	align(that: Subseq): Array<[number, boolean, boolean]> {
 		if (this.size !== that.size) {
-			throw new RangeError("Size mismatch");
+			throw new Error("Size mismatch");
 		}
 
 		const result: Array<[number, boolean, boolean]> = [];
@@ -149,7 +149,7 @@ export class Subseq {
 		) {
 			if (size1 === 0) {
 				if (i1 >= length1) {
-					throw new RangeError("Size mismatch");
+					throw new Error("Size mismatch");
 				}
 
 				size1 = this.sizes[i1++];
@@ -158,7 +158,7 @@ export class Subseq {
 
 			if (size2 === 0) {
 				if (i2 >= length2) {
-					throw new RangeError("Size mismatch");
+					throw new Error("Size mismatch");
 				}
 
 				size2 = that.sizes[i2++];
@@ -211,7 +211,7 @@ export class Subseq {
 
 	shrink(that: Subseq): Subseq {
 		if (this.size !== that.size) {
-			throw new RangeError("Size mismatch");
+			throw new Error("Size mismatch");
 		}
 
 		const sizes: Array<number> = [];
@@ -226,7 +226,7 @@ export class Subseq {
 
 	expand(that: Subseq): Subseq {
 		if (this.size !== that.excludedSize) {
-			throw new RangeError("Size mismatch");
+			throw new Error("Size mismatch");
 		}
 
 		const sizes: Array<number> = [];
@@ -245,7 +245,7 @@ export class Subseq {
 				while (size2) {
 					if (size1 === 0) {
 						if (i1 >= length1) {
-							throw new RangeError("Size mismatch");
+							throw new Error("Size mismatch");
 						}
 
 						size1 = this.sizes[i1++];
@@ -265,7 +265,7 @@ export class Subseq {
 
 	interleave(that: Subseq): [Subseq, Subseq] {
 		if (this.excludedSize !== that.excludedSize) {
-			throw new RangeError("Size mismatch");
+			throw new Error("Size mismatch");
 		}
 
 		const sizes1: Array<number> = [];
