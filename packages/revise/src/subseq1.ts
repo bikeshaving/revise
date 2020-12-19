@@ -20,7 +20,9 @@ function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
 }
 
 function measure(sizes: Array<number>): [number, number, number] {
-	let size = 0, includedSize = 0, excludedSize = 0;
+	let size = 0,
+		includedSize = 0,
+		excludedSize = 0;
 	for (let i = 0; i < sizes.length; i++) {
 		const s = sizes[i];
 		size += s;

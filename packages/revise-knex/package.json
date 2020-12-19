@@ -19,7 +19,7 @@
   "devDependencies": {
     "@channel/timers": "^0.2.1",
     "dotenv": "^8.2.0",
-    "knex": "^0.21.12",
+    "knex": "^0.21.14",
     "pg": "^8.5.1"
   },
   "peerDependencies": {

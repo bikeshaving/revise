@@ -9,7 +9,9 @@ describe("SocketConnection", () => {
 	const url = `ws://localhost:${port}`;
 
 	let server: Server;
-	beforeEach(() => new Promise((done) => (server = new Server({port}, done))));
+	beforeEach(
+		() => new Promise<void>((done) => (server = new Server({port}, done))),
+	);
 	afterEach(() => new Promise((done) => server.close(done)));
 
 	test("listen closes", async () => {
