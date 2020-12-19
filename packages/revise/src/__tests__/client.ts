@@ -2,12 +2,8 @@ import {InMemoryConnection} from "../connection/in-memory";
 import {Client} from "../client";
 describe("Client", () => {
 	describe("sync", () => {
-		test("typechecks", () => {
-			Client;
-		});
-
 		// TODO: remove specific replica stuff for better testing
-		// eslint-disable
+		// eslint-disable-next-line
 		test.skip("syncing without ingesting revisions", async () => {
 			const conn = new InMemoryConnection();
 			const sendRevisions = jest.spyOn(conn, "sendRevisions");
@@ -38,7 +34,7 @@ describe("Client", () => {
 			client.close();
 		});
 
-		// eslint-disable
+		// eslint-disable-next-line
 		test.skip("syncing and ingesting revisions", async () => {
 			const conn = new InMemoryConnection();
 			const sendRevisions = jest.spyOn(conn, "sendRevisions");
