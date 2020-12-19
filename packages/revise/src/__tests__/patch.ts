@@ -281,9 +281,7 @@ describe("Patch", () => {
 			const deleteSeq = new Subseq1([11]);
 			const inserted = "oo";
 			const factored = {insertSeq, deleteSeq, inserted};
-			expect(Patch1.synthesize(factored)).toEqual(
-				new Patch1([5, "oo", 11]),
-			);
+			expect(Patch1.synthesize(factored)).toEqual(new Patch1([5, "oo", 11]));
 			expect(Patch1.synthesize(factored).factor()).toEqual(factored);
 		});
 
@@ -295,8 +293,12 @@ describe("Patch", () => {
 				new Patch1([1, 9, "era", 11]),
 			);
 
-			expect(Patch1.synthesize({insertSeq, deleteSeq, inserted}).factor()).toEqual({
-				insertSeq, deleteSeq, inserted,
+			expect(
+				Patch1.synthesize({insertSeq, deleteSeq, inserted}).factor(),
+			).toEqual({
+				insertSeq,
+				deleteSeq,
+				inserted,
 			});
 		});
 
@@ -362,17 +364,19 @@ describe("Patch", () => {
 				Patch1.synthesize({
 					insertSeq: new Subseq1([11, 3]),
 					deleteSeq: new Subseq1([6, 5]),
-					inserted: "bro"
+					inserted: "bro",
 				}),
 			).toEqual(new Patch1([6, 11, "bro"]));
 		});
 
 		test("empty", () => {
-			expect(Patch1.synthesize({
-				insertSeq: new Subseq1([]),
-				deleteSeq: new Subseq1([]),
-				inserted: ""
-			})).toEqual(new Patch1([0]));
+			expect(
+				Patch1.synthesize({
+					insertSeq: new Subseq1([]),
+					deleteSeq: new Subseq1([]),
+					inserted: "",
+				}),
+			).toEqual(new Patch1([0]));
 		});
 	});
 
@@ -460,13 +464,57 @@ describe("Patch", () => {
 			// d2:  =====
 			//          " word"
 			// i2:  =====+++++
-			// dc:  =========--
+			// s2: "hello word"
+			// d1:  =====------
+			// d2:  ===========
+			// d1:  =====------=====
+			// i2:  ===========+++++
+			// d2:  ================
+			//     "hello world word"
+			// do:  =====++++=======
+			// io:  ===========++++=
+			//     "hello worldd"
+			// d1:  =========--=
+			// i2:  ===========+
+			// d2:  ============
 			//                "d"
 			// ic:  ===========+
-			// s2: "hello word"
+			// dc:  =========--=
 			const patch1 = new Patch1([5, 11], " world");
 			const patch2 = new Patch1([5, " word"], "");
 			const result = new Patch1([9, 11, "d"], "ld");
+			expect(patch1.compose(patch2)).toEqual(result);
+		});
+
+		test("compose 7", () => {
+			const patch1 = new Patch1([5, 6, 11], " ");
+			const patch2 = new Patch1([5, "_", 10], "");
+			const result = new Patch1([5, 6, "_", 11], " ");
+			expect(patch1.compose(patch2)).toEqual(result);
+		});
+
+		test("compose 8", () => {
+			const patch1 = new Patch1([5, 6, 11], " ");
+			const patch2 = new Patch1([5, " ", 10], "");
+			const result = new Patch1([11], "");
+			expect(patch1.compose(patch2)).toEqual(result);
+		});
+
+		test("compose 9", () => {
+			// s0: "hello world"
+			//          " "
+			// d1:  =====-=====
+			//           "__"
+			// i1:  ======++=====
+			// s1: "hello__world"
+			//          "__"
+			// d2:  =====--=====
+			//            "    "
+			// i2:  =======++++=====
+			// s2: "hello    world"
+			const patch1 = new Patch1([5, 6, "__", 11], " ");
+			const patch2 = new Patch1([5, 7, "    ", 12], "__");
+			const result = new Patch1([6, "   ", 11], "");
 			expect(patch1.compose(patch2)).toEqual(result);
 		});
 	});

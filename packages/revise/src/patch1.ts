@@ -29,14 +29,20 @@ export interface FactoredPatch {
 	deleted?: string;
 }
 
-
-// TODO: better names for arguments?
+/**
+ * Given two subseqs and strings which are represented by the included segments
+ * of the subseqs, this function combines the two strings so that they overlap
+ * according to the positions of the included segments of subseqs.
+ *
+ * The subseqs must have the same size, and the included segments of these
+ * subseqs may not overlap.
+ */
 function consolidate(
 	subseq1: Subseq1,
 	text1: string,
 	subseq2: Subseq1,
 	text2: string,
-): [Subseq1, string] {
+): string {
 	let i1 = 0;
 	let i2 = 0;
 	let text = "";
@@ -52,14 +58,18 @@ function consolidate(
 		}
 	});
 
-	return [subseq1.union(subseq2), text];
+	return text;
 }
 
-function erase(
-	subseq1: Subseq1,
-	text: string,
-	subseq2: Subseq1,
-): string {
+/**
+ * Given two subseqs as well a string which is represented by the included
+ * segments of the first subseq, this function returns the result of removing
+ * the included segments of the second subseq from the first subseq.
+ *
+ * The subseqs must have the same size, and the included segments of the second
+ * subseq must overlap with the first subseq’s included segments.
+ */
+function erase(subseq1: Subseq1, text: string, subseq2: Subseq1): string {
 	let i = 0;
 	let text1 = "";
 	subseq1.align(subseq2).forEach(([l, f1, f2]) => {
@@ -69,29 +79,43 @@ function erase(
 			}
 
 			i += l;
+		} else if (f2) {
+			throw new Error("Non-overlapping subseqs");
 		}
 	});
 
 	return text1;
 }
 
-function commonPrefix(text1: string, text2: string): string {
+/**
+ * Returns the length of the common prefix of two strings.
+ */
+function getSharedPrefixLength(text1: string, text2: string): number {
 	const length = Math.min(text1.length, text2.length);
 	for (let i = 0; i < length; i++) {
 		if (text1[i] !== text2[i]) {
-			return text1.slice(0, i);
+			return i;
 		}
 	}
 
-	return text1.slice(0, length);
+	return length;
 }
 
+/**
+ * Given two subseqs and two strings which are represented by the included
+ * segments of the subseqs, this function finds the overlapping common prefixes
+ * of the first and second strings and returns two subseqs which represents
+ * these overlapping sequences.
+ *
+ * The subseqs must have the same size, and may not overlap. These subseqs
+ * would be produced from two subseqs having been interleaved with each other.
+ */
 function overlapping(
 	subseq1: Subseq1,
 	text1: string,
 	subseq2: Subseq1,
 	text2: string,
-): [Subseq1] {
+): [Subseq1, Subseq1] {
 	let i1 = 0;
 	let i2 = 0;
 	let prevL = 0;
@@ -99,12 +123,18 @@ function overlapping(
 	const segments1: Array<number> = [];
 	const segments2: Array<number> = [];
 	subseq1.align(subseq2).forEach(([l, f1, f2]) => {
+		if (f1 && f2) {
+			throw new Error("Overlapping subseqs");
+		}
 		if (prevF1 && f2) {
-			const prefix = commonPrefix(text1.slice(i1, prevL), text2.slice(i2, l));
-			appendSegment(segments1, prefix.length, true);
-			appendSegment(segments1, prevL - prefix.length, false);
-			appendSegment(segments2, prefix.length, true);
-			appendSegment(segments2, l - prefix.length, false);
+			const shared = getSharedPrefixLength(
+				text1.slice(i1, prevL),
+				text2.slice(i2, l),
+			);
+			appendSegment(segments1, shared, true);
+			appendSegment(segments1, prevL - shared, false);
+			appendSegment(segments2, shared, true);
+			appendSegment(segments2, l - shared, false);
 		} else {
 			appendSegment(segments1, prevL, false);
 			appendSegment(segments2, l, false);
@@ -135,9 +165,7 @@ export class Patch1 {
 		this.deleted = deleted;
 	}
 
-	static synthesize(
-		factored: FactoredPatch,
-	): Patch1 {
+	static synthesize(factored: FactoredPatch): Patch1 {
 		const {insertSeq, deleteSeq, inserted, deleted} = factored;
 		const parts: Array<string | number> = [];
 		let insertOffset = 0;
@@ -146,7 +174,8 @@ export class Patch1 {
 		let prevInserting = false;
 		deleteSeq
 			.expand(insertSeq)
-			.align(insertSeq).forEach(([length, deleting, inserting]) => {
+			.align(insertSeq)
+			.forEach(([length, deleting, inserting]) => {
 				if (inserting) {
 					if (!prevDeleting) {
 						parts.push(retainOffset);
@@ -264,26 +293,29 @@ export class Patch1 {
 			inserted: inserted2,
 			deleted: deleted2,
 		} = that.factor();
-		deleteSeq1 = deleteSeq1.expand(insertSeq1);
-		deleteSeq2 = deleteSeq2.expand(deleteSeq1);
-		// handle toggles
-		const toggleSeq = insertSeq1.intersection(deleteSeq2);
-		if (toggleSeq.includedSize) {
-			deleteSeq1 = deleteSeq1.shrink(toggleSeq);
-			inserted1 = erase(
-				insertSeq1,
-				inserted1,
-				toggleSeq,
-			);
-			insertSeq1 = insertSeq1.shrink(toggleSeq);
-			deleteSeq2 = deleteSeq2.shrink(toggleSeq);
-			insertSeq2 = insertSeq2.shrink(toggleSeq.expand(insertSeq2));
+		// Align all the subseqs, so that they all have the same size and share the
+		// same coordinate space.
+		{
+			deleteSeq1 = deleteSeq1.expand(insertSeq1);
+			deleteSeq2 = deleteSeq2.expand(deleteSeq1);
+			[deleteSeq1, insertSeq2] = deleteSeq1.interleave(insertSeq2);
+			deleteSeq2 = deleteSeq2.expand(insertSeq2);
+			insertSeq1 = insertSeq1.expand(insertSeq2);
 		}
 
-		[deleteSeq1, insertSeq2] = deleteSeq1.interleave(insertSeq2);
-		deleteSeq2 = deleteSeq2.expand(insertSeq2);
+		// Find insertions which have been deleted and remove them.
+		{
+			const toggleSeq = insertSeq1.intersection(deleteSeq2);
+			if (toggleSeq.includedSize) {
+				deleteSeq1 = deleteSeq1.shrink(toggleSeq);
+				inserted1 = erase(insertSeq1, inserted1, toggleSeq);
+				insertSeq1 = insertSeq1.shrink(toggleSeq);
+				deleteSeq2 = deleteSeq2.shrink(toggleSeq);
+				insertSeq2 = insertSeq2.shrink(toggleSeq);
+			}
+		}
 
-		// handle overlaps
+		// Find deletions which have been re-inserted and remove them.
 		if (deleted1 != null) {
 			const [deleteOverlap, insertOverlap] = overlapping(
 				deleteSeq1,
@@ -293,42 +325,22 @@ export class Patch1 {
 			);
 			if (deleteOverlap.includedSize) {
 				deleted1 = erase(deleteSeq1, deleted1, deleteOverlap);
-				deleteSeq1 = deleteSeq1.difference(deleteOverlap).shrink(insertOverlap);
 				inserted2 = erase(insertSeq2, inserted2, insertOverlap);
+				deleteSeq1 = deleteSeq1.difference(deleteOverlap).shrink(insertOverlap);
+				insertSeq1 = insertSeq1.shrink(insertOverlap);
+				deleteSeq2 = deleteSeq2.shrink(insertOverlap);
 				insertSeq2 = insertSeq2.shrink(insertOverlap);
-				// TODO: is this logic correct?
-				deleteSeq2 = deleteSeq2.shrink(deleteOverlap);
 			}
 		}
 
-		const [insertSeq, inserted] = consolidate(
-			insertSeq1.expand(insertSeq2),
-			inserted1,
-			insertSeq2,
-			inserted2,
-		);
-		let deleteSeq: Subseq1, deleted: string | undefined;
-		if (deleted1 == null || deleted2 == null) {
-			deleteSeq = deleteSeq1.union(deleteSeq2);
-		} else {
-			try {
-			[deleteSeq, deleted] = consolidate(
-				deleteSeq1,
-				deleted1,
-				deleteSeq2,
-				deleted2,
-			);
-			} catch (err) {
-				console.log(deleteSeq1, deleteSeq2);
-				throw err;
-			}
+		const insertSeq = insertSeq1.union(insertSeq2);
+		const inserted = consolidate(insertSeq1, inserted1, insertSeq2, inserted2);
+		const deleteSeq = deleteSeq1.union(deleteSeq2).shrink(insertSeq);
+		let deleted: string | undefined;
+		if (deleted1 != null && deleted2 != null) {
+			deleted = consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2);
 		}
 
-		deleteSeq = deleteSeq.shrink(insertSeq);
 		return Patch1.synthesize({insertSeq, deleteSeq, inserted, deleted});
-	}
-
-	transform(that: Patch1): [Patch1, Patch1] {
-		throw "TODO";
 	}
 }

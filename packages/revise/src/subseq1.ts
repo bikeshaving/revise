@@ -1,3 +1,5 @@
+// TODO: Maybe this should be a static function on the class???
+// TODO: Rename segments???
 export function appendSegment(
 	segments: Array<number>,
 	length: number,
@@ -23,6 +25,7 @@ export function appendSegment(
 	}
 }
 
+// TODO: should we make subseqs mutable?
 /**
  * A data structure for representing subsequences. Subsequences are parts of
  * other sequences, created by removing zero or more elements from the original
@@ -145,6 +148,7 @@ export class Subseq1 {
 		for (
 			let i1 = 0, i2 = 0, l1 = 0, l2 = 0, f1 = true, f2 = true;
 			i1 < this.segments.length || i2 < that.segments.length;
+
 		) {
 			if (l1 === 0) {
 				if (i1 >= this.segments.length) {
@@ -183,24 +187,24 @@ export class Subseq1 {
 
 	union(that: Subseq1): Subseq1 {
 		const segments: Array<number> = [];
-		this.align(that).forEach(
-			([l, f1, f2]) => appendSegment(segments, l, f1 || f2),
+		this.align(that).forEach(([l, f1, f2]) =>
+			appendSegment(segments, l, f1 || f2),
 		);
 		return new Subseq1(segments);
 	}
 
 	intersection(that: Subseq1): Subseq1 {
 		const segments: Array<number> = [];
-		this.align(that).forEach(
-			([l, f1, f2]) => appendSegment(segments, l, f1 && f2),
+		this.align(that).forEach(([l, f1, f2]) =>
+			appendSegment(segments, l, f1 && f2),
 		);
 		return new Subseq1(segments);
 	}
 
 	difference(that: Subseq1): Subseq1 {
 		const segments: Array<number> = [];
-		this.align(that).forEach(
-			([l, f1, f2]) => appendSegment(segments, l, f1 && !f2),
+		this.align(that).forEach(([l, f1, f2]) =>
+			appendSegment(segments, l, f1 && !f2),
 		);
 		return new Subseq1(segments);
 	}
@@ -267,6 +271,7 @@ export class Subseq1 {
 		for (
 			let i1 = 0, i2 = 0, l1 = 0, l2 = 0, f1 = true, f2 = true;
 			i1 < this.segments.length || i2 < that.segments.length;
+
 		) {
 			if (l1 === 0 && i1 < this.segments.length) {
 				l1 = this.segments[i1++];
@@ -302,19 +307,5 @@ export class Subseq1 {
 		}
 
 		return [new Subseq1(segments1), new Subseq1(segments2)];
-	}
-
-	/**
-	 * Erases all the included segments of this which fall between the included
-	 * segments of that.
-	 *
-	 * Not implemented.
-	 */
-	erase(that: Subseq1): Subseq1 {
-		if (this.excludedSize !== that.size) {
-			throw new RangeError("Size mismatch");
-		}
-
-		throw "TODO";
 	}
 }
