@@ -1,26 +1,28 @@
-// TODO: use this
-import {Subseq} from "./subseq";
+import {Subseq} from "./subseq.js";
 
-export interface RetainOperation {
-	type: "retain";
-	start: number;
-	end: number;
-}
+/**
+ * @typedef {Object} RetainOperation
+ * @property {"retain"} type
+ * @property {number} start
+ * @property {number} end
+ */
 
-export interface DeleteOperation {
-	type: "delete";
-	start: number;
-	end: number;
-	value?: string | undefined;
-}
+/**
+ * @typedef {Object} DeleteOperation
+ * @property {"delete"} type
+ * @property {number} start
+ * @property {number} end
+ * @property {string} [value]
+ */
 
-export interface InsertOperation {
-	type: "insert";
-	start: number;
-	value: string;
-}
+/**
+ * @typedef {Object} InsertOperation
+ * @property {"insert"} type
+ * @property {number} start
+ * @property {string} value
+ */
 
-export type Operation = RetainOperation | DeleteOperation | InsertOperation;
+/** @typedef {RetainOperation | DeleteOperation | InsertOperation} Operation */
 
 /**
  * Given two subseqs and strings which are represented by the included segments
@@ -29,13 +31,15 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
  *
  * The subseqs must have the same size, and the included segments of these
  * subseqs may not overlap.
+ *
+ * @param {Subseq} subseq1
+ * @param {string} str1
+ * @param {Subseq} subseq2
+ * @param {string} str2
+ *
+ * @returns {string}
  */
-function consolidate(
-	subseq1: Subseq,
-	str1: string,
-	subseq2: Subseq,
-	str2: string,
-): string {
+function consolidate(subseq1, str1, subseq2, str2) {
 	let i1 = 0;
 	let i2 = 0;
 	let result = "";
@@ -61,8 +65,14 @@ function consolidate(
  *
  * The subseqs must have the same size, and the included segments of the second
  * subseq must overlap with the first subseq’s included segments.
+ *
+ * @param {Subseq} subseq1
+ * @param {string} str
+ * @param {Subseq} subseq2
+ *
+ * @returns {string}
  */
-function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
+function erase(subseq1, str, subseq2) {
 	let i = 0;
 	let result = "";
 	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
@@ -81,9 +91,12 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 }
 
 /**
- * Returns the length of the common prefix of two strings.
+ * @param {string} str1
+ * @param {string} str2
+ *
+ * @returns {number} - The length of the common prefix of two strings.
  */
-function sharedPrefixLength(str1: string, str2: string): number {
+function sharedPrefixLength(str1, str2) {
 	const length = Math.min(str1.length, str2.length);
 	for (let i = 0; i < length; i++) {
 		if (str1[i] !== str2[i]) {
@@ -102,23 +115,28 @@ function sharedPrefixLength(str1: string, str2: string): number {
  *
  * The subseqs must have the same size, and may not overlap. These subseqs are
  * typically produced from two interleaved subseqs.
+ *
+ * @param {Subseq} subseq1
+ * @param {string} str1
+ * @param {Subseq} subseq2
+ * @param {string} str2
+ *
+ * @returns {[Subseq, Subseq]}
  */
-function overlapping(
-	subseq1: Subseq,
-	str1: string,
-	subseq2: Subseq,
-	str2: string,
-): [Subseq, Subseq] {
+function overlapping(subseq1, str1, subseq2, str2) {
 	let i1 = 0;
 	let i2 = 0;
 	let prevLength = 0;
 	let prevFlag1 = false;
-	const sizes1: Array<number> = [];
-	const sizes2: Array<number> = [];
+	/** @type Array.<number> */
+	const sizes1 = [];
+	/** @type Array.<number> */
+	const sizes2 = [];
 	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
 		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
 		}
+
 		if (prevFlag1 && flag2) {
 			const shared = sharedPrefixLength(
 				str1.slice(i1, prevLength),
@@ -150,20 +168,26 @@ function overlapping(
 }
 
 export class Patch {
-	parts: Array<string | number>;
-	deleted?: string;
-	constructor(parts: Array<string | number>, deleted?: string) {
+	/**
+	 * @param {Array.<string | number>} parts
+	 * @param {string} [deleted]
+	 */
+	constructor(parts, deleted) {
 		this.parts = parts;
 		this.deleted = deleted;
 	}
 
-	static synthesize(
-		insertSeq: Subseq,
-		inserted: string,
-		deleteSeq: Subseq,
-		deleted?: string | undefined,
-	): Patch {
-		const parts: Array<string | number> = [];
+	/**
+	 * @param {Subseq} insertSeq
+	 * @param {string} inserted
+	 * @param {Subseq} deleteSeq
+	 * @param {string} [deleted]
+	 *
+	 * @returns {Patch}
+	 */
+	static synthesize(insertSeq, inserted, deleteSeq, deleted) {
+		/** @type {Array.<string | number>} */
+		const parts = [];
 		let insertOffset = 0;
 		let retainOffset = 0;
 		let prevDeleting = false;
@@ -202,8 +226,10 @@ export class Patch {
 		return new Patch(parts, deleted);
 	}
 
-	operations(): Array<Operation> {
-		const result: Array<Operation> = [];
+	/** @returns {Array.<Operation>} */
+	operations() {
+		/** @type {Array.<Operation>} */
+		const result = [];
 		let insertOffset = 0;
 		let retainOffset = 0;
 		let retaining = true;
@@ -242,10 +268,13 @@ export class Patch {
 		return result;
 	}
 
-	factor(): [Subseq, string, Subseq, string | undefined] {
+	/** @returns {[Subseq, string, Subseq, string | undefined]} */
+	factor() {
 		const operations = this.operations();
-		const insertSizes: Array<number> = [];
-		const deleteSizes: Array<number> = [];
+		/** @type {Array.<number>} */
+		const insertSizes = [];
+		/** @type {Array.<number>} */
+		const deleteSizes = [];
 		let inserted = "";
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i];
@@ -274,8 +303,12 @@ export class Patch {
 
 	/**
 	 * Composes two consecutive patches.
+	 *
+	 * @param {Patch} that
+	 *
+	 * @returns {Patch}
 	 */
-	compose(that: Patch): Patch {
+	compose(that) {
 		let [insertSeq1, inserted1, deleteSeq1, deleted1] = this.factor();
 		let [insertSeq2, inserted2, deleteSeq2, deleted2] = that.factor();
 		// Expand all subseqs so that they share the same coordinate space.

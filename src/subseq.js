@@ -1,4 +1,11 @@
-function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
+/**
+ * @param sizes {Array.<number>}
+ * @param size {number}
+ * @param flag {boolean}
+ *
+ * @returns {undefined}
+ */
+function pushSegment(sizes, size, flag) {
 	if (size < 0) {
 		throw new RangeError("Negative size");
 	} else if (size === 0) {
@@ -19,7 +26,12 @@ function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
 	}
 }
 
-function measure(sizes: Array<number>): [number, number, number] {
+/**
+ * @param sizes {Array.<number>}
+ *
+ * @returns {[number, number, number]}
+ */
+function measure(sizes) {
 	let size = 0,
 		includedSize = 0,
 		excludedSize = 0;
@@ -40,59 +52,43 @@ function measure(sizes: Array<number>): [number, number, number] {
  * A data structure for representing subsequences. Subsequences are parts of
  * other sequences, created by removing zero or more elements from the original
  * sequence without changing the order of remaining elements.
+ * The sizes property is an array of numbers, where each number represents the
+ * size of a continguous segment from the original sequence. The subsequence
+ * “contains” a segment based on its position in this array. Segments alternate
+ * between excluded and included, with the first number representing the size
+ * of an excluded segment. In other words, the first segment is excluded, the
+ * second included, the third excluded and so on.
+ *
+ * Because the first segment is always an excluded segment, a subsequence
+ * array will start with a 0 when the subsequence includes the first
+ * element of the sequence. No other segments will be of size 0 in the
+ * array.
+ *
+ * @example Given the sequence "abcdefgh", the following size arrays represent
+ * the following subsequences:
+ *
+ * [0, 4, 4]                = "abcd"
+ * [4, 4]                   = "efgh"
+ * [0, 2, 2, 2, 2]          = "abef"
+ * [2, 2, 2, 2]             = "cdgh"
+ * [0, 1, 6, 1]             = "ah"
+ * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
  */
 export class Subseq {
 	static pushSegment = pushSegment;
 
-	/**
-	 * The sum of the sizes of segments of the subsequence.
-	 */
-	size: number;
-
-	/**
-	 * The sum of the sizes of the included segments of the subsequence.
-	 */
-	includedSize: number;
-
-	/**
-	 * The sum of the sizes of the excluded segments of the subsequence.
-	 */
-	excludedSize: number;
-
-	/**
-	 * An array of numbers, where each number represents the size of a
-	 * continguous segment from the original sequence. The subsequence “contains”
-	 * a segment based on its position in this array. Segments alternate between
-	 * excluded and included, with the first number representing the size of an
-	 * excluded segment. In other words, the first segment is excluded, the second
-	 * included, the third excluded and so on.
-	 *
-	 * Because the first segment is always an excluded segment, a subsequence
-	 * array will start with a 0 when the subsequence includes the first element
-	 * of the sequence. No other segments will be of size 0 in the array.
-	 *
-	 * @example
-	 * Given the following string sequence: "abcdefgh"
-	 * The following size arrays represent the following subsequences:
-	 *
-	 * [0, 4, 4]                = "abcd"
-	 * [4, 4]                   = "efgh"
-	 * [0, 2, 2, 2, 2]          = "abef"
-	 * [2, 2, 2, 2]             = "cdgh"
-	 * [0, 1, 6, 1]             = "ah"
-	 * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
-	 */
-	sizes: Array<number>;
-
-	constructor(sizes: Array<number>) {
+	/** @param {Array.<number>} sizes */
+	constructor(sizes) {
 		const [size, includedSize, excludedSize] = measure(sizes);
+		/** @type {Array.<number>} */
 		this.sizes = sizes;
 		this.size = size;
 		this.includedSize = includedSize;
 		this.excludedSize = excludedSize;
 	}
 
-	print(): string {
+	/** @returns {string} */
+	print() {
 		let result = "";
 		for (let i = 0; i < this.sizes.length; i++) {
 			if (i % 2 === 0) {
@@ -105,7 +101,12 @@ export class Subseq {
 		return result;
 	}
 
-	contains(offset: number): boolean {
+	/**
+	 * @param {number} offset
+	 *
+	 * @returns {boolean}
+	 */
+	contains(offset) {
 		if (offset < 0) {
 			return false;
 		}
@@ -120,26 +121,35 @@ export class Subseq {
 		return false;
 	}
 
-	clear(): Subseq {
+	/** @returns number */
+	clear() {
 		return new Subseq(this.size ? [this.size] : []);
 	}
 
-	fill(): Subseq {
+	/** @returns {Subseq} */
+	fill() {
 		return new Subseq(this.size ? [0, this.size] : []);
 	}
 
-	complement(): Subseq {
+	/** @returns {Subseq} */
+	complement() {
 		const sizes =
 			this.sizes[0] === 0 ? this.sizes.slice(1) : [0, ...this.sizes];
 		return new Subseq(sizes);
 	}
 
-	align(that: Subseq): Array<[number, boolean, boolean]> {
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {Array.<[number, boolean, boolean]>}
+	 */
+	align(that) {
 		if (this.size !== that.size) {
 			throw new Error("Size mismatch");
 		}
 
-		const result: Array<[number, boolean, boolean]> = [];
+		/** @type {Array.<[number, boolean, boolean]>} */
+		const result = [];
 		const length1 = this.sizes.length;
 		const length2 = that.sizes.length;
 		for (
@@ -182,8 +192,14 @@ export class Subseq {
 		return result;
 	}
 
-	union(that: Subseq): Subseq {
-		const sizes: Array<number> = [];
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {Subseq}
+	 */
+	union(that) {
+		/** @type {Array.<number>} */
+		const sizes = [];
 		for (const [size, flag1, flag2] of this.align(that)) {
 			pushSegment(sizes, size, flag1 || flag2);
 		}
@@ -191,8 +207,14 @@ export class Subseq {
 		return new Subseq(sizes);
 	}
 
-	intersection(that: Subseq): Subseq {
-		const sizes: Array<number> = [];
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {Subseq}
+	 */
+	intersection(that) {
+		/** @type {Array.<number>} */
+		const sizes = [];
 		for (const [size, flag1, flag2] of this.align(that)) {
 			pushSegment(sizes, size, flag1 && flag2);
 		}
@@ -200,8 +222,14 @@ export class Subseq {
 		return new Subseq(sizes);
 	}
 
-	difference(that: Subseq): Subseq {
-		const sizes: Array<number> = [];
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {Subseq}
+	 */
+	difference(that) {
+		/** @type {Array.<number>} */
+		const sizes = [];
 		for (const [size, flag1, flag2] of this.align(that)) {
 			pushSegment(sizes, size, flag1 && !flag2);
 		}
@@ -209,12 +237,18 @@ export class Subseq {
 		return new Subseq(sizes);
 	}
 
-	shrink(that: Subseq): Subseq {
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {Subseq}
+	 */
+	shrink(that) {
 		if (this.size !== that.size) {
 			throw new Error("Size mismatch");
 		}
 
-		const sizes: Array<number> = [];
+		/** @type {Array.<number>} */
+		const sizes = [];
 		for (const [size, flag1, flag2] of this.align(that)) {
 			if (!flag2) {
 				pushSegment(sizes, size, flag1);
@@ -224,12 +258,18 @@ export class Subseq {
 		return new Subseq(sizes);
 	}
 
-	expand(that: Subseq): Subseq {
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {Subseq}
+	 */
+	expand(that) {
 		if (this.size !== that.excludedSize) {
 			throw new Error("Size mismatch");
 		}
 
-		const sizes: Array<number> = [];
+		/** @type {Array.<number>} */
+		const sizes = [];
 		const length1 = this.sizes.length;
 		const length2 = that.sizes.length;
 		for (
@@ -263,13 +303,20 @@ export class Subseq {
 		return new Subseq(sizes);
 	}
 
-	interleave(that: Subseq): [Subseq, Subseq] {
+	/**
+	 * @param {Subseq} that
+	 *
+	 * @returns {[Subseq, Subseq]}
+	 */
+	interleave(that) {
 		if (this.excludedSize !== that.excludedSize) {
 			throw new Error("Size mismatch");
 		}
 
-		const sizes1: Array<number> = [];
-		const sizes2: Array<number> = [];
+		/** @type {Array.<number>} */
+		const sizes1 = [];
+		/** @type {Array.<number>} */
+		const sizes2 = [];
 		const length1 = this.sizes.length;
 		const length2 = that.sizes.length;
 		for (
