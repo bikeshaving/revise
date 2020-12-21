@@ -1,0 +1,22 @@
+body {
+  margin: 0;
+  background: #0c1227;
+  color: #fff;
+  font-family: sans-serif;
+}
+
+.app {
+  margin: 10vh auto;
+  color: white;
+}
+
+.editor {
+  margin: 0 auto;
+  max-width: 60em;
+}
+.editor pre {
+  margin: 0 1em;
+  padding: 1em;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+}
