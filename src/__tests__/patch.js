@@ -60,48 +60,54 @@ describe("Patch", () => {
 			const insertSeq = new Subseq([5, 2, 6]);
 			const inserted = "oo";
 			const deleteSeq = new Subseq([11]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([5, "oo", 11]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([5, "oo", 11]),
+			);
 		});
 
 		test("synthesize 2", () => {
 			const insertSeq = new Subseq([9, 3, 2]);
 			const inserted = "era";
 			const deleteSeq = new Subseq([1, 8, 2]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([1, 9, "era", 11]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([1, 9, "era", 11]),
+			);
 		});
 
 		test("synthesize 3", () => {
 			const insertSeq = new Subseq([2, 2, 9]);
 			const inserted = "je";
 			const deleteSeq = new Subseq([0, 2, 3, 6]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([0, 2, "je", 5, 11]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([0, 2, "je", 5, 11]),
+			);
 		});
 
 		test("synthesize 4", () => {
 			const insertSeq = new Subseq([4, 1, 7, 7]);
 			const inserted = " n Earth";
 			const deleteSeq = new Subseq([5, 6]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([4, " ", 5, 11, "n Earth"]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([4, " ", 5, 11, "n Earth"]),
+			);
 		});
 
 		test("synthesize 5", () => {
 			const insertSeq = new Subseq([11, 5]);
 			const inserted = "buddy";
 			const deleteSeq = new Subseq([6, 5]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([6, 11, "buddy"]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([6, 11, "buddy"]),
+			);
 		});
 
 		test("synthesize 6", () => {
 			const insertSeq = new Subseq([11, 4]);
 			const inserted = "star";
 			const deleteSeq = new Subseq([0, 6, 5]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([0, 6, 11, "star"]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([0, 6, 11, "star"]),
+			);
 		});
 
 		test("simple", () => {
@@ -110,8 +116,9 @@ describe("Patch", () => {
 			const inserted = "foo";
 			// ===+++===+
 			const deleteSeq = new Subseq([3, 3, 3, 1]);
-			expect(Patch.synthesize(insertSeq, inserted, deleteSeq))
-				.toEqual(new Patch([3, 6, "foo", 9, 10]));
+			expect(Patch.synthesize(insertSeq, inserted, deleteSeq)).toEqual(
+				new Patch([3, 6, "foo", 9, 10]),
+			);
 		});
 
 		test("mismatched inserted and insertSeq throws", () => {
@@ -122,14 +129,14 @@ describe("Patch", () => {
 
 		test("insertions after deletions", () => {
 			expect(
-				Patch.synthesize(new Subseq([11, 3]), "bro", new Subseq([6, 5]))
+				Patch.synthesize(new Subseq([11, 3]), "bro", new Subseq([6, 5])),
 			).toEqual(new Patch([6, 11, "bro"]));
 		});
 
 		test("empty", () => {
-			expect(
-				Patch.synthesize(new Subseq([]), "", new Subseq([])),
-			).toEqual(new Patch([0]));
+			expect(Patch.synthesize(new Subseq([]), "", new Subseq([]))).toEqual(
+				new Patch([0]),
+			);
 		});
 	});
 
