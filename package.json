@@ -2,7 +2,6 @@
   "name": "@bikeshaving/revise",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "clean": "shx rm -rf ./lib",
     "prebuild": "yarn clean",
@@ -38,7 +37,6 @@
     "./content-observer.js": "./content-observer.js"
   },
   "workspaces": [
-    ".",
     "packages/*"
   ]
 }

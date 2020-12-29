@@ -1,4 +1,4 @@
-import {Subseq} from "../subseq.js";
+import {Subseq} from "../subseq";
 
 describe("Subseq", () => {
 	describe("size", () => {
@@ -279,6 +279,7 @@ describe("Subseq", () => {
 
 		test("complex", () => {
 			const s = new Subseq([4, 3, 2, 3, 4]);
+			// @prettier-ignore
 			const expected = [
 				false,
 				false,
