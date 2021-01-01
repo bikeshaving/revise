@@ -276,4 +276,38 @@ describe("Patch", () => {
 			expect(patch1.compose(patch2)).toEqual(result);
 		});
 	});
+
+	describe("build", () => {
+		test("build 1", () => {
+			expect(Patch.build("hello world", "oo", 5)).toEqual(
+				new Patch([5, "oo", 11], ""),
+			);
+		});
+
+		test("build 2", () => {
+			expect(Patch.build("hello world", "era", 1, 9)).toEqual(
+				new Patch([1, 9, "era", 11], "ello wor"),
+			);
+		});
+
+		test("build 3", () => {
+			expect(Patch.build("hello world", "buddy", 6, 11)).toEqual(
+				new Patch([6, 11, "buddy"], "world"),
+			);
+		});
+
+		test("build 4", () => {
+			expect(Patch.build("hello world", "", 10, 11)).toEqual(
+				new Patch([10, 11], "d"),
+			);
+		});
+
+		test("build compose", () => {
+			const patch1 = Patch.build("hello world", "je", 0, 2);
+			const patch2 = Patch.build("jello world", "", 5, 11);
+			expect(patch1.compose(patch2)).toEqual(
+				new Patch([0, 2, "je", 5, 11], "he world"),
+			);
+		});
+	});
 });

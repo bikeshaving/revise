@@ -202,6 +202,30 @@ export class Patch {
 		return new Patch(parts, deleted);
 	}
 
+	static build(
+		text: string,
+		inserted: string,
+		from: number,
+		to: number = from,
+	): Patch {
+		const insertSizes: Array<number> = [];
+		const deleteSizes: Array<number> = [];
+		Subseq.pushSegment(insertSizes, from, false);
+		Subseq.pushSegment(insertSizes, to - from, false);
+		Subseq.pushSegment(insertSizes, inserted.length, true);
+		Subseq.pushSegment(insertSizes, text.length - to, false);
+		Subseq.pushSegment(deleteSizes, from, false);
+		Subseq.pushSegment(deleteSizes, to - from, true);
+		Subseq.pushSegment(deleteSizes, text.length - to, false);
+		const deleted = text.slice(from, to);
+		return Patch.synthesize(
+			new Subseq(insertSizes),
+			inserted,
+			new Subseq(deleteSizes),
+			deleted,
+		);
+	}
+
 	operations(): Array<Operation> {
 		const result: Array<Operation> = [];
 		let insertOffset = 0;
