@@ -21,7 +21,9 @@ describe("getContent", () => {
 	});
 
 	test("nested divs 1", () => {
-		const node = parseHTML("<div><div><div>Hello</div></div><div>World</div></div>");
+		const node = parseHTML(
+			"<div><div><div>Hello</div></div><div>World</div></div>",
+		);
 		expect(getContent(node)).toEqual("Hello\nWorld\n");
 	});
 
@@ -55,8 +57,10 @@ describe("getContent", () => {
 		expect(getContent(node)).toEqual("Hello World\n");
 	});
 
-	test("br span in div", () => {
-		const node = parseHTML("<div>Hello<span><br /></span>World<span><br /></span></div>");
+	test("empty span with br at end of div", () => {
+		const node = parseHTML(
+			"<div>Hello<span><br /></span>World<span><br /></span></div>",
+		);
 		expect(getContent(node)).toEqual("Hello\nWorld\n");
 	});
 
