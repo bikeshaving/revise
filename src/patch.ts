@@ -344,8 +344,8 @@ export class Patch {
 		const deleteSeq = deleteSeq1.union(deleteSeq2).shrink(insertSeq);
 		const deleted =
 			deleted1 != null && deleted2 != null
-			? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
-			: undefined;
+				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
+				: undefined;
 		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted);
 	}
 }
