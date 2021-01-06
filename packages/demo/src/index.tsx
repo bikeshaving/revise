@@ -1,5 +1,5 @@
 import type { Child, Children, Context } from '@bikeshaving/crank/crank.js';
-import { Copy, createElement, Raw } from '@bikeshaving/crank/crank.js';
+import { Copy, createElement, Fragment, Raw } from '@bikeshaving/crank/crank.js';
 import { renderer } from '@bikeshaving/crank/dom.js';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript';
@@ -9,9 +9,10 @@ Prism.manual = true;
 import { splitLines } from './prism-utils';
 import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
-import {ContentObserver, getPositionFromIndex} from './content-observer';
+import {ContentObserver, getPositionFromIndex} from '@bikeshaving/revise/content-observer.js';
 
-function getChildren(content: string): Children {
+// TODO: Pass in old lines and mutate that array rather than creating a new one.
+function getLines(content: string): Array<Child> {
   const lines = content.split(/\r\n|\r|\n/);
   if (/\r\n|\r|\n$/.test(content)) {
     lines.pop();
@@ -72,31 +73,54 @@ function* Editable(this: Context, { children }: any) {
         const selection = window.getSelection();
         if (selection) {
           const [node, offset] = getPositionFromIndex(el, cursor);
-          selection.collapse(node, offset);
+          if (
+            selection.focusNode !== node || selection.focusOffset !== offset
+          ) {
+            // TODO: This triggers a layout shift. We should do it in a requestAnimationFrame callback or something.
+            selection.collapse(node, offset);
+          }
         }
       } else {
         content = content1;
         cursor = cursor1;
-        document.execCommand('undo');
-        this.refresh();
       }
+
+      this.refresh();
     },
   );
 
-  this.schedule((el1: Element) => {
-    el = el1;
-    observer.observe(el);
+  this.schedule(() => {
+    observer.observe(el!);
+    this.refresh();
   });
 
+  let initial = true;
   try {
     for ({} of this) {
+      //yield (
+      //  <div class="editor">
+      //    <pre
+      //      crank-ref={(el1: Node) => (el = el1)}
+      //      class="language-js"
+      //      contenteditable="true"
+      //      spellcheck={false}
+      //    >
+      //      <span />
+      //      {parse(content)}
+      //    </pre>
+      //  </div>
+      //);
       yield (
         <div class="editor">
-          <pre class="editor language-js" contenteditable="true">
-            {parse(content)}
-          </pre>
+          <div
+            crank-ref={(el1: Node) => (el = el1)}
+            contenteditable="true"
+            spellcheck={false}
+          >{getLines(content)}</div>
         </div>
       );
+
+      initial = false;
     }
   } finally {
     observer.disconnect();

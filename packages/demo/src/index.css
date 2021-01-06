@@ -14,9 +14,19 @@ body {
   margin: 0 auto;
   max-width: 60em;
 }
-.editor pre {
+
+.editor > div {
   margin: 0 1em;
   padding: 1em;
+  background-color: #2d2d2d;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+}
+
+.editor > pre {
+  margin: 0 1em;
+  padding: 1em;
+  background-color: #2d2d2d;
   white-space: pre-wrap;
   white-space: break-spaces;
 }

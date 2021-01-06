@@ -3,7 +3,7 @@ import * as path from "path";
 
 import ts from "rollup-plugin-typescript2";
 
-const input = ["src/subseq.js", "src/patch.js", "src/content-observer.js"];
+const input = ["src/subseq.ts", "src/patch.ts", "src/content-observer.ts"];
 
 export default [
 	{

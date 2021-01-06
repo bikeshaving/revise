@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "clean": "shx rm -rf ./lib",
+    "clean": "shx rm -rf dist subseq.js patch.js content-observer.js *.d.ts *.map",
     "prebuild": "yarn clean",
     "build": "rollup -c rollup.config.js",
     "watch": "yarn run build -w",
@@ -37,6 +37,7 @@
     "./content-observer.js": "./content-observer.js"
   },
   "workspaces": [
+    ".",
     "packages/*"
   ]
 }

@@ -1,3 +1,5 @@
+import {Patch} from "./patch";
+import {Subseq} from "./subseq";
 // TODO: stop hardcoding this so we can have \r\n documents???
 const NEWLINE = '\n';
 
@@ -11,6 +13,13 @@ export const ContentLength = Symbol.for('revise.ContentLength');
  * parent.
  */
 export const ContentOffset = Symbol.for('revise.ContentOffset');
+
+declare global {
+  interface Node {
+    [ContentOffset]?: number | undefined;
+    [ContentLength]?: number | undefined;
+  }
+}
 
 // TODO: Mutations in non-contenteditable widgets should be ignored.
 // TODO: Mutations in nested contenteditables should be ignored.
@@ -32,6 +41,7 @@ export class ContentObserver {
     this._target = null;
     this._mutationObserver = new MutationObserver((records) => {
       const target = this._target!;
+      invalidateTargets(target, records);
       const content = getContent(target);
       const selection = window.getSelection()!;
       const cursor = getIndexFromPosition(
@@ -43,6 +53,7 @@ export class ContentObserver {
     });
   }
 
+  // TODO: Pass in intended content to observe so we can get an initial diff.
   observe(target: Node) {
     this._target = target;
     getContent(target);
@@ -60,7 +71,114 @@ export class ContentObserver {
   }
 }
 
-const NEWLINE_ELEMENTS = new Set([
+function invalidateTargets(
+  root: Node,
+  records: Array<MutationRecord>,
+): void {
+  console.log(records);
+  let invalidated = false;
+  for (const record of records) {
+    let target = record.target;
+    if (
+      typeof target[ContentOffset] === "undefined" ||
+      !root.contains(target)
+    ) {
+      continue;
+    }
+
+    for (; target !== root; target = target.parentNode!) {
+      if (typeof target[ContentOffset] === "undefined") {
+        break;
+      }
+
+      target[ContentOffset] = undefined;
+      invalidated = true;
+    }
+  }
+
+  if (invalidated) {
+    root[ContentOffset] = undefined;
+  }
+}
+
+//function parseRecords(
+//  rootNode: Node,
+//  records: Array<MutationRecord>,
+//): void {
+//  const originalLength = records.length;
+//  const seen = new Set<Text>();
+//  records = records.filter((record) => {
+//    switch (record.type) {
+//      case "characterData": {
+//        if (seen.has(record.target as Text)) {
+//          return false;
+//        }
+//
+//        seen.add(record.target as Text);
+//        break;
+//      }
+//      case "childList": {
+//        if (!document.body.contains(record.target)) {
+//          return false;
+//        }
+//
+//        break;
+//      }
+//    }
+//
+//    return typeof record.target[ContentOffset] !== "undefined";
+//  });
+//  console.log("Parsing Records", originalLength, records.length);
+//  for (const record of records) {
+//    const offset = record.previousSibling
+//      ? record.previousSibling[ContentOffset]
+//      : record.target[ContentOffset];
+//    console.log({
+//      record,
+//      offset,
+//      target: record.target.nodeType === Node.TEXT_NODE
+//        ? (record.target as Text).data
+//        : (record.target as Element).outerHTML,
+//    });
+//    switch (record.type) {
+//      case "childList": {
+//        if (record.removedNodes.length) {
+//          console.log(
+//            "removed",
+//            Array.from(record.removedNodes).map((node) => {
+//              let content = getContent(rootNode, node);
+//              return [node.nodeType === Node.TEXT_NODE ? (node as Text).data : (node as Element).outerHTML, content];
+//            }),
+//          );
+//        }
+//
+//        if (record.addedNodes.length) {
+//          console.log(
+//            "added",
+//            Array.from(record.addedNodes).map((node) => {
+//              let content = getContent(rootNode, node);
+//              if (
+//                record.nextSibling === null &&
+//                content.endsWith("\n")
+//              ) {
+//                content = content.slice(0, -1);
+//              }
+//
+//              return [node.nodeType === Node.TEXT_NODE ? (node as Text).data : (node as Element).outerHTML, content];
+//            }),
+//          );
+//        }
+//
+//        break;
+//      }
+//      case "characterData":
+//        console.log("characterData", [record.oldValue, "->", (record.target as Text).data]);
+//        break;
+//    }
+//  }
+//}
+
+const BLOCKLIKE_ELEMENTS = new Set([
   'ADDRESS',
   'ARTICLE',
   'ASIDE',
@@ -98,71 +216,106 @@ const NEWLINE_ELEMENTS = new Set([
   'UL',
 ]);
 
-function isNewlineElement(node: Node): node is Element {
+function isBlocklikeElement(node: Node): node is Element {
   return (
-    node.nodeType === Node.ELEMENT_NODE && NEWLINE_ELEMENTS.has(node.nodeName)
+    node.nodeType === Node.ELEMENT_NODE && BLOCKLIKE_ELEMENTS.has(node.nodeName)
   );
 }
 
-const walkers = new WeakMap<Node, TreeWalker>();
-function getOrCreateWalker(node: Node): TreeWalker {
-  let walker = walkers.get(node);
-  if (!walker) {
-    walker = document.createTreeWalker(
-      node,
-      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-    );
+const NOOP = () => {};
 
-    walkers.set(node, walker);
-  }
-
-  walker.currentNode = node;
-  return walker;
-}
-
-function getContent(rootNode: Node): string {
-  const walker = getOrCreateWalker(rootNode);
-  let content = '';
-  const seen = new Set<Node>([]);
-  for (
-    let currentNode: Node | null = walker.currentNode, hasNewline = false;
+function walk(
+  rootNode: Node,
+  {
+    whatToShow = NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+    pre = NOOP,
+    post = NOOP,
+  }: {
+    whatToShow?: number,
+    pre?: (node: Node) => unknown,
+    post?: (node: Node) => unknown,
+  },
+): void {
+  const walker = document.createTreeWalker(rootNode, whatToShow);
+  const seen = new Set<Node>();
+  outer: for (
+    let currentNode: Node | null = walker.currentNode;
     currentNode !== null;
     currentNode = walker.nextSibling() || walker.parentNode()
   ) {
-    for (
-      ;
-      currentNode.nodeType !== Node.TEXT_NODE && !seen.has(currentNode);
-      currentNode = walker.currentNode
-    ) {
-      seen.add(currentNode);
-      if (!hasNewline && content.length && isNewlineElement(currentNode)) {
-        content += NEWLINE;
-        hasNewline = true;
+    if (!seen.has(currentNode)) {
+      let firstChild: Node | null;
+      while (true) {
+        if (pre(currentNode)) {
+          continue outer;
+        }
+
+        firstChild = walker.firstChild();
+        if (firstChild) {
+          seen.add(currentNode);
+          currentNode = firstChild;
+        } else {
+          break;
+        }
       }
-
-      currentNode[ContentOffset] = content.length;
-      if (walker.firstChild() === null) {
-        break;
-      }
     }
 
-    if (currentNode.nodeType === Node.TEXT_NODE) {
-      currentNode[ContentOffset] = content.length;
-      const data = (currentNode as Text).data;
-      content += data;
-      hasNewline = data.endsWith(NEWLINE);
-    } else if (currentNode.nodeName === 'BR') {
-      content += NEWLINE;
-      hasNewline = true;
-    }
-
-    if (!hasNewline && isNewlineElement(currentNode)) {
-      content += NEWLINE;
-      hasNewline = true;
-    }
+    post(currentNode);
   }
+}
 
-  rootNode[ContentLength] = content.length;
+export function getContent(
+  root: Node,
+): string {
+  let content = '';
+  let offset = 0;
+  let hasNewline = false;
+  const invalidated: Array<Node> = [];
+  walk(root, {
+    pre(node) {
+      if (node !== root && typeof node[ContentLength] !== "undefined") {
+        throw new Error("Cannot observe nodes within a content observer");
+      }
+
+      if (typeof node[ContentOffset] === "undefined") {
+        invalidated.push(node);
+      }
+
+      if (!hasNewline && offset && isBlocklikeElement(node)) {
+        hasNewline = true;
+        content += NEWLINE;
+        offset += NEWLINE.length;
+      }
+
+      node[ContentOffset] = offset;
+    },
+    post(node) {
+      if (node.nodeName === 'BR') {
+        hasNewline = true;
+        content += NEWLINE;
+        offset += NEWLINE.length;
+      } else if (node.nodeType === Node.TEXT_NODE) {
+        const content1 = (node as Text).data;
+        hasNewline = content1.endsWith(NEWLINE);
+        content += content1;
+        offset += content1.length;
+      } else if (
+        !hasNewline &&
+        node.firstChild &&
+        isBlocklikeElement(node)
+      ) {
+        hasNewline = true;
+        content += NEWLINE;
+        offset += NEWLINE.length;
+      }
+
+      if (node === root) {
+        node[ContentLength] = offset;
+      }
+    },
+  });
+
+  console.log(invalidated);
   return content;
 }
 
@@ -172,8 +325,10 @@ function getContent(rootNode: Node): string {
  * is found or we reached the root of the true.
  */
 function getNextNode(rootNode: Node, node: Node): Node | null {
-  const walker = getOrCreateWalker(rootNode);
-  walker.currentNode = node;
+  const walker = document.createTreeWalker(
+    rootNode,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  );
   for (let currentNode: Node | null = node; currentNode !== null; ) {
     currentNode = walker.nextSibling();
     if (currentNode === null) {
@@ -240,7 +395,10 @@ export function getPositionFromIndex(
     return [null, 0];
   }
 
-  const walker = getOrCreateWalker(rootNode);
+  const walker = document.createTreeWalker(
+    rootNode,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+  );
   for (
     let currentNode = walker.firstChild();
     currentNode !== null;
