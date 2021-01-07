@@ -226,6 +226,10 @@ export class Patch {
 		);
 	}
 
+	static diff(oldText: string, newText: string): void {
+		const minLength = Math.min(oldText.length, newText.length);
+	}
+
 	operations(): Array<Operation> {
 		const result: Array<Operation> = [];
 		let insertOffset = 0;

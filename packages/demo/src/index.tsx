@@ -10,6 +10,8 @@ import { splitLines } from './prism-utils';
 import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
 import {ContentObserver, getPositionFromIndex} from '@bikeshaving/revise/content-observer.js';
+import {Subseq} from '@bikeshaving/revise/subseq.js';
+import {Patch} from '@bikeshaving/revise/patch.js';
 
 // TODO: Pass in old lines and mutate that array rather than creating a new one.
 function getLines(content: string): Array<Child> {
@@ -81,6 +83,7 @@ function* Editable(this: Context, { children }: any) {
           }
         }
       } else {
+        Patch.diff(content, content1);
         content = content1;
         cursor = cursor1;
       }
