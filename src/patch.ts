@@ -83,7 +83,7 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 /**
  * Returns the length of the common prefix of two strings.
  */
-function sharedPrefixLength(str1: string, str2: string): number {
+function commonPrefixLength(str1: string, str2: string): number {
 	const length = Math.min(str1.length, str2.length);
 	for (let i = 0; i < length; i++) {
 		if (str1[i] !== str2[i]) {
@@ -120,14 +120,14 @@ function overlapping(
 			throw new Error("Overlapping subseqs");
 		}
 		if (prevFlag1 && flag2) {
-			const shared = sharedPrefixLength(
+			const prefix = commonPrefixLength(
 				str1.slice(i1, prevLength),
 				str2.slice(i2, size),
 			);
-			Subseq.pushSegment(sizes1, shared, true);
-			Subseq.pushSegment(sizes1, prevLength - shared, false);
-			Subseq.pushSegment(sizes2, shared, true);
-			Subseq.pushSegment(sizes2, size - shared, false);
+			Subseq.pushSegment(sizes1, prefix, true);
+			Subseq.pushSegment(sizes1, prevLength - prefix, false);
+			Subseq.pushSegment(sizes2, prefix, true);
+			Subseq.pushSegment(sizes2, size - prefix, false);
 		} else {
 			Subseq.pushSegment(sizes1, prevLength, false);
 			Subseq.pushSegment(sizes2, size, false);

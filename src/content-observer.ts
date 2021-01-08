@@ -30,30 +30,58 @@ declare global {
 // getContent by actually reading mutation records themselves.
 // TODO: Figure out what records we should emit.
 // TODO: Integrate with an undo stack of some kind.
-// TODO: Multiple targets.
 export interface ContentRecord {
+	type: string;
 	target: Node;
 	content: string;
-	cursor: number;
+	cursor: Cursor;
 }
 
+// TODO: Multiple targets.
 export class ContentObserver {
 	_target: Node | null;
 	_mutationObserver: MutationObserver;
+	_onselectionchange: () => unknown;
 	constructor(callback: (record: ContentRecord) => unknown) {
 		this._target = null;
 		this._mutationObserver = new MutationObserver((records) => {
-			const target = this._target!;
-			invalidateTargets(target, records);
-			const content = getContent(target);
+			const target = this._target;
+			if (!target) {
+				return;
+			}
+
+			invalidateRoot(target, records);
+			const content = target[Content];
+			const content1 = getContent(target);
 			const selection = window.getSelection()!;
-			const cursor = getIndexFromPosition(
+			const cursor = cursorFromSelection(target, selection);
+			callback({
+				type: "mutation",
 				target,
-				selection.focusNode,
-				selection.focusOffset,
-			);
-			callback({target, content, cursor});
+				content: content1,
+				cursor,
+			});
 		});
+
+		this._onselectionchange = () => {
+			const target = this._target;
+			if (!target) {
+				return;
+			}
+
+			const selection = document.getSelection();
+			const cursor = cursorFromSelection(target, selection);
+			if (cursor === -1) {
+				return;
+			}
+
+			callback({
+				type: "selectionchange",
+				target,
+				content: target[Content]!,
+				cursor,
+			});
+		};
 	}
 
 	// TODO: Pass in intended content to observe so we can get an initial diff.
@@ -66,15 +94,17 @@ export class ContentObserver {
 			characterData: true,
 			characterDataOldValue: true,
 		});
+		document.addEventListener("selectionchange", this._onselectionchange);
 	}
 
 	disconnect() {
 		this._target = null;
 		this._mutationObserver.disconnect();
+		document.removeEventListener("selectionchange", this._onselectionchange);
 	}
 }
 
-function invalidateTargets(root: Node, records: Array<MutationRecord>): void {
+function invalidateRoot(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
@@ -153,16 +183,18 @@ function walk(
 		whatToShow = NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 		pre = NOOP,
 		post = NOOP,
+		start,
 	}: {
 		whatToShow?: number;
 		pre?: (node: Node) => unknown;
 		post?: (node: Node) => unknown;
+		start?: Node | null;
 	},
 ): void {
 	const walker = document.createTreeWalker(rootNode, whatToShow);
 	const seen = new Set<Node>();
-	outer: for (
-		let currentNode: Node | null = walker.currentNode;
+	next: for (
+		let currentNode: Node | null = start || walker.currentNode;
 		currentNode !== null;
 		currentNode = walker.nextSibling() || walker.parentNode()
 	) {
@@ -170,7 +202,7 @@ function walk(
 			let firstChild: Node | null;
 			while (true) {
 				if (pre(currentNode)) {
-					continue outer;
+					continue next;
 				}
 
 				firstChild = walker.firstChild();
@@ -183,7 +215,9 @@ function walk(
 			}
 		}
 
-		post(currentNode);
+		if (post(currentNode)) {
+			break;
+		}
 	}
 }
 
@@ -191,15 +225,10 @@ export function getContent(root: Node): string {
 	let content = "";
 	let offset = 0;
 	let hasNewline = false;
-	const invalidated: Array<Node> = [];
 	walk(root, {
 		pre(node) {
 			if (node !== root && typeof node[Content] !== "undefined") {
 				throw new Error("Cannot observe nodes within a content observer");
-			}
-
-			if (typeof node[ContentOffset] === "undefined") {
-				invalidated.push(node);
 			}
 
 			if (!hasNewline && offset && isBlocklikeElement(node)) {
@@ -220,7 +249,11 @@ export function getContent(root: Node): string {
 				hasNewline = content1.endsWith(NEWLINE);
 				content += content1;
 				offset += content1.length;
-			} else if (!hasNewline && node.firstChild && isBlocklikeElement(node)) {
+			} else if (
+				!hasNewline &&
+				isBlocklikeElement(node) &&
+				(node === root || node.firstChild)
+			) {
 				hasNewline = true;
 				content += NEWLINE;
 				offset += NEWLINE.length;
@@ -257,16 +290,23 @@ function getNextNode(rootNode: Node, node: Node): Node | null {
 	return null;
 }
 
-type Cursor = [number, number] | number | null;
+export type NodeOffset = [Node | null, number];
 
-function getIndexFromPosition(
-	rootNode: Node,
+// TODO: Should we use null when the editable is not focused, or should we use -1?
+// TODO: Should we allow descending ranges for cursors? ([5, 0] to indicate a
+// selection whose focus node and offset appear before the anchor node and
+// offset).
+export type Cursor = [number, number] | number;
+
+// TODO: Should we be exporting this???
+export function indexFromNodeOffset(
+	root: Node,
 	node: Node | null,
 	offset: number,
 ): number {
 	if (
 		node === null ||
-		!rootNode.contains(node) ||
+		!root.contains(node) ||
 		typeof node[ContentOffset] === "undefined"
 	) {
 		return -1;
@@ -278,10 +318,10 @@ function getIndexFromPosition(
 		// In Firefox, when inserting a soft newline, a BR element is inserted, the
 		// selection node is set to the parent node of the BR, and the selection
 		// offset is set to the length of the childNodes.
-		const nextNode = getNextNode(rootNode, node);
+		const nextNode = getNextNode(root, node);
 		if (nextNode === null || typeof nextNode[ContentOffset] === "undefined") {
 			// TODO: return the length of the content
-			return rootNode[Content]!.length;
+			return root[Content]!.length;
 		}
 
 		return nextNode[ContentOffset]!;
@@ -292,17 +332,17 @@ function getIndexFromPosition(
 	return node.childNodes[offset][ContentOffset]!;
 }
 
-function getNodeLength(node: Text | Element): number {
+function getNodeLength(node: Node): number {
 	return node.nodeType === Node.TEXT_NODE
 		? (node as Text).data.length
 		: node.childNodes.length;
 }
 
 // TODO: Figure out how this function should be called and exported.
-export function getPositionFromIndex(
+export function nodeOffsetFromIndex(
 	rootNode: Node,
 	index: number,
-): [Node | null, number] {
+): NodeOffset {
 	if (typeof rootNode[Content] === "undefined") {
 		throw new Error("Unknown node");
 	}
@@ -369,4 +409,59 @@ export function getPositionFromIndex(
 	}
 
 	return [null, 0];
+}
+
+export function cursorFromSelection(
+	root: Node,
+	selection: Selection | null,
+): Cursor {
+	if (selection == null) {
+		return -1;
+	}
+
+	const focus = indexFromNodeOffset(
+		root,
+		selection.focusNode,
+		selection.focusOffset,
+	);
+
+	const anchor = indexFromNodeOffset(
+		root,
+		selection.anchorNode,
+		selection.anchorOffset,
+	);
+
+	if (focus === anchor || focus === -1 || anchor === -1) {
+		return focus;
+	}
+
+	return [anchor, focus];
+}
+
+export function setSelection(
+	selection: Selection,
+	root: Node,
+	cursor: Cursor,
+): void {
+	const anchor = typeof cursor === "number" ? cursor : cursor[0];
+	const focus = typeof cursor === "number" ? cursor : cursor[1];
+	if (anchor === focus) {
+		const [node, offset] = nodeOffsetFromIndex(root, focus);
+		if (selection.focusNode !== node || selection.focusOffset !== offset) {
+			selection.collapse(node, offset);
+		}
+
+		return;
+	}
+
+	const range = selection.getRangeAt(0);
+	const [anchorNode, anchorOffset] = nodeOffsetFromIndex(root, anchor);
+	const [focusNode, focusOffset] = nodeOffsetFromIndex(root, focus);
+	if (anchorNode) {
+		range.setStart(anchorNode, anchorOffset);
+	}
+
+	if (focusNode) {
+		range.setEnd(focusNode, focusOffset);
+	}
 }

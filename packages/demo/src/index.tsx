@@ -9,8 +9,13 @@ Prism.manual = true;
 import { splitLines } from './prism-utils';
 import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
-import {ContentObserver, getPositionFromIndex} from '@bikeshaving/revise/content-observer.js';
-import {Subseq} from '@bikeshaving/revise/subseq.js';
+import type {Cursor} from '@bikeshaving/revise/content-observer.js';
+import {
+  ContentObserver,
+  indexFromNodeOffset,
+  nodeOffsetFromIndex,
+  setSelection,
+} from '@bikeshaving/revise/content-observer.js';
 import {Patch} from '@bikeshaving/revise/patch.js';
 
 // TODO: Pass in old lines and mutate that array rather than creating a new one.
@@ -65,25 +70,81 @@ function parse(content: string): Array<Child> {
   return printLines(lines);
 }
 
+/**
+ * Get the length of the common prefix of two strings.
+ */
+function commonPrefixLength(text1: string, text2: string) {
+  const min = Math.min(text1.length, text2.length);
+  for (let l = 0; l < min; l++) {
+    if (text1[l] !== text2[l]) {
+      return l;
+    }
+  }
+  return min;
+}
+
+/**
+ * Get the length of the common suffix of two strings.
+ */
+function commonSuffixLength(text1: string, text2: string) {
+  const min = Math.min(text1.length, text2.length);
+  for (let l = 0, l1 = text1.length - 1, l2 = text2.length - 1; l < min; l++) {
+    if (text1[l1 - l] !== text2[l2 - l]) {
+      return l;
+    }
+  }
+
+  return min;
+}
+
+// TODO: this should be a method of last resort when no cursor is available.
+function diff(text1: string, text2: string): Patch {
+  let prefix = commonPrefixLength(text1, text2);
+  let suffix = commonSuffixLength(text1, text2);
+  // We recompute prefix/suffix against sliced strings because there might be
+  // overlap in the case of edits to strings with repeated characters.
+  //
+  // TODO: Maybe we should bias towards the end in this case?
+  if (prefix < suffix) {
+    prefix = commonPrefixLength(
+      text1.slice(0, text1.length - suffix),
+      text2.slice(0, text2.length - suffix),
+    );
+  } else {
+    suffix = commonSuffixLength(
+      text1.slice(prefix),
+      text2.slice(prefix),
+    );
+  }
+
+  return Patch.build(
+    text1,
+    text2.slice(prefix, text2.length - suffix),
+    prefix,
+    text1.length - suffix,
+  );
+}
+
 function* Editable(this: Context, { children }: any) {
   let content = '\n';
-  let cursor = -1;
+  let cursor: Cursor = -1;
   let el: any;
   const observer = new ContentObserver(
-    ({ content: content1, cursor: cursor1 }) => {
+    ({ type, content: content1, cursor: cursor1 }) => {
+      if (type === "selectionchange") {
+        cursor = cursor1;
+        return;
+      }
+
       if (content === content1) {
-        const selection = window.getSelection();
+        // TODO: Maybe the ContentObserver could provide a method to do this.
+        const selection = document.getSelection();
         if (selection) {
-          const [node, offset] = getPositionFromIndex(el, cursor);
-          if (
-            selection.focusNode !== node || selection.focusOffset !== offset
-          ) {
-            // TODO: This triggers a layout shift. We should do it in a requestAnimationFrame callback or something.
-            selection.collapse(node, offset);
-          }
+          setSelection(selection, el, cursor);
         }
       } else {
-        Patch.diff(content, content1);
+        const patch = diff(content, content1);
+        console.log(patch.parts, [patch.deleted]);
         content = content1;
         cursor = cursor1;
       }
@@ -97,7 +158,6 @@ function* Editable(this: Context, { children }: any) {
     this.refresh();
   });
 
-  let initial = true;
   try {
     for ({} of this) {
       //yield (
@@ -120,10 +180,10 @@ function* Editable(this: Context, { children }: any) {
             contenteditable="true"
             spellcheck={false}
           >{getLines(content)}</div>
+          <pre>{el && el.innerHTML}</pre>
+          <pre>{JSON.stringify(content)}</pre>
         </div>
       );
-
-      initial = false;
     }
   } finally {
     observer.disconnect();

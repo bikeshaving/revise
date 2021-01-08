@@ -5,6 +5,10 @@ body {
   font-family: sans-serif;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 .app {
   margin: 10vh auto;
   color: white;
@@ -16,16 +20,18 @@ body {
 }
 
 .editor > div {
-  margin: 0 1em;
-  padding: 1em;
+  margin: 30px;
+  padding: 15px;
+  border: none;
+  outline: none;
   background-color: #2d2d2d;
   white-space: pre-wrap;
   white-space: break-spaces;
 }
 
 .editor > pre {
-  margin: 0 1em;
-  padding: 1em;
+  margin: 30px;
+  padding: 15px;
   background-color: #2d2d2d;
   white-space: pre-wrap;
   white-space: break-spaces;
