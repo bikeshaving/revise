@@ -1,13 +1,13 @@
-import {Patch} from "./patch";
-import {Subseq} from "./subseq";
-
 // TODO: stop hardcoding this so we can have \r\n documents???
 const NEWLINE = "\n";
 
 //TODO: Use a single symbol property.
+
 /**
  * A symbol property added to the root node which is being observed. It is set
  * to the string content of the entire DOM node.
+ *
+ * Maybe this can be set to some kind of controller object instead.
  */
 export const Content = Symbol.for("revise.Content");
 
@@ -29,6 +29,8 @@ declare global {
 	}
 }
 
+// TODO: expose methods via a ContentController class.
+
 // TODO: Mutations in non-contenteditable widgets should be ignored.
 // TODO: Mutations in nested contenteditables should be ignored.
 // TODO: Figure out how to limit the amount of work we need to do with
@@ -49,7 +51,7 @@ export class ContentObserver {
 	_onselectionchange: () => unknown;
 	constructor(callback: (record: ContentRecord) => unknown) {
 		this._root = null;
-		this._mutationObserver = new MutationObserver((records) => {
+		this._mutationObserver = new MutationObserver((/* records */) => {
 			const root = this._root;
 			if (!root) {
 				return;
@@ -100,6 +102,7 @@ export class ContentObserver {
 			childList: true,
 			characterData: true,
 			characterDataOldValue: true,
+			// TODO: We need to listen to attribute changes for widgets.
 		});
 		document.addEventListener("selectionchange", this._onselectionchange);
 	}
@@ -107,7 +110,7 @@ export class ContentObserver {
 	disconnect() {
 		this._root = null;
 		this._mutationObserver.disconnect();
-		// TODO: only remove the event listener if all targets are disconnected.
+		// TODO: only remove the event listener if all roots are disconnected.
 		document.removeEventListener("selectionchange", this._onselectionchange);
 	}
 }
@@ -181,6 +184,7 @@ function walk(
 	) {
 		if (!seen.has(currentNode)) {
 			let firstChild: Node | null;
+			// eslint-disable-next-line no-constant-condition
 			while (true) {
 				if (pre(currentNode)) {
 					continue next;
@@ -203,7 +207,9 @@ function walk(
 }
 
 export function getContent(root: Node): string {
-	let hasNewline = false, content = "", offset = 0;
+	let hasNewline = false,
+		content = "",
+		offset = 0;
 	walk(root, {
 		pre(node) {
 			if (node !== root && typeof node[Content] !== "undefined") {
@@ -456,10 +462,7 @@ function getNodeLength(node: Node): number {
 }
 
 // TODO: Figure out how this function should be called and exported.
-export function nodeOffsetFromIndex(
-	root: Node,
-	index: number,
-): NodeOffset {
+export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 	if (typeof root[Content] === "undefined") {
 		throw new Error("Unknown node");
 	}

@@ -63,9 +63,4 @@ describe("getContent", () => {
 		);
 		expect(getContent(node)).toEqual("Hello\nWorld\n");
 	});
-
-	test("empty div", () => {
-		const node = parseHTML("<span>Hello World<br /></span>");
-		expect(getContent(node)).toEqual("Hello World\n");
-	});
 });

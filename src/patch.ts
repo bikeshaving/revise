@@ -32,9 +32,9 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
  */
 function consolidate(
 	subseq1: Subseq,
-	str1: string,
+	text1: string,
 	subseq2: Subseq,
-	str2: string,
+	text2: string,
 ): string {
 	let i1 = 0;
 	let i2 = 0;
@@ -43,10 +43,10 @@ function consolidate(
 		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
 		} else if (flag1) {
-			result += str1.slice(i1, size);
+			result += text1.slice(i1, size);
 			i1 += size;
 		} else if (flag2) {
-			result += str2.slice(i2, size);
+			result += text2.slice(i2, size);
 			i2 += size;
 		}
 	}
@@ -81,12 +81,27 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 }
 
 /**
- * Returns the length of the common prefix of two strings.
+ * @returns the length of the common prefix between two strings.
  */
-function commonPrefixLength(str1: string, str2: string): number {
-	const length = Math.min(str1.length, str2.length);
+function commonPrefixLength(text1: string, text2: string) {
+	const length = Math.min(text1.length, text2.length);
 	for (let i = 0; i < length; i++) {
-		if (str1[i] !== str2[i]) {
+		if (text1[i] !== text2[i]) {
+			return i;
+		}
+	}
+	return length;
+}
+
+/**
+ * @returns the length of the common suffix between two strings.
+ */
+function commonSuffixLength(text1: string, text2: string) {
+	const length1 = text1.length;
+	const length2 = text2.length;
+	const length = Math.min(length1, length2);
+	for (let i = 0; i < length; i++) {
+		if (text1[length1 - i - 1] !== text2[length2 - i - 1]) {
 			return i;
 		}
 	}
@@ -105,9 +120,9 @@ function commonPrefixLength(str1: string, str2: string): number {
  */
 function overlapping(
 	subseq1: Subseq,
-	str1: string,
+	text1: string,
 	subseq2: Subseq,
-	str2: string,
+	text2: string,
 ): [Subseq, Subseq] {
 	let i1 = 0;
 	let i2 = 0;
@@ -121,8 +136,8 @@ function overlapping(
 		}
 		if (prevFlag1 && flag2) {
 			const prefix = commonPrefixLength(
-				str1.slice(i1, prevLength),
-				str2.slice(i2, size),
+				text1.slice(i1, prevLength),
+				text2.slice(i2, size),
 			);
 			Subseq.pushSegment(sizes1, prefix, true);
 			Subseq.pushSegment(sizes1, prevLength - prefix, false);
@@ -176,8 +191,8 @@ export class Patch {
 					parts.push(retainOffset);
 				}
 
-				const str = inserted.slice(insertOffset, insertOffset + size);
-				parts.push(str);
+				const text = inserted.slice(insertOffset, insertOffset + size);
+				parts.push(text);
 				insertOffset += size;
 			} else {
 				if (deleting) {
@@ -226,8 +241,25 @@ export class Patch {
 		);
 	}
 
-	static diff(oldText: string, newText: string): void {
-		const minLength = Math.min(oldText.length, newText.length);
+	static diff(text1: string, text2: string, hint?: number): Patch {
+		let prefix = commonPrefixLength(text1, text2);
+		let suffix = commonSuffixLength(text1, text2);
+		if (prefix + suffix > Math.min(text1.length, text2.length)) {
+			// Prefix and suffix may overlap when there are runs of the same character.
+			if (hint !== undefined && hint > -1 && hint <= prefix) {
+				prefix = hint;
+			}
+
+			// TODO: We can probably avoid the commonSuffixLength() call here.
+			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
+		}
+
+		return Patch.build(
+			text1,
+			text2.slice(prefix, text2.length - suffix),
+			prefix,
+			text1.length - suffix,
+		);
 	}
 
 	operations(): Array<Operation> {
