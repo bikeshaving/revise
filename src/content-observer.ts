@@ -1,8 +1,10 @@
 import {Patch} from "./patch";
 import {Subseq} from "./subseq";
+
 // TODO: stop hardcoding this so we can have \r\n documents???
 const NEWLINE = "\n";
 
+//TODO: Use a single symbol property.
 /**
  * A symbol property added to the root node which is being observed. It is set
  * to the string content of the entire DOM node.
@@ -17,10 +19,13 @@ export const Content = Symbol.for("revise.Content");
  */
 export const ContentOffset = Symbol.for("revise.ContentOffset");
 
+export const ContentLength = Symbol.for("revise.ContentLength");
+
 declare global {
 	interface Node {
 		[Content]?: string | undefined;
 		[ContentOffset]?: number | undefined;
+		[ContentLength]?: number | undefined;
 	}
 }
 
@@ -32,63 +37,65 @@ declare global {
 // TODO: Integrate with an undo stack of some kind.
 export interface ContentRecord {
 	type: string;
-	target: Node;
+	root: Node;
 	content: string;
 	cursor: Cursor;
 }
 
 // TODO: Multiple targets.
 export class ContentObserver {
-	_target: Node | null;
+	_root: Node | null;
 	_mutationObserver: MutationObserver;
 	_onselectionchange: () => unknown;
 	constructor(callback: (record: ContentRecord) => unknown) {
-		this._target = null;
+		this._root = null;
 		this._mutationObserver = new MutationObserver((records) => {
-			const target = this._target;
-			if (!target) {
+			const root = this._root;
+			if (!root) {
 				return;
 			}
 
-			invalidateRoot(target, records);
-			const content = target[Content];
-			const content1 = getContent(target);
+			// TODO: Use invalidate and patches as opposed to reading the entire tree.
+			// invalidate(root, records);
+			// const patch = getPatch(root);
+			const content = getContent(root);
 			const selection = window.getSelection()!;
-			const cursor = cursorFromSelection(target, selection);
+			const cursor = cursorFromSelection(root, selection);
 			callback({
 				type: "mutation",
-				target,
-				content: content1,
+				root,
+				content,
 				cursor,
 			});
 		});
 
 		this._onselectionchange = () => {
-			const target = this._target;
-			if (!target) {
+			const root = this._root;
+			if (!root) {
 				return;
 			}
 
 			const selection = document.getSelection();
-			const cursor = cursorFromSelection(target, selection);
+			const cursor = cursorFromSelection(root, selection);
 			if (cursor === -1) {
 				return;
 			}
 
 			callback({
 				type: "selectionchange",
-				target,
-				content: target[Content]!,
+				root,
+				content: root[Content]!,
 				cursor,
 			});
 		};
 	}
 
-	// TODO: Pass in intended content to observe so we can get an initial diff.
-	observe(target: Node) {
-		this._target = target;
-		getContent(target);
-		this._mutationObserver.observe(target, {
+	// TODO: Pass in intended content to observe so we can get an initial diff?
+	observe(root: Node) {
+		this._root = root;
+		// Marking the offset/lengths of the root
+		getContent(root);
+		this._mutationObserver.observe(root, {
 			subtree: true,
 			childList: true,
 			characterData: true,
@@ -98,36 +105,10 @@ export class ContentObserver {
 	}
 
 	disconnect() {
-		this._target = null;
+		this._root = null;
 		this._mutationObserver.disconnect();
+		// TODO: only remove the event listener if all targets are disconnected.
 		document.removeEventListener("selectionchange", this._onselectionchange);
-	}
-}
-
-function invalidateRoot(root: Node, records: Array<MutationRecord>): void {
-	let invalidated = false;
-	for (let i = 0; i < records.length; i++) {
-		const record = records[i];
-		let target = record.target;
-		if (
-			typeof target[ContentOffset] === "undefined" ||
-			!root.contains(target)
-		) {
-			continue;
-		}
-
-		for (; target !== root; target = target.parentNode!) {
-			if (typeof target[ContentOffset] === "undefined") {
-				break;
-			}
-
-			target[ContentOffset] = undefined;
-			invalidated = true;
-		}
-	}
-
-	if (invalidated) {
-		root[ContentOffset] = undefined;
 	}
 }
 
@@ -178,7 +159,7 @@ function isBlocklikeElement(node: Node): node is Element {
 const NOOP = () => {};
 
 function walk(
-	rootNode: Node,
+	root: Node,
 	{
 		whatToShow = NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 		pre = NOOP,
@@ -191,7 +172,7 @@ function walk(
 		start?: Node | null;
 	},
 ): void {
-	const walker = document.createTreeWalker(rootNode, whatToShow);
+	const walker = document.createTreeWalker(root, whatToShow);
 	const seen = new Set<Node>();
 	next: for (
 		let currentNode: Node | null = start || walker.currentNode;
@@ -222,22 +203,19 @@ function walk(
 }
 
 export function getContent(root: Node): string {
-	let content = "";
-	let offset = 0;
-	let hasNewline = false;
+	let hasNewline = false, content = "", offset = 0;
 	walk(root, {
 		pre(node) {
 			if (node !== root && typeof node[Content] !== "undefined") {
 				throw new Error("Cannot observe nodes within a content observer");
 			}
 
+			node[ContentOffset] = offset;
 			if (!hasNewline && offset && isBlocklikeElement(node)) {
 				hasNewline = true;
 				content += NEWLINE;
 				offset += NEWLINE.length;
 			}
-
-			node[ContentOffset] = offset;
 		},
 		post(node) {
 			if (node.nodeName === "BR") {
@@ -252,6 +230,10 @@ export function getContent(root: Node): string {
 			} else if (
 				!hasNewline &&
 				isBlocklikeElement(node) &&
+				// TODO: We check that the any block-like elements that aren’t the root
+				// have at least one child, to deal with empty divs and such, but I am
+				// not sure about this logic. For instance, empty divs non-zero heights
+				// seem to record as a newline according to content-editable algorithms.
 				(node === root || node.firstChild)
 			) {
 				hasNewline = true;
@@ -259,23 +241,158 @@ export function getContent(root: Node): string {
 				offset += NEWLINE.length;
 			}
 
-			if (node === root) {
-				node[Content] = content;
-			}
+			node[ContentLength] = offset - node[ContentOffset]!;
 		},
 	});
 
+	root[Content] = content;
 	return content;
 }
+
+// TODO: uncomment
+///**
+// * Given an observed root, and an array of mutation records, this function
+// * invalidates nodes which have changed children by deleting the ContentLength
+// * property.
+// *
+// * This function should be used in conjunction with the getPatch() function
+// * below.
+// */
+//function invalidate(root: Node, records: Array<MutationRecord>): void {
+//	let invalidated = false;
+//	for (let i = 0; i < records.length; i++) {
+//		const record = records[i];
+//		let target = record.target;
+//		// TODO: handle non-contenteditable widgets
+//		if (target === root) {
+//			invalidated = true;
+//			continue;
+//		} else if (
+//			typeof target[ContentLength] === "undefined" ||
+//			!root.contains(target)
+//		) {
+//			continue;
+//		}
+//
+//		for (; target !== root; target = target.parentNode!) {
+//			if (typeof target[ContentLength] === "undefined") {
+//				break;
+//			}
+//
+//			target[ContentLength] = undefined;
+//			invalidated = true;
+//		}
+//	}
+//
+//	if (invalidated) {
+//		root[ContentLength] = undefined;
+//	}
+//}
+//
+///**
+// * TODO: THIS FUNCTION DOES NOT WORK. This function has a 5-star difficulty
+// * rating. Attempt at your peril, Brian.
+// *
+// * Given an observed root node whose elements have invalidated or unassigned
+// * ContentLength properties, create a patch.
+// */
+//export function getPatch(root: Node): Patch {
+//	const content = root[Content];
+//	if (!content) {
+//		throw new Error("Unknown root");
+//	}
+//
+//	let hasNewline = false, inserted = "", offset = 0;
+//	const invalidated: Array<any> = [];
+//	const insertSizes: Array<number> = [];
+//	const deleteSizes: Array<number> = [];
+//	walk(root, {
+//		pre(node) {
+//			if (node !== root && typeof node[Content] !== "undefined") {
+//				throw new Error("Cannot observe nodes within a content observer");
+//			}
+//
+//			if (typeof node[ContentOffset] === "number") {
+//				// TODO: DO WE NEED Math.abs HERE?
+//				//const missing = Math.abs(offset - node[ContentOffset]!);
+//				const missing = offset - node[ContentOffset]!;
+//				if (missing > 0) {
+//					console.log(node, offset, node[ContentOffset]);
+//				}
+//
+//				Subseq.pushSegment(deleteSizes, missing, true);
+//				Subseq.pushSegment(insertSizes, missing, false);
+//			}
+//
+//			node[ContentOffset] = offset;
+//			if (typeof node[ContentLength] === "number") {
+//				const length = node[ContentLength]!;
+//				Subseq.pushSegment(deleteSizes, length, false);
+//				Subseq.pushSegment(insertSizes, length, false);
+//				offset += length;
+//				return true; // Skip descending into this node
+//			} else if (!hasNewline && offset && isBlocklikeElement(node)) {
+//				offset += NEWLINE.length;
+//			}
+//		},
+//		post(node) {
+//			invalidated.push(node);
+//			if (node.nodeName === "BR") {
+//				hasNewline = true;
+//				inserted += NEWLINE;
+//				offset += NEWLINE.length;
+//			} else if (node.nodeType === Node.TEXT_NODE) {
+//				const content1 = (node as Text).data;
+//				hasNewline = content1.endsWith(NEWLINE);
+//				inserted += content1;
+//				offset += content1.length;
+//			} else if (
+//				!hasNewline &&
+//				isBlocklikeElement(node) &&
+//				// TODO: We check that the any block-like elements that aren’t the root
+//				// have at least one child, to deal with empty divs and such, but I am
+//				// not sure about this logic. For instance, empty divs non-zero heights
+//				// seem to record as a newline according to content-editable algorithms.
+//				node.firstChild
+//			) {
+//				hasNewline = true;
+//				inserted += NEWLINE;
+//				offset += NEWLINE.length;
+//			}
+//
+//			const length = offset - node[ContentOffset]!;
+//			// TODO: This is wrong, probably.
+//			Subseq.pushSegment(deleteSizes, length, false);
+//			Subseq.pushSegment(insertSizes, length, true);
+//			node[ContentLength] = length;
+//		},
+//	});
+//
+//	if (
+//		typeof root[ContentLength] === "number" &&
+//		!hasNewline &&
+//		isBlocklikeElement(root)
+//	) {
+//		hasNewline = true;
+//		inserted += NEWLINE;
+//		offset += NEWLINE.length;
+//		if (root.nodeType === Node.ELEMENT_NODE) {
+//			(root as Element).setAttribute("content-length", root[ContentLength]!.toString());
+//		}
+//	}
+//
+//	root[Content] = content;
+//	return Patch.synthesize(new Subseq([]), "", new Subseq([]));
+//}
 
 /**
  * Retrieves the next sibling of the current node, or the next sibling of the
  * current node’s parent. Will continue searching upwards until a next sibling
  * is found or we reached the root of the true.
  */
-function getNextNode(rootNode: Node, node: Node): Node | null {
+function getNextNode(root: Node, node: Node): Node | null {
 	const walker = document.createTreeWalker(
-		rootNode,
+		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 	for (let currentNode: Node | null = node; currentNode !== null; ) {
@@ -340,19 +457,19 @@ function getNodeLength(node: Node): number {
 
 // TODO: Figure out how this function should be called and exported.
 export function nodeOffsetFromIndex(
-	rootNode: Node,
+	root: Node,
 	index: number,
 ): NodeOffset {
-	if (typeof rootNode[Content] === "undefined") {
+	if (typeof root[Content] === "undefined") {
 		throw new Error("Unknown node");
 	}
 
-	if (index < 0 || index > rootNode[Content]!.length) {
+	if (index < 0 || index > root[Content]!.length) {
 		return [null, 0];
 	}
 
 	const walker = document.createTreeWalker(
-		rootNode,
+		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
