@@ -51,7 +51,7 @@ export class ContentObserver {
 	_onselectionchange: () => unknown;
 	constructor(callback: (record: ContentRecord) => unknown) {
 		this._root = null;
-		this._mutationObserver = new MutationObserver((/* records */) => {
+		this._mutationObserver = new MutationObserver((records) => {
 			const root = this._root;
 			if (!root) {
 				return;
@@ -207,9 +207,10 @@ function walk(
 }
 
 export function getContent(root: Node): string {
-	let hasNewline = false,
-		content = "",
-		offset = 0;
+	let content = "";
+	let hasNewline = false;
+	let offset = 0;
+	// TODO: We should do parent-local offsets.
 	walk(root, {
 		pre(node) {
 			if (node !== root && typeof node[Content] !== "undefined") {
@@ -218,33 +219,35 @@ export function getContent(root: Node): string {
 
 			node[ContentOffset] = offset;
 			if (!hasNewline && offset && isBlocklikeElement(node)) {
-				hasNewline = true;
 				content += NEWLINE;
 				offset += NEWLINE.length;
+				hasNewline = true;
 			}
 		},
 		post(node) {
-			if (node.nodeName === "BR") {
-				hasNewline = true;
-				content += NEWLINE;
-				offset += NEWLINE.length;
-			} else if (node.nodeType === Node.TEXT_NODE) {
+			if (node.nodeType === Node.TEXT_NODE) {
 				const content1 = (node as Text).data;
-				hasNewline = content1.endsWith(NEWLINE);
 				content += content1;
 				offset += content1.length;
-			} else if (
-				!hasNewline &&
-				isBlocklikeElement(node) &&
-				// TODO: We check that the any block-like elements that aren’t the root
-				// have at least one child, to deal with empty divs and such, but I am
-				// not sure about this logic. For instance, empty divs non-zero heights
-				// seem to record as a newline according to content-editable algorithms.
-				(node === root || node.firstChild)
-			) {
-				hasNewline = true;
+				hasNewline = content1.endsWith(NEWLINE);
+			} else if (node.nodeName === "BR") {
 				content += NEWLINE;
 				offset += NEWLINE.length;
+				hasNewline = true;
+			} else {
+				if (
+					!hasNewline &&
+					isBlocklikeElement(node) &&
+					// TODO: We check that the any block-like elements that aren’t the root
+					// have at least one child, to deal with empty divs and such, but I am
+					// not sure about this logic. For instance, empty divs non-zero heights
+					// seem to record as a newline according to content-editable algorithms.
+					(node === root || node.firstChild)
+				) {
+					content += NEWLINE;
+					offset += NEWLINE.length;
+					hasNewline = true;
+				}
 			}
 
 			node[ContentLength] = offset - node[ContentOffset]!;
