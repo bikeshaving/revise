@@ -161,7 +161,10 @@ function isBlocklikeElement(node: Node): node is Element {
 
 const NOOP = () => {};
 
-// TODO: Use local offsets!
+// TODO: Use local offsets! Using global offsets makes working with invalidated
+// nodes more difficult because you have to recurse into the descendents of
+// next sibling nodes, effectively negating any of the performance benefits of
+// specific invalidating nodes.
 export function getContent(root: Node): string {
 	let content = "";
 	let hasNewline = false;
@@ -273,10 +276,21 @@ export function indexFromNodeOffset(
 
 	walker.currentNode = node;
 	while (node !== null && node !== root) {
-		node = walker.previousSibling();
-		if (node === null) {
-			node = walker.parentNode();
+		const previousSibling = walker.previousSibling();
+		if (previousSibling === null) {
+			const parentNode = walker.parentNode();
+			if (parentNode) {
+				// This deals with an edge case where the parent node introduces a line
+				// break before it, because there are inline elements/text before, but
+				// the child is selected.
+				//
+				// TODO: This logic will probably change when we do local offsets.
+				index += (node[ContentOffset] || 0) - (parentNode[ContentOffset] || 0);
+			}
+
+			node = parentNode;
 		} else {
+			node = previousSibling;
 			index += node[ContentLength] || 0;
 		}
 	}
