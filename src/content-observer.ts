@@ -251,6 +251,9 @@ export function getContent(root: Node): string {
 			}
 
 			node[ContentLength] = offset - node[ContentOffset]!;
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				(node as Element).setAttribute("contentlength", node[ContentLength]!.toString());
+			}
 		},
 	});
 
@@ -397,19 +400,15 @@ export function getContent(root: Node): string {
 /**
  * Retrieves the next sibling of the current node, or the next sibling of the
  * current node’s parent. Will continue searching upwards until a next sibling
- * is found or we reached the root of the true.
+ * is found or we reached the root of the tree.
  */
-function getNextNode(root: Node, node: Node): Node | null {
-	const walker = document.createTreeWalker(
-		root,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-	for (let currentNode: Node | null = node; currentNode !== null; ) {
-		currentNode = walker.nextSibling();
-		if (currentNode === null) {
-			currentNode = walker.parentNode();
+function getNextNode(walker: TreeWalker): Node | null {
+	for (let node1: Node | null = walker.currentNode; node1 !== null; ) {
+		node1 = walker.nextSibling();
+		if (node1 === null) {
+			node1 = walker.parentNode();
 		} else {
-			return currentNode;
+			return node1;
 		}
 	}
 
@@ -431,31 +430,39 @@ export function indexFromNodeOffset(
 	offset: number,
 ): number {
 	if (
-		node === null ||
+		node == null ||
 		!root.contains(node) ||
 		typeof node[ContentOffset] === "undefined"
 	) {
 		return -1;
-	} else if (node.nodeType === Node.TEXT_NODE) {
-		return node[ContentOffset]! + offset;
 	}
 
-	if (offset >= node.childNodes.length) {
-		// In Firefox, when inserting a soft newline, a BR element is inserted, the
-		// selection node is set to the parent node of the BR, and the selection
-		// offset is set to the length of the childNodes.
-		const nextNode = getNextNode(root, node);
-		if (nextNode === null || typeof nextNode[ContentOffset] === "undefined") {
-			// TODO: return the length of the content
-			return root[Content]!.length;
+	let index = offset;
+	if (node.nodeType === Node.ELEMENT_NODE) {
+		if (offset >= node.childNodes.length) {
+			index = node[ContentLength] || 0;
+		} else {
+			node = node.childNodes[offset];
+			index = 0;
 		}
-
-		return nextNode[ContentOffset]!;
-	} else if (offset < 0 || typeof node.childNodes[offset] === "undefined") {
-		return node[ContentOffset]!;
 	}
 
-	return node.childNodes[offset][ContentOffset]!;
+	const walker = document.createTreeWalker(
+		root,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+
+	walker.currentNode = node;
+	while (node !== null && node !== root) {
+		node = walker.previousSibling();
+		if (node === null) {
+			node = walker.parentNode();
+		} else {
+			index += node[ContentLength] || 0;
+		}
+	}
+
+	return index;
 }
 
 function getNodeLength(node: Node): number {
@@ -470,7 +477,7 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 		throw new Error("Unknown node");
 	}
 
-	if (index < 0 || index > root[Content]!.length) {
+	if (index < 0) {
 		return [null, 0];
 	}
 
@@ -478,60 +485,31 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-
-	for (
-		let currentNode = walker.firstChild();
-		currentNode !== null;
-		currentNode = walker.currentNode
-	) {
-		const offset = currentNode[ContentOffset];
-		if (offset === undefined) {
-			throw new Error("Unknown node");
-		} else if (index === offset) {
-			if (currentNode.nodeName === "BR") {
-				// Firefox has trouble when selections reference BR elements.
-				const previousSibling = walker.previousSibling();
-				if (previousSibling === null || previousSibling.nodeName === "BR") {
-					const parentNode = currentNode.parentNode!;
-					const offset = Array.from(parentNode.childNodes).indexOf(
-						currentNode as ChildNode,
-					);
-					return [parentNode, offset];
-				}
-
-				return [
-					previousSibling,
-					getNodeLength(previousSibling as Text | Element),
-				];
+	let node: Node | null = walker.currentNode;
+	let offset = index;
+	while (node !== null) {
+		const length = node[ContentLength] || 0;
+		if (offset <= length) {
+			if (node.nodeType === Node.TEXT_NODE) {
+				return [node, offset];
 			}
 
-			return [currentNode, 0];
-		} else if (index < offset) {
-			const previousSibling = walker.previousSibling();
-			if (previousSibling === null) {
-				return [walker.parentNode(), 0];
-			} else if (previousSibling.nodeType === Node.TEXT_NODE) {
-				const offset1 = index - previousSibling[ContentOffset]!;
-				return [previousSibling, offset1];
-			} else if (walker.firstChild() === null) {
-				return [
-					previousSibling,
-					getNodeLength(previousSibling as Text | Element),
-				];
-			}
-		} else if (walker.nextSibling() === null) {
-			if (currentNode.nodeType === Node.TEXT_NODE) {
-				return [
-					currentNode,
-					Math.min(index - offset, getNodeLength(currentNode as Text)),
-				];
-			} else if (walker.firstChild() === null) {
-				return [currentNode, getNodeLength(currentNode as Text | Element)];
-			}
+			node = walker.firstChild();
+		} else {
+			offset -= length;
+			node = walker.nextSibling();
 		}
 	}
 
-	return [null, 0];
+	node = walker.currentNode;
+	if (offset > 0) {
+		const nextNode = getNextNode(walker);
+		if (nextNode) {
+			return [nextNode, 0];
+		}
+	}
+
+	return [node, getNodeLength(node)];
 }
 
 export function cursorFromSelection(
@@ -548,11 +526,16 @@ export function cursorFromSelection(
 		selection.focusOffset,
 	);
 
-	const anchor = indexFromNodeOffset(
-		root,
-		selection.anchorNode,
-		selection.anchorOffset,
-	);
+	let anchor: number;
+	if (selection.isCollapsed) {
+		anchor = focus;
+	} else {
+		anchor = indexFromNodeOffset(
+			root,
+			selection.anchorNode,
+			selection.anchorOffset,
+		);
+	}
 
 	if (focus === anchor || focus === -1 || anchor === -1) {
 		return focus;

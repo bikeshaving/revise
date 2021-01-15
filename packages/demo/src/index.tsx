@@ -18,26 +18,9 @@ import {
 } from '@bikeshaving/revise/content-observer.js';
 import {Patch} from '@bikeshaving/revise/patch.js';
 
-// TODO: Pass in old lines and mutate that array rather than creating a new one.
-function renderLines(content: string): Array<Child> {
-  const lines = content.split(/\r\n|\r|\n/);
-  if (/\r\n|\r|\n$/.test(content)) {
-    lines.pop();
-  }
-
-  //return content;
-  // We’re using these return values to test different rendering strategies.
-  //return lines.flatMap((line) => [line, <br />]);
-  //return lines.flatMap((line) => [<span>{line}</span>, <br />]);
-  //return lines.flatMap((line) =>
-  //  line ? [<span>{line}</span>, <br />] : <br />,
-  //);
-  //return lines.flatMap((line) => line ? [Array.from(line).map((char) => <span>{char}</span>), <br />] : <br />);
-  // This is the most well-behaved way to divide lines.
-  return lines.map((line) => <div>{line || <br />}</div>);
-  //return lines.map((line) => <div>{line || "\n"}</div>);
-  //return lines.map((line) => <div>{line}<br /></div>);
-  //return lines.map((line) => <div>{line}{"\n"}</div>);
+function parse(content: string): Array<Child> {
+  const lines = splitLines(Prism.tokenize(content, Prism.languages.typescript));
+  return printLines(lines);
 }
 
 function printTokens(tokens: Array<Token | string>): Array<Child> {
@@ -63,9 +46,26 @@ function printLines(lines: Array<Array<Token | string>>): Array<Child> {
   ));
 }
 
-function parse(content: string): Array<Child> {
-  const lines = splitLines(Prism.tokenize(content, Prism.languages.typescript));
-  return printLines(lines);
+// TODO: Pass in old lines and mutate that array rather than creating a new one.
+function renderLines(content: string): Array<Child> {
+  const lines = content.split(/\r\n|\r|\n/);
+  if (/\r\n|\r|\n$/.test(content)) {
+    lines.pop();
+  }
+
+  //return content;
+  // We’re using these return values to test different rendering strategies.
+  return lines.flatMap((line) => [line, <br />]);
+  //return lines.flatMap((line) => [<span>{line}</span>, <br />]);
+  //return lines.flatMap((line) =>
+  //  line ? [<span>{line}</span>, <br />] : <br />,
+  //);
+  //return lines.flatMap((line) => line ? [Array.from(line).map((char) => <span>{char}</span>), <br />] : <br />);
+  // This is the most well-behaved way to divide lines.
+  //return lines.map((line) => <div>{line || <br />}</div>);
+  //return lines.map((line) => <div>{line || "\n"}</div>);
+  //return lines.map((line) => <div>{line}<br /></div>);
+  //return lines.map((line) => <div>{line}{"\n"}</div>);
 }
 
 function* Editable(this: Context, { children }: any) {
@@ -81,8 +81,8 @@ function* Editable(this: Context, { children }: any) {
       }
 
       if (content === content1) {
-        //cursor = cursor1;
-        // TODO: Maybe the ContentObserver could provide a method to do this.
+        // TODO: WHY THE HELL IS cursor different from cursor1 here sometimes???
+        // TODO: Maybe the ContentObserver could do this automatically.
         const selection = document.getSelection();
         if (selection) {
           setSelection(selection, el, cursor);
@@ -104,6 +104,7 @@ function* Editable(this: Context, { children }: any) {
     this.refresh();
   });
 
+  let initial = true;
   try {
     for ({} of this) {
       //yield (
@@ -114,7 +115,7 @@ function* Editable(this: Context, { children }: any) {
       //      contenteditable="true"
       //      spellcheck={false}
       //    >
-      //      <code style={null}>{parse(content)}</code>
+      //      <code>{parse(content)}</code>
       //    </pre>
       //    <pre>{el && el.innerHTML}</pre>
       //    <pre>{JSON.stringify(content)}</pre>
@@ -133,6 +134,7 @@ function* Editable(this: Context, { children }: any) {
           <pre>{operations}</pre>
         </div>
       );
+      //initial = false;
     }
   } finally {
     observer.disconnect();
