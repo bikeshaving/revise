@@ -1,4 +1,8 @@
-import {getContent, indexFromNodeOffset, nodeOffsetFromIndex} from "../content-observer";
+import {
+	getContent,
+	indexFromNodeOffset,
+	nodeOffsetFromIndex,
+} from "../content-observer";
 
 function parseHTML(text: string): Node {
 	return document.createRange().createContextualFragment(text);
@@ -67,64 +71,64 @@ describe("getContent", () => {
 
 describe("nodeOffset/index conversions", () => {
 	test("adjacent divs", () => {
-		const node = parseHTML(
-			"<div><div>hello</div><div>world</div></div>",
-		).firstChild!;
+		const node = parseHTML("<div><div>hello</div><div>world</div></div>")
+			.firstChild!;
 		const content = getContent(node);
 		expect(content).toEqual("hello\nworld\n");
-		expect(
-			nodeOffsetFromIndex(node, -2),
-		).toEqual([null, 0]);
-		expect(
-			nodeOffsetFromIndex(node, -1),
-		).toEqual([null, 0]);
-		expect(
-			nodeOffsetFromIndex(node, 0),
-		).toEqual([node.childNodes[0].firstChild, 0]);
-		expect(
-			nodeOffsetFromIndex(node, 1),
-		).toEqual([node.childNodes[0].firstChild, 1]);
-		expect(
-			nodeOffsetFromIndex(node, 2),
-		).toEqual([node.childNodes[0].firstChild, 2]);
-		expect(
-			nodeOffsetFromIndex(node, 3),
-		).toEqual([node.childNodes[0].firstChild, 3]);
-		expect(
-			nodeOffsetFromIndex(node, 4),
-		).toEqual([node.childNodes[0].firstChild, 4]);
-		expect(
-			nodeOffsetFromIndex(node, 5),
-		).toEqual([node.childNodes[0].firstChild, 5]);
-		expect(
-			nodeOffsetFromIndex(node, 6),
-		).toEqual([node.childNodes[1], 0]);
-		expect(
-			nodeOffsetFromIndex(node, 7),
-		).toEqual([node.childNodes[1].firstChild, 1]);
-		expect(
-			nodeOffsetFromIndex(node, 8),
-		).toEqual([node.childNodes[1].firstChild, 2]);
-		expect(
-			nodeOffsetFromIndex(node, 9),
-		).toEqual([node.childNodes[1].firstChild, 3]);
-		expect(
-			nodeOffsetFromIndex(node, 10),
-		).toEqual([node.childNodes[1].firstChild, 4]);
-		expect(
-			nodeOffsetFromIndex(node, 11),
-		).toEqual([node.childNodes[1].firstChild, 5]);
-		expect(
-			nodeOffsetFromIndex(node, 12),
-		).toEqual([node.childNodes[1], 1]);
-		expect(
-			nodeOffsetFromIndex(node, 13),
-		).toEqual([node, 2]);
+		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, -1)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, 0)).toEqual([
+			node.childNodes[0].firstChild,
+			0,
+		]);
+		expect(nodeOffsetFromIndex(node, 1)).toEqual([
+			node.childNodes[0].firstChild,
+			1,
+		]);
+		expect(nodeOffsetFromIndex(node, 2)).toEqual([
+			node.childNodes[0].firstChild,
+			2,
+		]);
+		expect(nodeOffsetFromIndex(node, 3)).toEqual([
+			node.childNodes[0].firstChild,
+			3,
+		]);
+		expect(nodeOffsetFromIndex(node, 4)).toEqual([
+			node.childNodes[0].firstChild,
+			4,
+		]);
+		expect(nodeOffsetFromIndex(node, 5)).toEqual([
+			node.childNodes[0].firstChild,
+			5,
+		]);
+		expect(nodeOffsetFromIndex(node, 6)).toEqual([node.childNodes[1], 0]);
+		expect(nodeOffsetFromIndex(node, 7)).toEqual([
+			node.childNodes[1].firstChild,
+			1,
+		]);
+		expect(nodeOffsetFromIndex(node, 8)).toEqual([
+			node.childNodes[1].firstChild,
+			2,
+		]);
+		expect(nodeOffsetFromIndex(node, 9)).toEqual([
+			node.childNodes[1].firstChild,
+			3,
+		]);
+		expect(nodeOffsetFromIndex(node, 10)).toEqual([
+			node.childNodes[1].firstChild,
+			4,
+		]);
+		expect(nodeOffsetFromIndex(node, 11)).toEqual([
+			node.childNodes[1].firstChild,
+			5,
+		]);
+		expect(nodeOffsetFromIndex(node, 12)).toEqual([node.childNodes[1], 1]);
+		expect(nodeOffsetFromIndex(node, 13)).toEqual([node, 2]);
 
 		for (let i = -3; i < content.length + 3; i++) {
-			expect(
-				indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i)),
-			).toBe(Math.max(-1, Math.min(i, content.length)));
+			expect(indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i))).toBe(
+				Math.max(-1, Math.min(i, content.length)),
+			);
 		}
 	});
 
@@ -132,62 +136,46 @@ describe("nodeOffset/index conversions", () => {
 		const node = parseHTML("<div>hello<div>world</div></div>").firstChild!;
 		const content = getContent(node);
 		expect(content).toEqual("hello\nworld\n");
-		expect(
-			nodeOffsetFromIndex(node, -2),
-		).toEqual([null, 0]);
-		expect(
-			nodeOffsetFromIndex(node, -1),
-		).toEqual([null, 0]);
-		expect(
-			nodeOffsetFromIndex(node, 0),
-		).toEqual([node.childNodes[0], 0]);
-		expect(
-			nodeOffsetFromIndex(node, 1),
-		).toEqual([node.childNodes[0], 1]);
-		expect(
-			nodeOffsetFromIndex(node, 2),
-		).toEqual([node.childNodes[0], 2]);
-		expect(
-			nodeOffsetFromIndex(node, 3),
-		).toEqual([node.childNodes[0], 3]);
-		expect(
-			nodeOffsetFromIndex(node, 4),
-		).toEqual([node.childNodes[0], 4]);
-		expect(
-			nodeOffsetFromIndex(node, 5),
-		).toEqual([node.childNodes[0], 5]);
-		expect(
-			nodeOffsetFromIndex(node, 6),
-		).toEqual([node.childNodes[1].firstChild, 0]);
-		expect(
-			nodeOffsetFromIndex(node, 7),
-		).toEqual([node.childNodes[1].firstChild, 1]);
-		expect(
-			nodeOffsetFromIndex(node, 8),
-		).toEqual([node.childNodes[1].firstChild, 2]);
-		expect(
-			nodeOffsetFromIndex(node, 9),
-		).toEqual([node.childNodes[1].firstChild, 3]);
-		expect(
-			nodeOffsetFromIndex(node, 10),
-		).toEqual([node.childNodes[1].firstChild, 4]);
-		expect(
-			nodeOffsetFromIndex(node, 11),
-		).toEqual([node.childNodes[1].firstChild, 5]);
-		expect(
-			nodeOffsetFromIndex(node, 12),
-		).toEqual([node.childNodes[1], 1]);
-		expect(
-			nodeOffsetFromIndex(node, 13),
-		).toEqual([node, 2]);
-		expect(
-			nodeOffsetFromIndex(node, 14),
-		).toEqual([node, 2]);
+		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, -1)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, 0)).toEqual([node.childNodes[0], 0]);
+		expect(nodeOffsetFromIndex(node, 1)).toEqual([node.childNodes[0], 1]);
+		expect(nodeOffsetFromIndex(node, 2)).toEqual([node.childNodes[0], 2]);
+		expect(nodeOffsetFromIndex(node, 3)).toEqual([node.childNodes[0], 3]);
+		expect(nodeOffsetFromIndex(node, 4)).toEqual([node.childNodes[0], 4]);
+		expect(nodeOffsetFromIndex(node, 5)).toEqual([node.childNodes[0], 5]);
+		expect(nodeOffsetFromIndex(node, 6)).toEqual([
+			node.childNodes[1].firstChild,
+			0,
+		]);
+		expect(nodeOffsetFromIndex(node, 7)).toEqual([
+			node.childNodes[1].firstChild,
+			1,
+		]);
+		expect(nodeOffsetFromIndex(node, 8)).toEqual([
+			node.childNodes[1].firstChild,
+			2,
+		]);
+		expect(nodeOffsetFromIndex(node, 9)).toEqual([
+			node.childNodes[1].firstChild,
+			3,
+		]);
+		expect(nodeOffsetFromIndex(node, 10)).toEqual([
+			node.childNodes[1].firstChild,
+			4,
+		]);
+		expect(nodeOffsetFromIndex(node, 11)).toEqual([
+			node.childNodes[1].firstChild,
+			5,
+		]);
+		expect(nodeOffsetFromIndex(node, 12)).toEqual([node.childNodes[1], 1]);
+		expect(nodeOffsetFromIndex(node, 13)).toEqual([node, 2]);
+		expect(nodeOffsetFromIndex(node, 14)).toEqual([node, 2]);
 
 		for (let i = -3; i < content.length + 3; i++) {
-			expect(
-				indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i)),
-			).toBe(Math.max(-1, Math.min(i, content.length)));
+			expect(indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i))).toBe(
+				Math.max(-1, Math.min(i, content.length)),
+			);
 		}
 	});
 });

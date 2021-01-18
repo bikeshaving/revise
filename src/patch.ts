@@ -242,6 +242,7 @@ export class Patch {
 	}
 
 	static diff(text1: string, text2: string, hint?: number): Patch {
+		// TODO: Use hint to guess prefix and suffix?
 		let prefix = commonPrefixLength(text1, text2);
 		let suffix = commonSuffixLength(text1, text2);
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {

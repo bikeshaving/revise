@@ -55,7 +55,7 @@ function renderLines(content: string): Array<Child> {
 
   //return content;
   // We’re using these return values to test different rendering strategies.
-  return lines.flatMap((line) => [line, <br />]);
+  //return lines.flatMap((line) => [line, <br />]);
   //return lines.flatMap((line) => [<span>{line}</span>, <br />]);
   //return lines.flatMap((line) =>
   //  line ? [<span>{line}</span>, <br />] : <br />,
@@ -64,7 +64,7 @@ function renderLines(content: string): Array<Child> {
   // This is the most well-behaved way to divide lines.
   //return lines.map((line) => <div>{line || <br />}</div>);
   //return lines.map((line) => <div>{line || "\n"}</div>);
-  //return lines.map((line) => <div>{line}<br /></div>);
+  return lines.map((line) => <div>{line}<br /></div>);
   //return lines.map((line) => <div>{line}{"\n"}</div>);
 }
 
@@ -75,27 +75,22 @@ function* Editable(this: Context, { children }: any) {
   let el: any;
   const observer = new ContentObserver(
     ({ type, content: content1, cursor: cursor1 }) => {
-      if (type === "selectionchange") {
-        cursor = cursor1;
-        return;
-      }
-
-      if (content === content1) {
-        // TODO: WHY THE HELL IS cursor different from cursor1 here sometimes???
-        // TODO: Maybe the ContentObserver could do this automatically.
-        const selection = document.getSelection();
-        if (selection) {
-          setSelection(selection, el, cursor);
+      switch (type) {
+        case "selectionchange":
+          cursor = cursor1;
+          content = content1;
+          this.refresh();
+          break;
+        case "mutation": {
+          const hint = Math.min.apply(null, [cursor, cursor1].flat());
+          const patch = Patch.diff(content, content1, hint);
+          operations = JSON.stringify(patch.operations(), null, 2);
+          content = content1;
+          cursor = cursor1;
+          observer.repairCursor(() => this.refresh());
+          break;
         }
-      } else {
-        const hint = Math.min.apply(null, [cursor, cursor1].flat());
-        const patch = Patch.diff(content, content1, hint);
-        operations = JSON.stringify(patch.operations(), null, 2);
-        content = content1;
-        cursor = cursor1;
       }
-
-      this.refresh();
     },
   );
 
@@ -104,7 +99,7 @@ function* Editable(this: Context, { children }: any) {
     this.refresh();
   });
 
-  let initial = true;
+  //let initial = true;
   try {
     for ({} of this) {
       //yield (
@@ -117,9 +112,10 @@ function* Editable(this: Context, { children }: any) {
       //    >
       //      <code>{parse(content)}</code>
       //    </pre>
-      //    <pre>{el && el.innerHTML}</pre>
-      //    <pre>{JSON.stringify(content)}</pre>
-      //    <pre>{operations}</pre>
+      //    <div>HTML: <pre>{el && el.innerHTML}</pre></div>
+      //    <div>Content: <pre>{JSON.stringify(content)}</pre></div>
+      //    <div>Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
+      //    <div>Operations: <pre>{operations}</pre></div>
       //  </div>
       //);
       yield (
@@ -129,9 +125,10 @@ function* Editable(this: Context, { children }: any) {
             contenteditable="true"
             spellcheck={false}
           >{renderLines(content)}</div>
-          <pre>{el && el.innerHTML}</pre>
-          <pre>{JSON.stringify(content)}</pre>
-          <pre>{operations}</pre>
+          <div>HTML: <pre>{el && el.innerHTML}</pre></div>
+          <div>Content: <pre>{JSON.stringify(content)}</pre></div>
+          <div>Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
+          <div>Operations: <pre>{operations}</pre></div>
         </div>
       );
       //initial = false;

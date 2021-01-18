@@ -41,6 +41,7 @@ export interface ContentRecord {
 	type: string;
 	root: Node;
 	content: string;
+	//patch: Patch;
 	cursor: Cursor;
 }
 
@@ -51,7 +52,7 @@ export class ContentObserver {
 	_onselectionchange: () => unknown;
 	constructor(callback: (record: ContentRecord) => unknown) {
 		this._root = null;
-		this._mutationObserver = new MutationObserver((records) => {
+		this._mutationObserver = new MutationObserver((_records) => {
 			const root = this._root;
 			if (!root) {
 				return;
@@ -61,7 +62,7 @@ export class ContentObserver {
 			// invalidate(root, records);
 			// const patch = getPatch(root);
 			const content = getContent(root);
-			const selection = window.getSelection()!;
+			const selection = document.getSelection();
 			const cursor = cursorFromSelection(root, selection);
 			callback({
 				type: "mutation",
@@ -71,23 +72,25 @@ export class ContentObserver {
 			});
 		});
 
+		// TODO: Is this necessary or a good idea?
 		this._onselectionchange = () => {
 			const root = this._root;
 			if (!root) {
 				return;
 			}
 
-			const selection = document.getSelection();
-			const cursor = cursorFromSelection(root, selection);
-			if (cursor === -1) {
-				return;
-			}
-
-			callback({
-				type: "selectionchange",
-				root,
-				content: root[Content]!,
-				cursor,
+			// TODO: Investigate further. We have to do it in a microtask or mutation
+			// record callbacks start messing up, but only when the console is
+			// closed?
+			queueMicrotask(() => {
+				const selection = document.getSelection();
+				const cursor = cursorFromSelection(root, selection);
+				callback({
+					type: "selectionchange",
+					root,
+					content: root[Content]!,
+					cursor,
+				});
 			});
 		};
 	}
@@ -95,7 +98,7 @@ export class ContentObserver {
 	// TODO: Pass in intended content to observe so we can get an initial diff?
 	observe(root: Node) {
 		this._root = root;
-		// Marking the offset/lengths of the root
+		// We need to mark the lengths and offsets.
 		getContent(root);
 		this._mutationObserver.observe(root, {
 			subtree: true,
@@ -112,6 +115,19 @@ export class ContentObserver {
 		this._mutationObserver.disconnect();
 		// TODO: only remove the event listener if all roots are disconnected.
 		document.removeEventListener("selectionchange", this._onselectionchange);
+	}
+
+	repairCursor(callback: Function): void {
+		const root = this._root;
+		if (!root) {
+			return;
+		}
+
+		const selection = document.getSelection();
+		const cursor = cursorFromSelection(root, selection);
+		callback();
+		getContent(root);
+		setSelection(selection, root, cursor);
 	}
 }
 
@@ -163,11 +179,12 @@ function isBlocklikeElement(node: Node): node is Element {
 // nodes more difficult because you have to recurse into the descendents of
 // next sibling nodes, effectively negating any of the performance benefits of
 // specific invalidating nodes.
+// TODO: Make this function incremental!
+// TODO: Make this function return patches.
 export function getContent(root: Node): string {
 	let content = "";
 	let hasNewline = false;
 	let offset = 0;
-	const localOffsets: Array<number> = [];
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -331,7 +348,6 @@ export function cursorFromSelection(
 
 // TODO: Figure out how this function should be called and exported.
 export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
-	debugger;
 	if (typeof root[Content] === "undefined") {
 		throw new Error("Unknown node");
 	}
@@ -390,9 +406,7 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 	// BR element.
 	if (node && node.nodeName === "BR") {
 		const parentNode = node.parentNode!;
-		const offset = Array.from(parentNode.childNodes).indexOf(
-			node as ChildNode,
-		);
+		const offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
 		return [parentNode, offset];
 	}
 
@@ -400,10 +414,14 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 }
 
 export function setSelection(
-	selection: Selection,
+	selection: Selection | null,
 	root: Node,
 	cursor: Cursor,
 ): void {
+	if (!selection) {
+		return;
+	}
+
 	const anchor = typeof cursor === "number" ? cursor : cursor[0];
 	const focus = typeof cursor === "number" ? cursor : cursor[1];
 	if (anchor === focus) {
