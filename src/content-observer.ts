@@ -159,8 +159,6 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-const NOOP = () => {};
-
 // TODO: Use local offsets! Using global offsets makes working with invalidated
 // nodes more difficult because you have to recurse into the descendents of
 // next sibling nodes, effectively negating any of the performance benefits of
@@ -188,6 +186,7 @@ export function getContent(root: Node): string {
 					throw new Error("Cannot observe nodes within a content observer");
 				}
 
+				// Should this come before or after the newline check?
 				node[ContentOffset] = offset;
 				if (!hasNewline && offset && isBlocklikeElement(node)) {
 					content += NEWLINE;
@@ -280,11 +279,11 @@ export function indexFromNodeOffset(
 		if (previousSibling === null) {
 			const parentNode = walker.parentNode();
 			if (parentNode) {
-				// This deals with an edge case where the parent node introduces a line
-				// break before it, because there are inline elements/text before, but
-				// the child is selected.
-				//
-				// TODO: This logic will probably change when we do local offsets.
+				// This line deals with block elements which introduce a line break
+				// before them.
+				// "hello<div>world</div>"
+				//       ^ newline introduced here.
+				// TODO: This logic may change when we switch to local offsets.
 				index += (node[ContentOffset] || 0) - (parentNode[ContentOffset] || 0);
 			}
 
@@ -302,7 +301,6 @@ export function cursorFromSelection(
 	root: Node,
 	selection: Selection | null,
 ): Cursor {
-	debugger;
 	if (selection == null) {
 		return -1;
 	}
@@ -331,14 +329,9 @@ export function cursorFromSelection(
 	return [anchor, focus];
 }
 
-function getNodeLength(node: Node): number {
-	return node.nodeType === Node.TEXT_NODE
-		? (node as Text).data.length
-		: node.childNodes.length;
-}
-
 // TODO: Figure out how this function should be called and exported.
 export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
+	debugger;
 	if (typeof root[Content] === "undefined") {
 		throw new Error("Unknown node");
 	}
@@ -360,10 +353,19 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 				return [node, offset];
 			}
 
-			node = walker.firstChild();
+			const firstChild = walker.firstChild();
+			if (firstChild) {
+				offset -= (firstChild[ContentOffset] || 0) - (node[ContentOffset] || 0);
+			}
+
+			node = firstChild;
 		} else {
 			offset -= length;
 			node = walker.nextSibling();
+			if (node === null) {
+				node = walker.parentNode();
+				break;
+			}
 		}
 	}
 
@@ -384,7 +386,17 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 		}
 	}
 
-	return [node, getNodeLength(node)];
+	// Firefox breaks when a selection’s focusNode or anchorNode is set to a
+	// BR element.
+	if (node && node.nodeName === "BR") {
+		const parentNode = node.parentNode!;
+		const offset = Array.from(parentNode.childNodes).indexOf(
+			node as ChildNode,
+		);
+		return [parentNode, offset];
+	}
+
+	return [node, node ? node.childNodes.length : 0];
 }
 
 export function setSelection(
