@@ -9,6 +9,7 @@
     "watch": "yarn run build -w",
     "develop": "yarn test --watch",
     "test": "jest --rootDir src",
+    "debug": "node --inspect-brk ./node_modules/.bin/jest --runInBand --rootDir src",
     "lint": "eslint --ext js,ts src",
     "typecheck": "tsc --noEmit"
   },
