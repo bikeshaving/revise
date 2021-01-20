@@ -5,12 +5,19 @@ import {
 } from "../content-observer";
 
 function parseHTML(text: string): Node {
-	return document.createRange().createContextualFragment(text);
+	const fragment = document.createRange().createContextualFragment(text);
+	if (fragment.childNodes.length === 0) {
+		throw new Error("No parsed nodes");
+	} else if (fragment.childNodes.length > 1) {
+		return fragment;
+	}
+
+	return fragment.firstChild!;
 }
 
 describe("getContent", () => {
 	test("divs basic", () => {
-		const node = parseHTML("<div>Hello</div><div>World</div>");
+		const node = parseHTML("<div><div>Hello</div><div>World</div></div>");
 		expect(getContent(node)).toEqual("Hello\nWorld\n");
 	});
 
@@ -37,8 +44,30 @@ describe("getContent", () => {
 	});
 
 	test("div before text", () => {
-		const node = parseHTML("<div>Hello</div>World");
-		expect(getContent(node)).toEqual("Hello\nWorld");
+		const node = parseHTML("<div><div>Hello</div>World</div>");
+		expect(getContent(node)).toEqual("Hello\nWorld\n");
+	});
+
+	test("div after text", () => {
+		const node = parseHTML("<div>Hello<div>World</div></div>");
+		expect(getContent(node)).toEqual("Hello\nWorld\n");
+	});
+
+	test("nested div before text", () => {
+		const node = parseHTML("<div><div><div>Hello</div></div>World</div>");
+		expect(getContent(node)).toEqual("Hello\nWorld\n");
+	});
+
+	test("nested div after text and spans", () => {
+		const node = parseHTML(
+			"<div><span>H</span>ell<span>o</span><div><div><span>W</span>orl<span>d</span></div></div></div>",
+		);
+		expect(getContent(node)).toEqual("Hello\nWorld\n");
+	});
+
+	test("div br between text", () => {
+		const node = parseHTML("<div>Hello<div><br></div>World</div>");
+		expect(getContent(node)).toEqual("Hello\n\nWorld\n");
 	});
 
 	test("empty div", () => {
@@ -71,8 +100,7 @@ describe("getContent", () => {
 
 describe("nodeOffset/index conversions", () => {
 	test("adjacent divs", () => {
-		const node = parseHTML("<div><div>hello</div><div>world</div></div>")
-			.firstChild!;
+		const node = parseHTML("<div><div>hello</div><div>world</div></div>");
 		const content = getContent(node);
 		expect(content).toEqual("hello\nworld\n");
 		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
@@ -122,7 +150,7 @@ describe("nodeOffset/index conversions", () => {
 			node.childNodes[1].firstChild,
 			5,
 		]);
-		expect(nodeOffsetFromIndex(node, 12)).toEqual([node.childNodes[1], 1]);
+		expect(nodeOffsetFromIndex(node, 12)).toEqual([node, 2]);
 		expect(nodeOffsetFromIndex(node, 13)).toEqual([node, 2]);
 
 		for (let i = -3; i < content.length + 3; i++) {
@@ -133,7 +161,7 @@ describe("nodeOffset/index conversions", () => {
 	});
 
 	test("div after text", () => {
-		const node = parseHTML("<div>hello<div>world</div></div>").firstChild!;
+		const node = parseHTML("<div>hello<div>world</div></div>");
 		const content = getContent(node);
 		expect(content).toEqual("hello\nworld\n");
 		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
@@ -168,10 +196,68 @@ describe("nodeOffset/index conversions", () => {
 			node.childNodes[1].firstChild,
 			5,
 		]);
-		expect(nodeOffsetFromIndex(node, 12)).toEqual([node.childNodes[1], 1]);
+		expect(nodeOffsetFromIndex(node, 12)).toEqual([node, 2]);
 		expect(nodeOffsetFromIndex(node, 13)).toEqual([node, 2]);
 		expect(nodeOffsetFromIndex(node, 14)).toEqual([node, 2]);
 
+		for (let i = -3; i < content.length + 3; i++) {
+			expect(indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i))).toBe(
+				Math.max(-1, Math.min(i, content.length)),
+			);
+		}
+	});
+
+	test("double br", () => {
+		const node = parseHTML("<div>hello<br><br>world</div>");
+		const content = getContent(node);
+		expect(content).toEqual("hello\n\nworld\n");
+		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, -1)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, 0)).toEqual([node.childNodes[0], 0]);
+		expect(nodeOffsetFromIndex(node, 1)).toEqual([node.childNodes[0], 1]);
+		expect(nodeOffsetFromIndex(node, 2)).toEqual([node.childNodes[0], 2]);
+		expect(nodeOffsetFromIndex(node, 3)).toEqual([node.childNodes[0], 3]);
+		expect(nodeOffsetFromIndex(node, 4)).toEqual([node.childNodes[0], 4]);
+		expect(nodeOffsetFromIndex(node, 5)).toEqual([node.childNodes[0], 5]);
+		expect(nodeOffsetFromIndex(node, 6)).toEqual([node, 2]);
+		expect(nodeOffsetFromIndex(node, 7)).toEqual([node.childNodes[3], 0]);
+		expect(nodeOffsetFromIndex(node, 8)).toEqual([node.childNodes[3], 1]);
+		expect(nodeOffsetFromIndex(node, 9)).toEqual([node.childNodes[3], 2]);
+		expect(nodeOffsetFromIndex(node, 10)).toEqual([node.childNodes[3], 3]);
+		expect(nodeOffsetFromIndex(node, 11)).toEqual([node.childNodes[3], 4]);
+		expect(nodeOffsetFromIndex(node, 12)).toEqual([node.childNodes[3], 5]);
+		expect(nodeOffsetFromIndex(node, 13)).toEqual([node, 4]);
+		expect(nodeOffsetFromIndex(node, 14)).toEqual([node, 4]);
+		expect(nodeOffsetFromIndex(node, 15)).toEqual([node, 4]);
+		for (let i = -3; i < content.length + 3; i++) {
+			expect(indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i))).toBe(
+				Math.max(-1, Math.min(i, content.length)),
+			);
+		}
+	});
+
+	test("text and br alternating", () => {
+		const node = parseHTML("<div>hello<br>world<br></div>");
+		const content = getContent(node);
+		expect(content).toEqual("hello\nworld\n");
+		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, -1)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, 0)).toEqual([node.childNodes[0], 0]);
+		expect(nodeOffsetFromIndex(node, 1)).toEqual([node.childNodes[0], 1]);
+		expect(nodeOffsetFromIndex(node, 2)).toEqual([node.childNodes[0], 2]);
+		expect(nodeOffsetFromIndex(node, 3)).toEqual([node.childNodes[0], 3]);
+		expect(nodeOffsetFromIndex(node, 4)).toEqual([node.childNodes[0], 4]);
+		expect(nodeOffsetFromIndex(node, 5)).toEqual([node.childNodes[0], 5]);
+		expect(nodeOffsetFromIndex(node, 6)).toEqual([node.childNodes[2], 0]);
+		expect(nodeOffsetFromIndex(node, 7)).toEqual([node.childNodes[2], 1]);
+		expect(nodeOffsetFromIndex(node, 8)).toEqual([node.childNodes[2], 2]);
+		expect(nodeOffsetFromIndex(node, 9)).toEqual([node.childNodes[2], 3]);
+		expect(nodeOffsetFromIndex(node, 10)).toEqual([node.childNodes[2], 4]);
+		expect(nodeOffsetFromIndex(node, 11)).toEqual([node.childNodes[2], 5]);
+		expect(nodeOffsetFromIndex(node, 12)).toEqual([node, 4]);
+		expect(nodeOffsetFromIndex(node, 13)).toEqual([node, 4]);
+		expect(nodeOffsetFromIndex(node, 14)).toEqual([node, 4]);
+		expect(nodeOffsetFromIndex(node, 15)).toEqual([node, 4]);
 		for (let i = -3; i < content.length + 3; i++) {
 			expect(indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i))).toBe(
 				Math.max(-1, Math.min(i, content.length)),

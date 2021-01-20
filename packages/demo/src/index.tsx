@@ -3,6 +3,7 @@ import { Copy, createElement, Fragment, Raw } from '@bikeshaving/crank/crank.js'
 import { renderer } from '@bikeshaving/crank/dom.js';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-latex';
 import type { Token } from 'prismjs';
 // @ts-ignore
 Prism.manual = true;
@@ -19,7 +20,7 @@ import {
 import {Patch} from '@bikeshaving/revise/patch.js';
 
 function parse(content: string): Array<Child> {
-  const lines = splitLines(Prism.tokenize(content, Prism.languages.typescript));
+  const lines = splitLines(Prism.tokenize(content, Prism.languages.latex));
   return printLines(lines);
 }
 
@@ -55,7 +56,7 @@ function renderLines(content: string): Array<Child> {
 
   //return content;
   // We’re using these return values to test different rendering strategies.
-  //return lines.flatMap((line) => [line, <br />]);
+  return lines.flatMap((line) => [line, <br />]);
   //return lines.flatMap((line) => [<span>{line}</span>, <br />]);
   //return lines.flatMap((line) =>
   //  line ? [<span>{line}</span>, <br />] : <br />,
@@ -64,7 +65,7 @@ function renderLines(content: string): Array<Child> {
   // This is the most well-behaved way to divide lines.
   //return lines.map((line) => <div>{line || <br />}</div>);
   //return lines.map((line) => <div>{line || "\n"}</div>);
-  return lines.map((line) => <div>{line}<br /></div>);
+  //return lines.map((line) => <div>{line}<br /></div>);
   //return lines.map((line) => <div>{line}{"\n"}</div>);
 }
 
@@ -82,8 +83,13 @@ function* Editable(this: Context, { children }: any) {
           this.refresh();
           break;
         case "mutation": {
-          const hint = Math.min.apply(null, [cursor, cursor1].flat());
-          const patch = Patch.diff(content, content1, hint);
+          const points = [cursor, cursor1].flat(1);
+          // TODO: do we really need the low point or do we just need the lowest
+          // index from cursor1
+          const low = Math.min.apply(null, points);
+          // TODO: use high?
+          //const high = Math.max.apply(null, points);
+          const patch = Patch.diff(content, content1, low);
           operations = JSON.stringify(patch.operations(), null, 2);
           content = content1;
           cursor = cursor1;
@@ -102,29 +108,24 @@ function* Editable(this: Context, { children }: any) {
   //let initial = true;
   try {
     for ({} of this) {
-      //yield (
-      //  <div class="editor">
-      //    <pre
-      //      crank-ref={(el1: Node) => (el = el1)}
-      //      class="language-js"
-      //      contenteditable="true"
-      //      spellcheck={false}
-      //    >
-      //      <code>{parse(content)}</code>
-      //    </pre>
-      //    <div>HTML: <pre>{el && el.innerHTML}</pre></div>
-      //    <div>Content: <pre>{JSON.stringify(content)}</pre></div>
-      //    <div>Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
-      //    <div>Operations: <pre>{operations}</pre></div>
-      //  </div>
-      //);
       yield (
         <div class="editor">
+          {/*
           <div
             crank-ref={(el1: Node) => (el = el1)}
             contenteditable="true"
             spellcheck={false}
-          >{renderLines(content)}</div>
+          >
+            {parse(content)}
+          </div>
+          */}
+          <div
+            crank-ref={(el1: Node) => (el = el1)}
+            contenteditable="true"
+            spellcheck={false}
+          >
+            {renderLines(content)}
+          </div>
           <div>HTML: <pre>{el && el.innerHTML}</pre></div>
           <div>Content: <pre>{JSON.stringify(content)}</pre></div>
           <div>Cursor: <pre>{JSON.stringify(cursor)}</pre></div>

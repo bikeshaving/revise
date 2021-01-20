@@ -11,12 +11,6 @@ const NEWLINE = "\n";
  */
 export const Content = Symbol.for("revise.Content");
 
-/**
- * A symbol property added to every Text and Element node of the DOM tree which
- * is being observed. It is set to the length of the contents of all nodes
- * before this node, and is used to identify the positions of selections and
- * edits in the tree.
- */
 export const ContentOffset = Symbol.for("revise.ContentOffset");
 
 export const ContentLength = Symbol.for("revise.ContentLength");
@@ -74,15 +68,15 @@ export class ContentObserver {
 
 		// TODO: Is this necessary or a good idea?
 		this._onselectionchange = () => {
-			const root = this._root;
-			if (!root) {
-				return;
-			}
-
-			// TODO: Investigate further. We have to do it in a microtask or mutation
-			// record callbacks start messing up, but only when the console is
-			// closed?
+			// We have to execute this code in a microtask callback or
+			// contenteditables become uneditable in Safari.
+			// (but only when the console is closed?)
 			queueMicrotask(() => {
+				const root = this._root;
+				if (!root) {
+					return;
+				}
+
 				const selection = document.getSelection();
 				const cursor = cursorFromSelection(root, selection);
 				callback({
@@ -175,27 +169,20 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-// TODO: Use local offsets! Using global offsets makes working with invalidated
-// nodes more difficult because you have to recurse into the descendents of
-// next sibling nodes, effectively negating any of the performance benefits of
-// specific invalidating nodes.
 // TODO: Make this function incremental!
-// TODO: Make this function return patches.
+// TODO: Make this function return patches?
 export function getContent(root: Node): string {
-	let content = "";
-	let hasNewline = false;
-	let offset = 0;
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 	walker.currentNode = root;
+	let content = "";
+	let hasNewline = false;
+	let offset = 0;
+	const offsets: Array<number> = [];
 	const seen = new Set<Node>();
-	for (
-		let node: Node | null = root;
-		node !== null;
-		node = walker.nextSibling() || walker.parentNode()
-	) {
+	for (let node: Node | null = root; node !== null; ) {
 		if (!seen.has(node)) {
 			// eslint-disable-next-line no-constant-condition
 			while (true) {
@@ -203,16 +190,17 @@ export function getContent(root: Node): string {
 					throw new Error("Cannot observe nodes within a content observer");
 				}
 
-				// Should this come before or after the newline check?
 				node[ContentOffset] = offset;
-				if (!hasNewline && offset && isBlocklikeElement(node)) {
+				const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
+				if (newlineBefore) {
 					content += NEWLINE;
-					offset += NEWLINE.length;
 					hasNewline = true;
 				}
 
 				const firstChild = walker.firstChild();
 				if (firstChild) {
+					offsets.push(offset);
+					offset = newlineBefore ? NEWLINE.length : 0;
 					seen.add(node);
 					node = firstChild;
 				} else {
@@ -246,19 +234,60 @@ export function getContent(root: Node): string {
 			}
 		}
 
-		node[ContentLength] = offset - node[ContentOffset]!;
+		const length = offset - node[ContentOffset]!;
+		node[ContentLength] = length;
+		node = walker.nextSibling();
+		if (node === null) {
+			offset = offsets.pop()! + offset;
+			node = walker.parentNode();
+		}
 	}
 
 	root[Content] = content;
 	return content;
 }
 
+/**
+ * Given an observed root, and an array of mutation records, this function
+ * invalidates nodes which have changed children by deleting the ContentLength
+ * property.
+ *
+ * This function should be used in conjunction with the getPatch() function
+ * below.
+ */
+function _invalidate(root: Node, records: Array<MutationRecord>): void {
+	let invalidated = false;
+	for (let i = 0; i < records.length; i++) {
+		const record = records[i];
+		let target = record.target;
+		// TODO: handle non-contenteditable widgets
+		if (target === root) {
+			invalidated = true;
+			continue;
+		} else if (
+			typeof target[ContentLength] === "undefined" ||
+			!root.contains(target)
+		) {
+			continue;
+		}
+
+		for (; target !== root; target = target.parentNode!) {
+			if (typeof target[ContentLength] === "undefined") {
+				break;
+			}
+
+			target[ContentLength] = undefined;
+			invalidated = true;
+		}
+	}
+
+	if (invalidated) {
+		root[ContentLength] = undefined;
+	}
+}
+
 export type NodeOffset = [Node | null, number];
 
-// TODO: Should we use null when the editable is not focused, or should we use -1?
-// TODO: Should we allow descending ranges for cursors? ([5, 0] to indicate a
-// selection whose focus node and offset appear before the anchor node and
-// offset).
 export type Cursor = [number, number] | number;
 
 // TODO: Should we be exporting this???
@@ -270,7 +299,7 @@ export function indexFromNodeOffset(
 	if (
 		node == null ||
 		!root.contains(node) ||
-		typeof node[ContentOffset] === "undefined"
+		typeof node[ContentLength] === "undefined"
 	) {
 		return -1;
 	}
@@ -289,8 +318,8 @@ export function indexFromNodeOffset(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-
 	walker.currentNode = node;
+
 	while (node !== null && node !== root) {
 		const previousSibling = walker.previousSibling();
 		if (previousSibling === null) {
@@ -299,9 +328,8 @@ export function indexFromNodeOffset(
 				// This line deals with block elements which introduce a line break
 				// before them.
 				// "hello<div>world</div>"
-				//       ^ newline introduced here.
-				// TODO: This logic may change when we switch to local offsets.
-				index += (node[ContentOffset] || 0) - (parentNode[ContentOffset] || 0);
+				//			 ^ newline introduced here.
+				index += node[ContentOffset] || 0;
 			}
 
 			node = parentNode;
@@ -346,7 +374,30 @@ export function cursorFromSelection(
 	return [anchor, focus];
 }
 
-// TODO: Figure out how this function should be called and exported.
+function createParentNodeOffset(node: Node): [Node, number] {
+	const parentNode = node.parentNode;
+	if (parentNode === null) {
+		throw new Error("Node has no parent");
+	}
+
+	const offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
+	return [parentNode, offset];
+}
+
+function findSuccessorNode(walker: TreeWalker): Node | null {
+	let node: Node | null = walker.currentNode;
+	while (node !== null) {
+		node = walker.nextSibling();
+		if (node === null) {
+			node = walker.parentNode();
+		} else {
+			return node;
+		}
+	}
+
+	return null;
+}
+
 export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 	if (typeof root[Content] === "undefined") {
 		throw new Error("Unknown node");
@@ -360,7 +411,8 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-	let node: Node | null = walker.currentNode;
+	let node: Node | null = root;
+	walker.currentNode = node;
 	let offset = index;
 	while (node !== null) {
 		const length = node[ContentLength] || 0;
@@ -371,46 +423,50 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 
 			const firstChild = walker.firstChild();
 			if (firstChild) {
-				offset -= (firstChild[ContentOffset] || 0) - (node[ContentOffset] || 0);
-			}
+				offset -= firstChild[ContentOffset] || 0;
+				node = firstChild;
+			} else if (offset > 0) {
+				const successor = findSuccessorNode(walker);
+				if (successor) {
+					if (successor.nodeName === "BR") {
+						return createParentNodeOffset(successor);
+					}
 
-			node = firstChild;
+					return [successor, 0];
+				} else {
+					break;
+				}
+			} else if (node.nodeName === "BR") {
+				return createParentNodeOffset(node);
+			} else {
+				return [node, 0];
+			}
 		} else {
 			offset -= length;
-			node = walker.nextSibling();
-			if (node === null) {
-				node = walker.parentNode();
-				break;
-			}
-		}
-	}
-
-	node = walker.currentNode;
-	if (offset > 0) {
-		let nextNode: Node | null = node;
-		while (nextNode !== null) {
-			nextNode = walker.nextSibling();
-			if (nextNode === null) {
-				nextNode = walker.parentNode();
+			const nextSibling = walker.nextSibling();
+			if (nextSibling) {
+				node = nextSibling;
 			} else {
-				break;
+				const successor = findSuccessorNode(walker);
+				if (successor) {
+					if (successor.nodeName === "BR") {
+						return createParentNodeOffset(successor);
+					}
+
+					return [successor, 0];
+				} else {
+					break;
+				}
 			}
 		}
-
-		if (nextNode) {
-			return [nextNode, 0];
-		}
 	}
 
-	// Firefox breaks when a selection’s focusNode or anchorNode is set to a
-	// BR element.
-	if (node && node.nodeName === "BR") {
-		const parentNode = node.parentNode!;
-		const offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
-		return [parentNode, offset];
-	}
-
-	return [node, node ? node.childNodes.length : 0];
+	return [
+		root,
+		root.nodeType === Node.TEXT_NODE
+			? (root as Text).data.length
+			: root.childNodes.length,
+	];
 }
 
 export function setSelection(
@@ -426,7 +482,19 @@ export function setSelection(
 	const focus = typeof cursor === "number" ? cursor : cursor[1];
 	if (anchor === focus) {
 		const [node, offset] = nodeOffsetFromIndex(root, focus);
-		if (selection.focusNode !== node || selection.focusOffset !== offset) {
+		// Chrome seems to draw selections which point to a BR element incorrectly
+		// when there are two adjacent BR elements and the second has been deleted
+		// backwards, so we force a redraw.
+		const force =
+			node &&
+			node.nodeType === Node.ELEMENT_NODE &&
+			node.childNodes[offset] &&
+			node.childNodes[offset].nodeName === "BR";
+		if (
+			force ||
+			selection.focusNode !== node ||
+			selection.focusOffset !== offset
+		) {
 			selection.collapse(node, offset);
 		}
 
