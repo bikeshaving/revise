@@ -262,11 +262,8 @@ export function getContent(root: Node): string {
 
 /**
  * Given an observed root, and an array of mutation records, this function
- * invalidates nodes which have changed children by deleting the ContentLength
- * property.
- *
- * This function should be used in conjunction with the getPatch() function
- * below.
+ * invalidates nodes which have changed by deleting the ContentOffset and
+ * ContentLength properties.
  */
 function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
