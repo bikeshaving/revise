@@ -4,6 +4,7 @@ body {
   color: #fff;
   font-family: sans-serif;
   overflow-y: scroll;
+  overflow-x: hidden;
 }
 
 * {
@@ -18,6 +19,7 @@ body {
 .editor {
   margin: 0 auto;
   max-width: 60em;
+  tab-size: 2;
 }
 
 .editor > div {

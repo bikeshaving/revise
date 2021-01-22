@@ -1,23 +1,23 @@
-// TODO: stop hardcoding this so we can have \r\n documents???
+import {Patch} from "./patch";
+// TODO: stop hardcoding this so we can have \r\n documents?
+// Alternatively we can always default to \n documents.
 const NEWLINE = "\n";
 
-//TODO: Use a single symbol property.
-
+//TODO: Use a single symbol property?
 /**
- * A symbol property added to the root node which is being observed. It is set
- * to the string content of the entire DOM node.
- *
- * Maybe this can be set to some kind of controller object instead.
+ * A symbol property added to DOM nodes whose value is the content offset of a
+ * child node relative to its parent.
  */
-export const Content = Symbol.for("revise.Content");
-
 export const ContentOffset = Symbol.for("revise.ContentOffset");
 
+/**
+ * A symbol property added to DOM nodes whose value is the content length of a
+ * child node relative to its parent.
+ */
 export const ContentLength = Symbol.for("revise.ContentLength");
 
 declare global {
 	interface Node {
-		[Content]?: string | undefined;
 		[ContentOffset]?: number | undefined;
 		[ContentLength]?: number | undefined;
 	}
@@ -32,58 +32,80 @@ declare global {
 // TODO: Figure out what records we should emit.
 // TODO: Integrate with an undo stack of some kind.
 export interface ContentRecord {
-	type: string;
+	type: "content" | "cursor";
 	root: Node;
+	patch: Patch | null;
 	content: string;
-	//patch: Patch;
+	contentOldValue: string | null;
 	cursor: Cursor;
+	cursorOldValue: Cursor | null;
 }
 
-// TODO: Multiple targets.
+// TODO: Allow this class to observe multiple roots, or change this abstraction
+// around so that it only works for a single root, more like traditional JS
+// libraries which are passed a DOM node in the constructor.
 export class ContentObserver {
+	_callback: (record: ContentRecord) => unknown;
 	_root: Node | null;
+	_content: string | null;
+	_cursor: Cursor;
 	_mutationObserver: MutationObserver;
 	_onselectionchange: () => unknown;
 	constructor(callback: (record: ContentRecord) => unknown) {
 		this._root = null;
-		this._mutationObserver = new MutationObserver((_records) => {
+		this._content = null;
+		this._cursor = -1;
+		this._callback = callback;
+		this._mutationObserver = new MutationObserver((records) => {
 			const root = this._root;
 			if (!root) {
 				return;
 			}
 
-			// TODO: Use invalidate and patches as opposed to reading the entire tree.
-			// invalidate(root, records);
-			// const patch = getPatch(root);
+			invalidate(root, records);
+			const contentOldValue = this._content || "";
+			const cursorOldValue = this._cursor;
 			const content = getContent(root);
-			const selection = document.getSelection();
-			const cursor = cursorFromSelection(root, selection);
-			callback({
-				type: "mutation",
-				root,
+			const cursor = cursorFromSelection(root, document.getSelection());
+			this._content = content;
+			this._cursor = cursor;
+			const patch = Patch.diff(
+				contentOldValue,
 				content,
+				Math.min(...[cursorOldValue, cursor].flat()),
+			);
+			this._callback({
+				type: "content",
+				root,
+				patch,
+				content,
+				contentOldValue,
 				cursor,
+				cursorOldValue,
 			});
 		});
 
-		// TODO: Is this necessary or a good idea?
+		// TODO: Don’t call the constructor callback if the selection has not changed.
 		this._onselectionchange = () => {
 			// We have to execute this code in a microtask callback or
 			// contenteditables become uneditable in Safari.
-			// (but only when the console is closed?)
+			// (but only when the console is closed???)
 			queueMicrotask(() => {
 				const root = this._root;
 				if (!root) {
 					return;
 				}
 
-				const selection = document.getSelection();
-				const cursor = cursorFromSelection(root, selection);
-				callback({
-					type: "selectionchange",
+				const cursor = cursorFromSelection(root, document.getSelection());
+				this._cursor = cursor;
+				this._callback({
+					type: "cursor",
 					root,
-					content: root[Content]!,
+					patch: null,
+					content: this._content!,
+					contentOldValue: null,
 					cursor,
+					cursorOldValue: null,
 				});
 			});
 		};
@@ -91,27 +113,26 @@ export class ContentObserver {
 
 	// TODO: Pass in intended content to observe so we can get an initial diff?
 	observe(root: Node) {
-		this._root = root;
-		// We need to mark the lengths and offsets.
-		getContent(root);
 		this._mutationObserver.observe(root, {
 			subtree: true,
 			childList: true,
 			characterData: true,
-			characterDataOldValue: true,
 			// TODO: We need to listen to attribute changes for widgets.
 		});
 		document.addEventListener("selectionchange", this._onselectionchange);
+		this._root = root;
 	}
 
 	disconnect() {
 		this._root = null;
+		this._content = null;
+		this._cursor = -1;
 		this._mutationObserver.disconnect();
 		// TODO: only remove the event listener if all roots are disconnected.
 		document.removeEventListener("selectionchange", this._onselectionchange);
 	}
 
-	repairCursor(callback: Function): void {
+	repair(callback: Function): void {
 		const root = this._root;
 		if (!root) {
 			return;
@@ -169,13 +190,14 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-// TODO: Make this function incremental!
+// TODO: Make this function work incrementally (with invalidate)
 // TODO: Make this function return patches?
 export function getContent(root: Node): string {
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
+
 	walker.currentNode = root;
 	let content = "";
 	let hasNewline = false;
@@ -186,10 +208,6 @@ export function getContent(root: Node): string {
 		if (!seen.has(node)) {
 			// eslint-disable-next-line no-constant-condition
 			while (true) {
-				if (node !== root && typeof node[Content] !== "undefined") {
-					throw new Error("Cannot observe nodes within a content observer");
-				}
-
 				node[ContentOffset] = offset;
 				const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
 				if (newlineBefore) {
@@ -222,10 +240,6 @@ export function getContent(root: Node): string {
 			if (
 				!hasNewline &&
 				isBlocklikeElement(node) &&
-				// TODO: We check that the any block-like elements that aren’t the root
-				// have at least one child, to deal with empty divs and such, but I am
-				// not sure about this logic. For instance, empty divs non-zero heights
-				// seem to record as a newline according to content-editable algorithms.
 				(node === root || node.firstChild)
 			) {
 				content += NEWLINE;
@@ -243,7 +257,6 @@ export function getContent(root: Node): string {
 		}
 	}
 
-	root[Content] = content;
 	return content;
 }
 
@@ -255,34 +268,36 @@ export function getContent(root: Node): string {
  * This function should be used in conjunction with the getPatch() function
  * below.
  */
-function _invalidate(root: Node, records: Array<MutationRecord>): void {
+function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
-		let target = record.target;
+		let node = record.target;
 		// TODO: handle non-contenteditable widgets
-		if (target === root) {
+		if (node === root) {
 			invalidated = true;
 			continue;
 		} else if (
-			typeof target[ContentLength] === "undefined" ||
-			!root.contains(target)
+			typeof node[ContentLength] === "undefined" ||
+			!root.contains(node)
 		) {
 			continue;
 		}
 
-		for (; target !== root; target = target.parentNode!) {
-			if (typeof target[ContentLength] === "undefined") {
+		for (; node !== root; node = node.parentNode!) {
+			if (typeof node[ContentLength] === "undefined") {
 				break;
 			}
 
-			target[ContentLength] = undefined;
+			node[ContentLength] = undefined;
+			node[ContentOffset] = undefined;
 			invalidated = true;
 		}
 	}
 
 	if (invalidated) {
 		root[ContentLength] = undefined;
+		root[ContentOffset] = undefined;
 	}
 }
 
@@ -325,10 +340,6 @@ export function indexFromNodeOffset(
 		if (previousSibling === null) {
 			const parentNode = walker.parentNode();
 			if (parentNode) {
-				// This line deals with block elements which introduce a line break
-				// before them.
-				// "hello<div>world</div>"
-				//			 ^ newline introduced here.
 				index += node[ContentOffset] || 0;
 			}
 
@@ -399,10 +410,6 @@ function findSuccessorNode(walker: TreeWalker): Node | null {
 }
 
 export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
-	if (typeof root[Content] === "undefined") {
-		throw new Error("Unknown node");
-	}
-
 	if (index < 0) {
 		return [null, 0];
 	}
@@ -483,7 +490,7 @@ export function setSelection(
 	if (anchor === focus) {
 		const [node, offset] = nodeOffsetFromIndex(root, focus);
 		// Chrome seems to draw selections which point to a BR element incorrectly
-		// when there are two adjacent BR elements and the second has been deleted
+		// when there are two adjacent BR elements and one has been deleted
 		// backwards, so we force a redraw.
 		const force =
 			node &&
@@ -503,11 +510,11 @@ export function setSelection(
 
 	const range = selection.getRangeAt(0);
 	const [anchorNode, anchorOffset] = nodeOffsetFromIndex(root, anchor);
-	const [focusNode, focusOffset] = nodeOffsetFromIndex(root, focus);
 	if (anchorNode) {
 		range.setStart(anchorNode, anchorOffset);
 	}
 
+	const [focusNode, focusOffset] = nodeOffsetFromIndex(root, focus);
 	if (focusNode) {
 		range.setEnd(focusNode, focusOffset);
 	}

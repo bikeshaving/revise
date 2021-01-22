@@ -247,8 +247,8 @@ export class Patch {
 		let suffix = commonSuffixLength(text1, text2);
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {
 			// Prefix and suffix may overlap when there are runs of the same character.
-			if (hint !== undefined && hint > -1 && hint <= prefix) {
-				prefix = hint;
+			if (hint !== undefined && hint > -1) {
+				prefix = Math.min(prefix, hint);
 			}
 
 			// TODO: We can probably avoid the commonSuffixLength() call here.
