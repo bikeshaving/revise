@@ -8,7 +8,7 @@ module.exports = {
     "@snowpack/plugin-babel",
     "@snowpack/plugin-typescript",
   ],
-  installOptions: {
+  packageOptions: {
     installTypes: true,
   },
 };
