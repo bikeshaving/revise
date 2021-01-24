@@ -106,20 +106,20 @@ class Keyer {
     const operations = patch.operations();
     for (let i = operations.length - 1; i >= 0; i--) {
       const op = operations[i];
+      // TODO: Is this correct?
       switch (op.type) {
         case "delete":
-          this._keys.splice(op.start, op.end - op.start);
+          this._keys.splice(op.start + 1, op.end - op.start);
           break;
         case "insert":
-          // We use slice and concat rather than
-          // splice(op.start, 0, ...new Array(op.value.length)
-          // because the latter seems to fill in added indices with undefined
-          // rather than leaving the array sparse.
+          // We use slice and concat rather than splice(op.start, 0, ...new
+          // Array(op.value.length) because the latter seems to fill in added
+          // indices with undefined rather than leaving the array sparse.
+          this._keys.length = Math.max(this._keys.length, op.start + 1);
           this._keys = this._keys
-            .slice(0, op.start)
-            .concat(new Array(Math.max(0, op.start - this._keys.length)))
+            .slice(0, op.start + 1)
             .concat(new Array(op.value.length))
-            .concat(this._keys.slice(op.start));
+            .concat(this._keys.slice(op.start + 1));
           break;
       }
     }
