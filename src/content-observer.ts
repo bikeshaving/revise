@@ -11,8 +11,8 @@ const NEWLINE = "\n";
 export const ContentOffset = Symbol.for("revise.ContentOffset");
 
 /**
- * A symbol property added to DOM nodes whose value is the content length of a
- * child node relative to its parent.
+ * A symbol property added to DOM nodes whose value is the content length of
+ * its children.
  */
 export const ContentLength = Symbol.for("revise.ContentLength");
 
@@ -44,6 +44,21 @@ export interface ContentRecord {
 // TODO: Allow this class to observe multiple roots, or change this abstraction
 // around so that it only works for a single root, more like traditional JS
 // libraries which are passed a DOM node in the constructor.
+//
+// Pros of multiple roots:
+// - Aligns with other observer APIs.
+// - Potential advanced use-cases with multiple roots?
+// Cons of multiple roots:
+// - Not clear why we need multiple editable roots in the first place.
+// - We have to search through mutations and selections for
+// Pros of single root:
+// - Easier to reason about.
+// - Methods are
+// Cons of single root:
+// - We have to define EventTarget methods.
+// -
+//
+// Maybe we can base this abstraction around the custom elements.
 export class ContentObserver {
 	_callback: (record: ContentRecord) => unknown;
 	_root: Node | null;
@@ -190,8 +205,8 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-// TODO: Make this function work incrementally (with invalidate)
-// TODO: Make this function return patches?
+// TODO: Make this function work incrementally with invalidate
+// TODO: Make this function return a Patch instead of string?
 export function getContent(root: Node): string {
 	const walker = document.createTreeWalker(
 		root,
@@ -263,7 +278,7 @@ export function getContent(root: Node): string {
 /**
  * Given an observed root, and an array of mutation records, this function
  * invalidates nodes which have changed by deleting the ContentOffset and
- * ContentLength properties.
+ * ContentLength properties from them.
  */
 function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
