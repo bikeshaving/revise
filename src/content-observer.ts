@@ -41,23 +41,6 @@ export interface ContentRecord {
 	cursorOldValue: Cursor | null;
 }
 
-// TODO: Allow this class to observe multiple roots, or change this abstraction
-// around so that it only works for a single root, more like traditional JS
-// libraries which are passed a DOM node in the constructor.
-//
-// Pros of multiple roots:
-// - Aligns with other observer APIs.
-// - Potential advanced use-cases with multiple roots?
-// Cons of multiple roots:
-// - Not clear why we need multiple editable roots in the first place.
-// - We have to search through mutations and selections for
-// Pros of single root:
-// - Easier to reason about.
-// - Methods are
-// Cons of single root:
-// - We have to define EventTarget methods.
-// -
-//
 // Maybe we can base this abstraction around the custom elements.
 export class ContentObserver {
 	_callback: (record: ContentRecord) => unknown;
@@ -78,14 +61,14 @@ export class ContentObserver {
 			}
 
 			invalidate(root, records);
-			const contentOldValue = this._content || "";
+			const contentOldValue = this._content || null;
 			const cursorOldValue = this._cursor;
-			const content = getContent(root);
+			const content = getContent(root, contentOldValue || "");
 			const cursor = cursorFromSelection(root, document.getSelection());
 			this._content = content;
 			this._cursor = cursor;
 			const patch = Patch.diff(
-				contentOldValue,
+				contentOldValue || "",
 				content,
 				Math.min(...[cursorOldValue, cursor].flat()),
 			);
@@ -128,6 +111,7 @@ export class ContentObserver {
 
 	// TODO: Pass in intended content to observe so we can get an initial diff?
 	observe(root: Node) {
+		this._content = getContent(root);
 		this._mutationObserver.observe(root, {
 			subtree: true,
 			childList: true,
@@ -156,7 +140,8 @@ export class ContentObserver {
 		const selection = document.getSelection();
 		const cursor = cursorFromSelection(root, selection);
 		callback();
-		getContent(root);
+		invalidate(root, this._mutationObserver.takeRecords());
+		getContent(root, this._content || undefined);
 		setSelection(selection, root, cursor);
 	}
 }
@@ -205,35 +190,52 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-// TODO: Make this function work incrementally with invalidate
 // TODO: Make this function return a Patch instead of string?
-export function getContent(root: Node): string {
+export function getContent(root: Node, contentOldValue?: string): string {
+	if (contentOldValue && typeof root[ContentLength] !== "undefined") {
+		if (contentOldValue.length !== root[ContentLength]) {
+			throw new Error("Length mismatch");
+		}
+
+		return contentOldValue;
+	}
+
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-
 	walker.currentNode = root;
 	let content = "";
 	let hasNewline = false;
-	let offset = 0;
+	let oi = 0; // old index
+	let oiRelative = 0;
+	const oiRelatives: Array<number> = [];
 	const offsets: Array<number> = [];
+	let offset = 0;
 	const seen = new Set<Node>();
 	for (let node: Node | null = root; node !== null; ) {
 		if (!seen.has(node)) {
-			// eslint-disable-next-line no-constant-condition
-			while (true) {
+			while (!contentOldValue || typeof node[ContentLength] === "undefined") {
 				node[ContentOffset] = offset;
 				const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
 				if (newlineBefore) {
 					content += NEWLINE;
 					hasNewline = true;
+					oi += NEWLINE.length;
 				}
 
 				const firstChild = walker.firstChild();
 				if (firstChild) {
 					offsets.push(offset);
-					offset = newlineBefore ? NEWLINE.length : 0;
+					oiRelatives.push(oiRelative);
+					oiRelative = oi;
+
+					if (newlineBefore) {
+						offset = NEWLINE.length;
+					} else {
+						offset = 0;
+					}
+
 					seen.add(node);
 					node = firstChild;
 				} else {
@@ -242,17 +244,29 @@ export function getContent(root: Node): string {
 			}
 		}
 
-		if (node.nodeType === Node.TEXT_NODE) {
-			const content1 = (node as Text).data;
+		if (contentOldValue && typeof node[ContentLength] !== "undefined") {
+			const offset1 = oi - oiRelative;
+			if (offset1 < node[ContentOffset]!) {
+				oi += node[ContentOffset]! - offset1;
+			}
+
+			node[ContentOffset] = offset;
+			const content1 = contentOldValue.slice(oi, oi + node[ContentLength]!);
 			content += content1;
 			offset += content1.length;
 			hasNewline = content1.endsWith(NEWLINE);
-		} else if (node.nodeName === "BR") {
-			content += NEWLINE;
-			offset += NEWLINE.length;
-			hasNewline = true;
+			oi += node[ContentLength]!;
 		} else {
-			if (
+			if (node.nodeType === Node.TEXT_NODE) {
+				const content1 = (node as Text).data;
+				content += content1;
+				offset += content1.length;
+				hasNewline = content1.endsWith(NEWLINE);
+			} else if (node.nodeName === "BR") {
+				content += NEWLINE;
+				offset += NEWLINE.length;
+				hasNewline = true;
+			} else if (
 				!hasNewline &&
 				isBlocklikeElement(node) &&
 				(node === root || node.firstChild)
@@ -261,14 +275,23 @@ export function getContent(root: Node): string {
 				offset += NEWLINE.length;
 				hasNewline = true;
 			}
+
+			const length = offset - (node[ContentOffset] || 0);
+			node[ContentLength] = length;
 		}
 
-		const length = offset - node[ContentOffset]!;
-		node[ContentLength] = length;
-		node = walker.nextSibling();
-		if (node === null) {
-			offset = offsets.pop()! + offset;
+		const nextSibling = walker.nextSibling();
+		if (nextSibling === null && walker.currentNode !== root) {
+			const offset1 = offsets.pop()!;
+			oiRelative = oiRelatives.pop()!;
+			if (offset1 === undefined || oiRelative === undefined) {
+				throw new Error("Missing offset");
+			}
+
+			offset = offset1 + offset;
 			node = walker.parentNode();
+		} else {
+			node = nextSibling;
 		}
 	}
 
@@ -280,7 +303,7 @@ export function getContent(root: Node): string {
  * invalidates nodes which have changed by deleting the ContentOffset and
  * ContentLength properties from them.
  */
-function invalidate(root: Node, records: Array<MutationRecord>): void {
+export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
@@ -303,6 +326,10 @@ function invalidate(root: Node, records: Array<MutationRecord>): void {
 
 			node[ContentLength] = undefined;
 			node[ContentOffset] = undefined;
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				(node as Element).removeAttribute("coffset");
+				(node as Element).removeAttribute("clength");
+			}
 			invalidated = true;
 		}
 	}
@@ -310,6 +337,10 @@ function invalidate(root: Node, records: Array<MutationRecord>): void {
 	if (invalidated) {
 		root[ContentLength] = undefined;
 		root[ContentOffset] = undefined;
+		if (root.nodeType === Node.ELEMENT_NODE) {
+			(root as Element).removeAttribute("coffset");
+			(root as Element).removeAttribute("clength");
+		}
 	}
 }
 
@@ -390,7 +421,9 @@ export function cursorFromSelection(
 		);
 	}
 
-	if (focus === anchor || focus === -1 || anchor === -1) {
+	if (focus === -1) {
+		return anchor;
+	} else if (anchor === -1 || focus === anchor) {
 		return focus;
 	}
 
@@ -501,16 +534,14 @@ export function setSelection(
 	const focus = typeof cursor === "number" ? cursor : cursor[1];
 	if (anchor === focus) {
 		const [node, offset] = nodeOffsetFromIndex(root, focus);
-		// Chrome seems to draw selections which point to a BR element incorrectly
-		// when there are two adjacent BR elements and one has been deleted
-		// backwards, so we force a redraw.
-		const force =
-			node &&
-			node.nodeType === Node.ELEMENT_NODE &&
-			node.childNodes[offset] &&
-			node.childNodes[offset].nodeName === "BR";
 		if (
-			force ||
+			// Chrome seems to draw selections which point to a BR element incorrectly
+			// when there are two adjacent BR elements and one has been deleted
+			// backwards, so we force a redraw.
+			(node &&
+				node.nodeType === Node.ELEMENT_NODE &&
+				node.childNodes[offset] &&
+				node.childNodes[offset].nodeName === "BR") ||
 			selection.focusNode !== node ||
 			selection.focusOffset !== offset
 		) {
@@ -520,14 +551,17 @@ export function setSelection(
 		return;
 	}
 
-	const range = selection.getRangeAt(0);
 	const [anchorNode, anchorOffset] = nodeOffsetFromIndex(root, anchor);
-	if (anchorNode) {
-		range.setStart(anchorNode, anchorOffset);
-	}
-
 	const [focusNode, focusOffset] = nodeOffsetFromIndex(root, focus);
-	if (focusNode) {
-		range.setEnd(focusNode, focusOffset);
+	if (anchorNode === null && focusNode === null) {
+		selection.collapse(null);
+	} else if (anchorNode === null) {
+		selection.collapse(focusNode, focusOffset);
+	} else if (focusNode === null) {
+		selection.collapse(anchorNode, anchorOffset);
+	} else {
+		const range = selection.getRangeAt(0);
+		range.setStart(focusNode, focusOffset);
+		range.setEnd(anchorNode, anchorOffset);
 	}
 }

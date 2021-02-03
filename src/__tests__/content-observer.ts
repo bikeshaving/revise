@@ -1,5 +1,6 @@
 import {
 	getContent,
+	invalidate,
 	indexFromNodeOffset,
 	nodeOffsetFromIndex,
 } from "../content-observer";
@@ -95,6 +96,103 @@ describe("getContent", () => {
 			"<div>Hello<span><br /></span>World<span><br /></span></div>",
 		);
 		expect(getContent(node)).toEqual("Hello\nWorld\n");
+	});
+});
+
+describe("incremental", () => {
+	test("append div", () => {
+		const node = parseHTML("<div><div>12</div><div>34</div></div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n34\n");
+		node.appendChild(parseHTML("<div>56</div>"));
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n34\n56\n");
+	});
+
+	test("insert div between divs", () => {
+		const node = parseHTML("<div><div>12</div><div>56</div></div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n56\n");
+		node.insertBefore(parseHTML("<div>34</div>"), node.lastChild);
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n34\n56\n");
+	});
+
+	test("delete first div", () => {
+		const node = parseHTML("<div><div>12</div><div>34</div></div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n34\n");
+		node.childNodes[0].remove();
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("34\n");
+	});
+
+	test("delete second div", () => {
+		const node = parseHTML("<div><div>12</div><div>34</div></div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n34\n");
+		node.childNodes[1].remove();
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n");
+	});
+
+	test("delete div between existing divs", () => {
+		const node = parseHTML(
+			"<div><div>12</div><div>34</div><div>56</div></div>",
+		);
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n34\n56\n");
+		node.childNodes[1].remove();
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n56\n");
+	});
+
+	test("delete nested delete", () => {
+		const node = parseHTML(
+			"<div><div>12</div><div><div>34</div><div>56</div><div>78</div></div><div>90</div></div>",
+		);
+
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n34\n56\n78\n90\n");
+		node.childNodes[1].childNodes[1].remove();
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n34\n78\n90\n");
 	});
 });
 
