@@ -307,6 +307,20 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
+		if (record.addedNodes.length) {
+			for (let j = 0; j < record.addedNodes.length; j++) {
+				const node = record.addedNodes[j];
+				node[ContentOffset] = undefined;
+				node[ContentLength] = undefined;
+			}
+
+			for (let j = 0; j < record.removedNodes.length; j++) {
+				const node = record.removedNodes[j];
+				node[ContentOffset] = undefined;
+				node[ContentLength] = undefined;
+			}
+		}
+
 		let node = record.target;
 		// TODO: handle non-contenteditable widgets
 		if (node === root) {
