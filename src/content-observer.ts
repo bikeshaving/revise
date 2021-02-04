@@ -204,7 +204,6 @@ export function getContent(root: Node, contentOldValue?: string): string {
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-	walker.currentNode = root;
 	let content = "";
 	let hasNewline = false;
 	let oi = 0; // old index
@@ -298,6 +297,18 @@ export function getContent(root: Node, contentOldValue?: string): string {
 	return content;
 }
 
+// TODO: Is it necessary to clean nodes recursively?
+function clean(root: Node) {
+	const walker = document.createTreeWalker(
+		root,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+	for (let node: Node | null = root; node !== null; node = walker.nextNode()) {
+		node[ContentOffset] = undefined;
+		node[ContentLength] = undefined;
+	}
+}
+
 /**
  * Given an observed root, and an array of mutation records, this function
  * invalidates nodes which have changed by deleting the ContentOffset and
@@ -307,18 +318,12 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
-		if (record.addedNodes.length) {
-			for (let j = 0; j < record.addedNodes.length; j++) {
-				const node = record.addedNodes[j];
-				node[ContentOffset] = undefined;
-				node[ContentLength] = undefined;
-			}
+		for (let j = 0; j < record.addedNodes.length; j++) {
+			clean(record.addedNodes[j]);
+		}
 
-			for (let j = 0; j < record.removedNodes.length; j++) {
-				const node = record.removedNodes[j];
-				node[ContentOffset] = undefined;
-				node[ContentLength] = undefined;
-			}
+		for (let j = 0; j < record.removedNodes.length; j++) {
+			clean(record.removedNodes[j]);
 		}
 
 		let node = record.target;
@@ -340,10 +345,6 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 
 			node[ContentLength] = undefined;
 			node[ContentOffset] = undefined;
-			if (node.nodeType === Node.ELEMENT_NODE) {
-				(node as Element).removeAttribute("coffset");
-				(node as Element).removeAttribute("clength");
-			}
 			invalidated = true;
 		}
 	}
@@ -351,10 +352,6 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	if (invalidated) {
 		root[ContentLength] = undefined;
 		root[ContentOffset] = undefined;
-		if (root.nodeType === Node.ELEMENT_NODE) {
-			(root as Element).removeAttribute("coffset");
-			(root as Element).removeAttribute("clength");
-		}
 	}
 }
 
