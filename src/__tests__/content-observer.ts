@@ -16,7 +16,7 @@ function parseHTML(text: string): Node {
 	return fragment.firstChild!;
 }
 
-describe("getContent", () => {
+describe("content", () => {
 	test("divs basic", () => {
 		const node = parseHTML("<div><div>Hello</div><div>World</div></div>");
 		expect(getContent(node)).toEqual("Hello\nWorld\n");
@@ -193,6 +193,73 @@ describe("incremental", () => {
 		node.childNodes[1].childNodes[1].remove();
 		invalidate(node, observer.takeRecords());
 		expect(getContent(node, content1)).toEqual("12\n34\n78\n90\n");
+	});
+
+	test("text", () => {
+		const node = parseHTML(
+			"<div><div>12</div><div>56</div></div>",
+		);
+
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n56\n");
+		const text1 = node.childNodes[0].firstChild! as Text;
+		const text2 = node.childNodes[1].firstChild! as Text;
+		text1.data = "123";
+		text2.data = "456";
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("123\n456\n");
+	});
+
+	test("add div after text", () => {
+		const node = parseHTML("<div>12</div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n");
+		node.appendChild(parseHTML("<div>34</div>"));
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n34\n");
+	});
+
+	test("delete div after text", () => {
+		const node = parseHTML("<div>12<div>34</div></div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n34\n");
+		node.removeChild(node.lastChild!);
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n");
+	});
+
+	test("delete br at the start of a div after text", () => {
+		const node = parseHTML("<div>12<div><br>34</div></div>");
+		const observer = new MutationObserver(() => {});
+		observer.observe(node, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+		const content1 = getContent(node);
+		expect(content1).toEqual("12\n\n34\n");
+		node.lastChild!.firstChild!.remove();
+		invalidate(node, observer.takeRecords());
+		expect(getContent(node, content1)).toEqual("12\n34\n");
 	});
 });
 

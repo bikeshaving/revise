@@ -1,9 +1,6 @@
 import {Patch} from "./patch";
-// TODO: stop hardcoding this so we can have \r\n documents?
-// Alternatively we can always default to \n documents.
-const NEWLINE = "\n";
 
-//TODO: Use a single symbol property?
+// TODO: Use a map instead of symbol properties?
 /**
  * A symbol property added to DOM nodes whose value is the content offset of a
  * child node relative to its parent.
@@ -23,128 +20,9 @@ declare global {
 	}
 }
 
-// TODO: expose methods via a ContentController class.
-
-// TODO: Mutations in non-contenteditable widgets should be ignored.
-// TODO: Mutations in nested contenteditables should be ignored.
-// TODO: Figure out how to limit the amount of work we need to do with
-// getContent by actually reading mutation records themselves.
-// TODO: Figure out what records we should emit.
-// TODO: Integrate with an undo stack of some kind.
-export interface ContentRecord {
-	type: "content" | "cursor";
-	root: Node;
-	patch: Patch | null;
-	content: string;
-	contentOldValue: string | null;
-	cursor: Cursor;
-	cursorOldValue: Cursor | null;
-}
-
-// Maybe we can base this abstraction around the custom elements.
-export class ContentObserver {
-	_callback: (record: ContentRecord) => unknown;
-	_root: Node | null;
-	_content: string | null;
-	_cursor: Cursor;
-	_mutationObserver: MutationObserver;
-	_onselectionchange: () => unknown;
-	constructor(callback: (record: ContentRecord) => unknown) {
-		this._root = null;
-		this._content = null;
-		this._cursor = -1;
-		this._callback = callback;
-		this._mutationObserver = new MutationObserver((records) => {
-			const root = this._root;
-			if (!root) {
-				return;
-			}
-
-			invalidate(root, records);
-			const contentOldValue = this._content || null;
-			const cursorOldValue = this._cursor;
-			const content = getContent(root, contentOldValue || "");
-			const cursor = cursorFromSelection(root, document.getSelection());
-			this._content = content;
-			this._cursor = cursor;
-			const patch = Patch.diff(
-				contentOldValue || "",
-				content,
-				Math.min(...[cursorOldValue, cursor].flat()),
-			);
-			this._callback({
-				type: "content",
-				root,
-				patch,
-				content,
-				contentOldValue,
-				cursor,
-				cursorOldValue,
-			});
-		});
-
-		// TODO: Don’t call the constructor callback if the selection has not changed.
-		this._onselectionchange = () => {
-			// We have to execute this code in a microtask callback or
-			// contenteditables become uneditable in Safari.
-			// (but only when the console is closed???)
-			queueMicrotask(() => {
-				const root = this._root;
-				if (!root) {
-					return;
-				}
-
-				const cursor = cursorFromSelection(root, document.getSelection());
-				this._cursor = cursor;
-				this._callback({
-					type: "cursor",
-					root,
-					patch: null,
-					content: this._content!,
-					contentOldValue: null,
-					cursor,
-					cursorOldValue: null,
-				});
-			});
-		};
-	}
-
-	// TODO: Pass in intended content to observe so we can get an initial diff?
-	observe(root: Node) {
-		this._content = getContent(root);
-		this._mutationObserver.observe(root, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-			// TODO: We need to listen to attribute changes for widgets.
-		});
-		document.addEventListener("selectionchange", this._onselectionchange);
-		this._root = root;
-	}
-
-	disconnect() {
-		this._root = null;
-		this._content = null;
-		this._cursor = -1;
-		this._mutationObserver.disconnect();
-		// TODO: only remove the event listener if all roots are disconnected.
-		document.removeEventListener("selectionchange", this._onselectionchange);
-	}
-
-	repair(callback: Function): void {
-		const root = this._root;
-		if (!root) {
-			return;
-		}
-
-		const selection = document.getSelection();
-		const cursor = cursorFromSelection(root, selection);
-		callback();
-		invalidate(root, this._mutationObserver.takeRecords());
-		getContent(root, this._content || undefined);
-		setSelection(selection, root, cursor);
-	}
-}
+// TODO: stop hardcoding this so we can have \r\n documents?
+// Alternatively we can always default to \n documents.
+const NEWLINE = "\n";
 
 const BLOCKLIKE_ELEMENTS = new Set([
 	"ADDRESS",
@@ -190,11 +68,11 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-// TODO: Make this function return a Patch instead of string?
+// TODO: It might be faster to construct a patch rather than concatenating a string.
 export function getContent(root: Node, contentOldValue?: string): string {
 	if (contentOldValue && typeof root[ContentLength] !== "undefined") {
 		if (contentOldValue.length !== root[ContentLength]) {
-			throw new Error("Length mismatch");
+			throw new Error("contentOldValue does not match root length");
 		}
 
 		return contentOldValue;
@@ -204,13 +82,16 @@ export function getContent(root: Node, contentOldValue?: string): string {
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
+
 	let content = "";
 	let hasNewline = false;
-	let oi = 0; // old index
-	let oiRelative = 0;
-	const oiRelatives: Array<number> = [];
-	const offsets: Array<number> = [];
+	let oldIndex = 0;
+	let oldIndexRelative = 0;
 	let offset = 0;
+	// TODO: Both these arrays work like stacks. Maybe we can have a single one.
+	// TODO: the stack is mostly unnecessary for the root, maybe we can start with the firstChild
+	const indexes: Array<number> = [];
+	const offsets: Array<number> = [];
 	const seen = new Set<Node>();
 	for (let node: Node | null = root; node !== null; ) {
 		if (!seen.has(node)) {
@@ -220,15 +101,13 @@ export function getContent(root: Node, contentOldValue?: string): string {
 				if (newlineBefore) {
 					content += NEWLINE;
 					hasNewline = true;
-					oi += NEWLINE.length;
 				}
 
 				const firstChild = walker.firstChild();
 				if (firstChild) {
 					offsets.push(offset);
-					oiRelatives.push(oiRelative);
-					oiRelative = oi;
-
+					indexes.push(oldIndexRelative);
+					oldIndexRelative = oldIndex;
 					if (newlineBefore) {
 						offset = NEWLINE.length;
 					} else {
@@ -244,17 +123,24 @@ export function getContent(root: Node, contentOldValue?: string): string {
 		}
 
 		if (contentOldValue && typeof node[ContentLength] !== "undefined") {
-			const offset1 = oi - oiRelative;
-			if (offset1 < node[ContentOffset]!) {
-				oi += node[ContentOffset]! - offset1;
+			const oldOffset = oldIndex - oldIndexRelative;
+			if (oldOffset < node[ContentOffset]!) {
+				// A deletion has been detected.
+				oldIndex += node[ContentOffset]! - oldOffset;
 			}
 
+			// Set the offset to the new offset
 			node[ContentOffset] = offset;
-			const content1 = contentOldValue.slice(oi, oi + node[ContentLength]!);
+			const length = node[ContentLength]!;
+			const content1 = contentOldValue.slice(oldIndex, oldIndex + length);
+			if (content1.length !== length) {
+				throw new Error("String length mismatch");
+			}
+
 			content += content1;
-			offset += content1.length;
+			offset += length;
+			oldIndex += length;
 			hasNewline = content1.endsWith(NEWLINE);
-			oi += node[ContentLength]!;
 		} else {
 			if (node.nodeType === Node.TEXT_NODE) {
 				const content1 = (node as Text).data;
@@ -279,25 +165,23 @@ export function getContent(root: Node, contentOldValue?: string): string {
 			node[ContentLength] = length;
 		}
 
-		const nextSibling = walker.nextSibling();
-		if (nextSibling === null && walker.currentNode !== root) {
-			const offset1 = offsets.pop()!;
-			oiRelative = oiRelatives.pop()!;
-			if (offset1 === undefined || oiRelative === undefined) {
+		node = walker.nextSibling();
+		if (node === null && walker.currentNode !== root) {
+			const offset1 = offsets.pop();
+			const oldIndexRelative1 = indexes.pop();
+			if (offset1 === undefined || oldIndexRelative1 === undefined) {
 				throw new Error("Missing offset");
 			}
 
 			offset = offset1 + offset;
+			oldIndexRelative = oldIndexRelative1;
 			node = walker.parentNode();
-		} else {
-			node = nextSibling;
 		}
 	}
 
 	return content;
 }
 
-// TODO: Is it necessary to clean nodes recursively?
 function clean(root: Node) {
 	const walker = document.createTreeWalker(
 		root,
@@ -548,7 +432,7 @@ export function setSelection(
 		if (
 			// Chrome seems to draw selections which point to a BR element incorrectly
 			// when there are two adjacent BR elements and one has been deleted
-			// backwards, so we force a redraw.
+			// backward, so we force a redraw of the selection.
 			(node &&
 				node.nodeType === Node.ELEMENT_NODE &&
 				node.childNodes[offset] &&
@@ -574,5 +458,277 @@ export function setSelection(
 		const range = selection.getRangeAt(0);
 		range.setStart(focusNode, focusOffset);
 		range.setEnd(anchorNode, anchorOffset);
+	}
+}
+
+export type SelectionDirection = "forward" | "backward" | "none";
+
+// TODO: incorporate this code somewhere.
+//let undoing = false;
+//el.addEventListener("beforeinput", (ev: InputEvent) => {
+//	if (ev.inputType !== "historyUndo" && undoing) {
+//		ev.preventDefault();
+//	}
+//});
+//
+//el.addEventListener("input", (ev: InputEvent) => {
+//	if (ev.inputType === "historyUndo") {
+//		return;
+//	}
+//
+//	undoing = true;
+//	requestAnimationFrame(() => {
+//		document.execCommand("undo");
+//		undoing = false;
+//	});
+//});
+
+// TODO: maybe some of these properties can be moved to a hidden controller type
+// symbol properties
+const $observer = Symbol.for("ContentArea.$observer");
+const $invalidated = Symbol.for("ContentArea.$invalidated");
+const $value = Symbol.for("ContentArea.$value");
+const css = `
+:host {
+	display: contents;
+	white-space: pre-wrap;
+	white-space: break-spaces;
+}`;
+
+export class ContentAreaElement extends HTMLElement {
+	[$observer]: MutationObserver;
+	[$invalidated]: boolean;
+	[$value]: string;
+
+	static get observedAttributes(): Array<string> {
+		return ["contenteditable"];
+	}
+
+	constructor() {
+		super();
+		this[$observer] = new MutationObserver(handleRecords.bind(null, this));
+		this[$invalidated] = true;
+		this[$value] = "";
+		const shadow = this.attachShadow({mode: "open"});
+		const style = document.createElement("style");
+		style.textContent = css;
+		shadow.appendChild(style);
+		const slot = document.createElement("slot");
+		// See the attributeChangedCallback to understand why we set the
+		// contentEditable here.
+		slot.contentEditable = this.contentEditable;
+		shadow.appendChild(slot);
+	}
+
+	connectedCallback() {
+		// TODO: listen to attributes like contenteditable, data-contentbefore, data-content
+		this[$observer].observe(this, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+	}
+
+	disconnectedCallback() {
+		this[$observer].disconnect();
+		this[$invalidated] = true;
+		// JSDOM-based environments like jest will make the global document null
+		// before calling the disconnectedCallback.
+		if (document) {
+			clean(this);
+		}
+	}
+
+	attributeChangedCallback(
+		name: string,
+		//oldValue: string,
+		//newValue: string,
+	) {
+		switch (name) {
+			case "contenteditable": {
+				const slot = this.shadowRoot!.querySelector("slot")!;
+				// We have to set slot.contentEditable to this.contentEditable because
+				// Chrome has trouble selecting elements across shadow DOM boundaries.
+				// See https://bugs.chromium.org/p/chromium/issues/detail?id=1175930
+				slot.contentEditable = this.contentEditable;
+				break;
+			}
+		}
+	}
+
+	get value(): string {
+		validate(this);
+		return this[$value];
+	}
+
+	get selectionStart(): number {
+		throw "TODO";
+	}
+
+	set selectionStart(value: number) {
+		throw "TODO";
+	}
+
+	get selectionEnd(): number {
+		throw "TODO";
+	}
+
+	set selectionEnd(value: number) {
+		throw "TODO";
+	}
+
+	get selectionDirection(): SelectionDirection {
+		throw "TODO";
+	}
+
+	set selectionDirection(value: SelectionDirection) {
+		throw "TODO";
+	}
+
+	setSelectionRange(
+		//start: number,
+		//end: number,
+		//direction: SelectionDirection = "none",
+	): void {
+		throw "TODO";
+	}
+}
+
+function validate(area: ContentAreaElement): void {
+	handleRecords(area, area[$observer].takeRecords());
+	if (area[$invalidated]) {
+		area[$value] = getContent(area, area[$value]);
+		area[$invalidated] = false;
+	}
+}
+
+function handleRecords(
+	area: ContentAreaElement,
+	records: Array<MutationRecord>,
+): void {
+	if (records.length) {
+		area[$invalidated] = true;
+		invalidate(area, records);
+	}
+}
+
+// TODO: Mutations in non-contenteditable widgets should be ignored.
+// TODO: Mutations in nested contenteditables should be ignored.
+// TODO: Figure out how to limit the amount of work we need to do with
+// getContent by actually reading mutation records themselves.
+// TODO: Figure out what records we should emit.
+// TODO: Integrate with an undo stack of some kind.
+export interface ContentRecord {
+	type: "content" | "cursor";
+	root: Node;
+	patch: Patch | null;
+	content: string;
+	contentOldValue: string | null;
+	cursor: Cursor;
+	cursorOldValue: Cursor | null;
+}
+
+// Maybe we can base this abstraction around the custom elements.
+export class ContentObserver {
+	_callback: (record: ContentRecord) => unknown;
+	_root: Node | null;
+	_content: string | null;
+	_cursor: Cursor;
+	_mutationObserver: MutationObserver;
+	_onselectionchange: () => unknown;
+	constructor(callback: (record: ContentRecord) => unknown) {
+		this._root = null;
+		this._content = null;
+		this._cursor = -1;
+		this._callback = callback;
+		this._mutationObserver = new MutationObserver((records) => {
+			const root = this._root;
+			if (!root) {
+				return;
+			}
+
+			invalidate(root, records);
+			const contentOldValue = this._content || null;
+			const cursorOldValue = this._cursor;
+			const content = getContent(root, contentOldValue || "");
+			const cursor = cursorFromSelection(root, document.getSelection());
+			this._content = content;
+			this._cursor = cursor;
+			const patch = Patch.diff(
+				contentOldValue || "",
+				content,
+				Math.min(...[cursorOldValue, cursor].flat()),
+			);
+			this._callback({
+				type: "content",
+				root,
+				patch,
+				content,
+				contentOldValue,
+				cursor,
+				cursorOldValue,
+			});
+		});
+
+		// TODO: Don’t call the constructor callback if the selection has not changed.
+		this._onselectionchange = () => {
+			// We have to execute this code in a microtask callback or
+			// contenteditables become uneditable in Safari.
+			// (but only when the console is closed???)
+			queueMicrotask(() => {
+				const root = this._root;
+				if (!root) {
+					return;
+				}
+
+				const cursor = cursorFromSelection(root, document.getSelection());
+				this._cursor = cursor;
+				this._callback({
+					type: "cursor",
+					root,
+					patch: null,
+					content: this._content!,
+					contentOldValue: null,
+					cursor,
+					cursorOldValue: null,
+				});
+			});
+		};
+	}
+
+	// TODO: Pass in intended content to observe so we can get an initial diff?
+	observe(root: Node) {
+		this._content = getContent(root);
+		this._mutationObserver.observe(root, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+			// TODO: We need to listen to attribute changes for widgets.
+		});
+		document.addEventListener("selectionchange", this._onselectionchange);
+		this._root = root;
+	}
+
+	disconnect() {
+		this._root = null;
+		this._content = null;
+		this._cursor = -1;
+		this._mutationObserver.disconnect();
+		// TODO: only remove the event listener if all roots are disconnected.
+		document.removeEventListener("selectionchange", this._onselectionchange);
+	}
+
+	repair(callback: Function): void {
+		const root = this._root;
+		if (!root) {
+			return;
+		}
+
+		const selection = document.getSelection();
+		const cursor = cursorFromSelection(root, selection);
+		callback();
+		invalidate(root, this._mutationObserver.takeRecords());
+		getContent(root, this._content || undefined);
+		setSelection(selection, root, cursor);
 	}
 }
