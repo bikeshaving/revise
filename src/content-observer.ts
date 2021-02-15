@@ -20,8 +20,7 @@ declare global {
 	}
 }
 
-// TODO: stop hardcoding this so we can have \r\n documents?
-// Alternatively we can always default to \n documents.
+// TODO: CUSTOM NEWLINES????????????
 const NEWLINE = "\n";
 
 const BLOCKLIKE_ELEMENTS = new Set([
@@ -154,7 +153,7 @@ export function getContent(root: Node, contentOldValue?: string): string {
 			} else if (
 				!hasNewline &&
 				isBlocklikeElement(node) &&
-				(node === root || node.firstChild)
+				node.firstChild !== null
 			) {
 				content += NEWLINE;
 				offset += NEWLINE.length;
@@ -182,7 +181,7 @@ export function getContent(root: Node, contentOldValue?: string): string {
 	return content;
 }
 
-function clean(root: Node) {
+function clean(root: Node): void {
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -239,16 +238,13 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	}
 }
 
-export type NodeOffset = [Node | null, number];
-
-export type Cursor = [number, number] | number;
-
 // TODO: Should we be exporting this???
 export function indexFromNodeOffset(
 	root: Node,
 	node: Node | null,
 	offset: number,
 ): number {
+	debugger;
 	if (
 		node == null ||
 		!root.contains(node) ||
@@ -260,7 +256,10 @@ export function indexFromNodeOffset(
 	let index = offset;
 	if (node.nodeType === Node.ELEMENT_NODE) {
 		if (offset >= node.childNodes.length) {
-			index = node[ContentLength] || 0;
+			// Handling an edge case where node is a br element and offset is zero.
+			if (offset > 0) {
+				index = node[ContentLength] || 0;
+			}
 		} else {
 			node = node.childNodes[offset];
 			index = 0;
@@ -272,7 +271,6 @@ export function indexFromNodeOffset(
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 	walker.currentNode = node;
-
 	while (node !== null && node !== root) {
 		const previousSibling = walker.previousSibling();
 		if (previousSibling === null) {
@@ -291,41 +289,7 @@ export function indexFromNodeOffset(
 	return index;
 }
 
-export function cursorFromSelection(
-	root: Node,
-	selection: Selection | null,
-): Cursor {
-	if (selection == null) {
-		return -1;
-	}
-
-	const focus = indexFromNodeOffset(
-		root,
-		selection.focusNode,
-		selection.focusOffset,
-	);
-
-	let anchor: number;
-	if (selection.isCollapsed) {
-		anchor = focus;
-	} else {
-		anchor = indexFromNodeOffset(
-			root,
-			selection.anchorNode,
-			selection.anchorOffset,
-		);
-	}
-
-	if (focus === -1) {
-		return anchor;
-	} else if (anchor === -1 || focus === anchor) {
-		return focus;
-	}
-
-	return [anchor, focus];
-}
-
-function createParentNodeOffset(node: Node): [Node, number] {
+function createParentNodeOffset(node: Node): [Node | null, number] {
 	const parentNode = node.parentNode;
 	if (parentNode === null) {
 		throw new Error("Node has no parent");
@@ -349,7 +313,10 @@ function findSuccessorNode(walker: TreeWalker): Node | null {
 	return null;
 }
 
-export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
+export function nodeOffsetFromIndex(
+	root: Node,
+	index: number,
+): [Node | null, number] {
 	if (index < 0) {
 		return [null, 0];
 	}
@@ -359,7 +326,6 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 	let node: Node | null = root;
-	walker.currentNode = node;
 	let offset = index;
 	while (node !== null) {
 		const length = node[ContentLength] || 0;
@@ -416,52 +382,47 @@ export function nodeOffsetFromIndex(root: Node, index: number): NodeOffset {
 	];
 }
 
-export function setSelection(
-	selection: Selection | null,
-	root: Node,
-	cursor: Cursor,
-): void {
-	if (!selection) {
-		return;
-	}
+export type SelectionDirection = "forward" | "backward" | "none";
 
-	const anchor = typeof cursor === "number" ? cursor : cursor[0];
-	const focus = typeof cursor === "number" ? cursor : cursor[1];
-	if (anchor === focus) {
-		const [node, offset] = nodeOffsetFromIndex(root, focus);
-		if (
-			// Chrome seems to draw selections which point to a BR element incorrectly
-			// when there are two adjacent BR elements and one has been deleted
-			// backward, so we force a redraw of the selection.
-			(node &&
-				node.nodeType === Node.ELEMENT_NODE &&
-				node.childNodes[offset] &&
-				node.childNodes[offset].nodeName === "BR") ||
-			selection.focusNode !== node ||
-			selection.focusOffset !== offset
-		) {
-			selection.collapse(node, offset);
-		}
-
-		return;
-	}
-
-	const [anchorNode, anchorOffset] = nodeOffsetFromIndex(root, anchor);
-	const [focusNode, focusOffset] = nodeOffsetFromIndex(root, focus);
-	if (anchorNode === null && focusNode === null) {
-		selection.collapse(null);
-	} else if (anchorNode === null) {
-		selection.collapse(focusNode, focusOffset);
-	} else if (focusNode === null) {
-		selection.collapse(anchorNode, anchorOffset);
-	} else {
-		const range = selection.getRangeAt(0);
-		range.setStart(focusNode, focusOffset);
-		range.setEnd(anchorNode, anchorOffset);
-	}
+export interface SelectionInfo {
+	selectionStart: number;
+	selectionEnd: number;
+	selectionDirection: SelectionDirection;
 }
 
-export type SelectionDirection = "forward" | "backward" | "none";
+function getSelectionInfo(area: ContentAreaElement): SelectionInfo {
+	const selection = document.getSelection();
+	if (selection === null) {
+		return area[$selectionInfo];
+	}
+
+	const focus = indexFromNodeOffset(
+		area,
+		selection.focusNode,
+		selection.focusOffset,
+	);
+
+	let anchor: number;
+	if (selection.isCollapsed) {
+		anchor = focus;
+	} else {
+		anchor = indexFromNodeOffset(
+			area,
+			selection.anchorNode,
+			selection.anchorOffset,
+		);
+	}
+
+	if (focus === -1 || anchor === -1) {
+		return area[$selectionInfo];
+	}
+
+	const selectionStart = Math.min(focus, anchor);
+	const selectionEnd = Math.max(focus, anchor);
+	const selectionDirection: SelectionDirection =
+		focus === anchor ? "none" : focus < anchor ? "backward" : "forward";
+	return {selectionStart, selectionEnd, selectionDirection};
+}
 
 // TODO: incorporate this code somewhere.
 //let undoing = false;
@@ -485,20 +446,30 @@ export type SelectionDirection = "forward" | "backward" | "none";
 
 // TODO: maybe some of these properties can be moved to a hidden controller type
 // symbol properties
-const $observer = Symbol.for("ContentArea.$observer");
-const $invalidated = Symbol.for("ContentArea.$invalidated");
 const $value = Symbol.for("ContentArea.$value");
+const $observer = Symbol.for("ContentArea.$observer");
+const $selectionInfo = Symbol.for("ContentArea.$selectionInfo");
+const $onselectionchange = Symbol.for("ContentArea.$onselectionchange");
+const $slot = Symbol.for("ContentArea.$slot");
 const css = `
 :host {
 	display: contents;
-	white-space: pre-wrap;
 	white-space: break-spaces;
 }`;
 
+export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
+	// TODO: Align second parameter with other event constructors
+	constructor(typeArg: string, patch: Patch) {
+		super(typeArg, {detail: {patch}, bubbles: true});
+	}
+}
+
 export class ContentAreaElement extends HTMLElement {
-	[$observer]: MutationObserver;
-	[$invalidated]: boolean;
 	[$value]: string;
+	[$slot]: HTMLSlotElement;
+	[$selectionInfo]: SelectionInfo;
+	[$observer]: MutationObserver;
+	[$onselectionchange]: (ev: Event) => unknown;
 
 	static get observedAttributes(): Array<string> {
 		return ["contenteditable"];
@@ -506,18 +477,30 @@ export class ContentAreaElement extends HTMLElement {
 
 	constructor() {
 		super();
-		this[$observer] = new MutationObserver(handleRecords.bind(null, this));
-		this[$invalidated] = true;
 		this[$value] = "";
-		const shadow = this.attachShadow({mode: "open"});
+		this[$selectionInfo] = {
+			selectionStart: 0,
+			selectionEnd: 0,
+			selectionDirection: "none",
+		};
+		this[$observer] = new MutationObserver((records) =>
+			validate(this, records),
+		);
+		this[$onselectionchange] = () => validate(this);
+		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
 		shadow.appendChild(style);
 		const slot = document.createElement("slot");
-		// See the attributeChangedCallback to understand why we set the
-		// contentEditable here.
+		this[$slot] = slot;
 		slot.contentEditable = this.contentEditable;
 		shadow.appendChild(slot);
+		this.addEventListener("focusin", () => {
+			const {selectionStart, selectionEnd, selectionDirection} = this[
+				$selectionInfo
+			];
+			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
+		});
 	}
 
 	connectedCallback() {
@@ -527,15 +510,16 @@ export class ContentAreaElement extends HTMLElement {
 			childList: true,
 			characterData: true,
 		});
+		document.addEventListener("selectionchange", this[$onselectionchange]);
 	}
 
 	disconnectedCallback() {
 		this[$observer].disconnect();
-		this[$invalidated] = true;
 		// JSDOM-based environments like jest will make the global document null
 		// before calling the disconnectedCallback.
 		if (document) {
 			clean(this);
+			document.removeEventListener("selectionchange", this[$onselectionchange]);
 		}
 	}
 
@@ -546,10 +530,13 @@ export class ContentAreaElement extends HTMLElement {
 	) {
 		switch (name) {
 			case "contenteditable": {
-				const slot = this.shadowRoot!.querySelector("slot")!;
+				const slot = this[$slot];
 				// We have to set slot.contentEditable to this.contentEditable because
 				// Chrome has trouble selecting elements across shadow DOM boundaries.
 				// See https://bugs.chromium.org/p/chromium/issues/detail?id=1175930
+
+				// Chrome has additional issues with using the host element as a
+				// contenteditable element but this normalizes some behavior.
 				slot.contentEditable = this.contentEditable;
 				break;
 			}
@@ -562,173 +549,127 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get selectionStart(): number {
-		throw "TODO";
+		return this[$selectionInfo].selectionStart;
 	}
 
-	set selectionStart(value: number) {
-		throw "TODO";
+	set selectionStart(selectionStart: number) {
+		const {selectionEnd, selectionDirection} = this[$selectionInfo];
+		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 	}
 
 	get selectionEnd(): number {
-		throw "TODO";
+		return this[$selectionInfo].selectionEnd;
 	}
 
-	set selectionEnd(value: number) {
-		throw "TODO";
+	set selectionEnd(selectionEnd: number) {
+		const {selectionStart, selectionDirection} = this[$selectionInfo];
+		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 	}
 
 	get selectionDirection(): SelectionDirection {
-		throw "TODO";
+		return this[$selectionInfo].selectionDirection;
 	}
 
-	set selectionDirection(value: SelectionDirection) {
-		throw "TODO";
+	set selectionDirection(selectionDirection: SelectionDirection) {
+		const {selectionStart, selectionEnd} = this[$selectionInfo];
+		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 	}
 
 	setSelectionRange(
-		//start: number,
-		//end: number,
-		//direction: SelectionDirection = "none",
+		selectionStart: number,
+		selectionEnd: number,
+		selectionDirection: SelectionDirection = "none",
 	): void {
-		throw "TODO";
-	}
-}
-
-function validate(area: ContentAreaElement): void {
-	handleRecords(area, area[$observer].takeRecords());
-	if (area[$invalidated]) {
-		area[$value] = getContent(area, area[$value]);
-		area[$invalidated] = false;
-	}
-}
-
-function handleRecords(
-	area: ContentAreaElement,
-	records: Array<MutationRecord>,
-): void {
-	if (records.length) {
-		area[$invalidated] = true;
-		invalidate(area, records);
-	}
-}
-
-// TODO: Mutations in non-contenteditable widgets should be ignored.
-// TODO: Mutations in nested contenteditables should be ignored.
-// TODO: Figure out how to limit the amount of work we need to do with
-// getContent by actually reading mutation records themselves.
-// TODO: Figure out what records we should emit.
-// TODO: Integrate with an undo stack of some kind.
-export interface ContentRecord {
-	type: "content" | "cursor";
-	root: Node;
-	patch: Patch | null;
-	content: string;
-	contentOldValue: string | null;
-	cursor: Cursor;
-	cursorOldValue: Cursor | null;
-}
-
-// Maybe we can base this abstraction around the custom elements.
-export class ContentObserver {
-	_callback: (record: ContentRecord) => unknown;
-	_root: Node | null;
-	_content: string | null;
-	_cursor: Cursor;
-	_mutationObserver: MutationObserver;
-	_onselectionchange: () => unknown;
-	constructor(callback: (record: ContentRecord) => unknown) {
-		this._root = null;
-		this._content = null;
-		this._cursor = -1;
-		this._callback = callback;
-		this._mutationObserver = new MutationObserver((records) => {
-			const root = this._root;
-			if (!root) {
-				return;
-			}
-
-			invalidate(root, records);
-			const contentOldValue = this._content || null;
-			const cursorOldValue = this._cursor;
-			const content = getContent(root, contentOldValue || "");
-			const cursor = cursorFromSelection(root, document.getSelection());
-			this._content = content;
-			this._cursor = cursor;
-			const patch = Patch.diff(
-				contentOldValue || "",
-				content,
-				Math.min(...[cursorOldValue, cursor].flat()),
-			);
-			this._callback({
-				type: "content",
-				root,
-				patch,
-				content,
-				contentOldValue,
-				cursor,
-				cursorOldValue,
-			});
-		});
-
-		// TODO: Don’t call the constructor callback if the selection has not changed.
-		this._onselectionchange = () => {
-			// We have to execute this code in a microtask callback or
-			// contenteditables become uneditable in Safari.
-			// (but only when the console is closed???)
-			queueMicrotask(() => {
-				const root = this._root;
-				if (!root) {
-					return;
-				}
-
-				const cursor = cursorFromSelection(root, document.getSelection());
-				this._cursor = cursor;
-				this._callback({
-					type: "cursor",
-					root,
-					patch: null,
-					content: this._content!,
-					contentOldValue: null,
-					cursor,
-					cursorOldValue: null,
-				});
-			});
-		};
-	}
-
-	// TODO: Pass in intended content to observe so we can get an initial diff?
-	observe(root: Node) {
-		this._content = getContent(root);
-		this._mutationObserver.observe(root, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-			// TODO: We need to listen to attribute changes for widgets.
-		});
-		document.addEventListener("selectionchange", this._onselectionchange);
-		this._root = root;
-	}
-
-	disconnect() {
-		this._root = null;
-		this._content = null;
-		this._cursor = -1;
-		this._mutationObserver.disconnect();
-		// TODO: only remove the event listener if all roots are disconnected.
-		document.removeEventListener("selectionchange", this._onselectionchange);
-	}
-
-	repair(callback: Function): void {
-		const root = this._root;
-		if (!root) {
+		const selection = document.getSelection();
+		if (!selection) {
 			return;
 		}
 
-		const selection = document.getSelection();
-		const cursor = cursorFromSelection(root, selection);
-		callback();
-		invalidate(root, this._mutationObserver.takeRecords());
-		getContent(root, this._content || undefined);
-		setSelection(selection, root, cursor);
+		validate(this);
+		const length = this[$value].length;
+		selectionStart = selectionStart || 0;
+		selectionEnd = selectionEnd || 0;
+		selectionStart = Math.max(0, Math.min(selectionStart, length));
+		selectionEnd = Math.max(0, Math.min(selectionEnd, length));
+		if (selectionEnd < selectionStart) {
+			selectionStart = selectionEnd;
+		}
+
+		let anchor: number;
+		let focus: number;
+		if (selectionDirection === "backward") {
+			anchor = selectionEnd;
+			focus = selectionStart;
+		} else {
+			anchor = selectionStart;
+			focus = selectionEnd;
+		}
+
+		if (anchor === focus) {
+			const [node, offset] = nodeOffsetFromIndex(this, focus);
+			if (
+				selection.focusNode !== node ||
+				selection.focusOffset !== offset ||
+				// Chrome seems to draw collapsed selections which point to a BR element
+				// incorrectly when there are two adjacent BR elements and one has been
+				// deleted backward, so we force a redraw of the selection.
+				(node &&
+					node.nodeType === Node.ELEMENT_NODE &&
+					node.childNodes[offset] &&
+					node.childNodes[offset].nodeName === "BR")
+			) {
+				selection.collapse(node, offset);
+			}
+		} else {
+			const [anchorNode, anchorOffset] = nodeOffsetFromIndex(this, anchor);
+			const [focusNode, focusOffset] = nodeOffsetFromIndex(this, focus);
+			if (anchorNode === null && focusNode === null) {
+				selection.collapse(null);
+			} else if (anchorNode === null) {
+				selection.collapse(focusNode, focusOffset);
+			} else if (focusNode === null) {
+				selection.collapse(anchorNode, anchorOffset);
+			} else {
+				// TODO: IE support or nah?
+				selection.setBaseAndExtent(
+					anchorNode,
+					anchorOffset,
+					focusNode,
+					focusOffset,
+				);
+			}
+		}
+	}
+}
+
+function validate(
+	area: ContentAreaElement,
+	records?: Array<MutationRecord> | undefined,
+	skip: boolean = false,
+): void {
+	if (records === undefined) {
+		records = area[$observer].takeRecords();
+	}
+	invalidate(area, records);
+	const oldValue = area[$value];
+	const oldSelectionInfo = area[$selectionInfo];
+	const value = (area[$value] = getContent(area, area[$value]));
+	const selectionInfo = (area[$selectionInfo] = getSelectionInfo(area));
+	if (records.length && !skip) {
+		const patch = Patch.diff(
+			oldValue,
+			value,
+			Math.min(oldSelectionInfo.selectionStart, selectionInfo.selectionStart),
+		);
+		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
+		const records1 = area[$observer].takeRecords();
+		if (records1.length || true) {
+			validate(area, records1, true);
+			area.setSelectionRange(
+				selectionInfo.selectionStart,
+				selectionInfo.selectionEnd,
+				selectionInfo.selectionDirection,
+			);
+		}
 	}
 }

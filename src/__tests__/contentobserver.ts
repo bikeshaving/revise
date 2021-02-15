@@ -196,9 +196,7 @@ describe("incremental", () => {
 	});
 
 	test("text", () => {
-		const node = parseHTML(
-			"<div><div>12</div><div>56</div></div>",
-		);
+		const node = parseHTML("<div><div>12</div><div>56</div></div>");
 
 		const observer = new MutationObserver(() => {});
 		observer.observe(node, {
@@ -428,5 +426,22 @@ describe("nodeOffset/index conversions", () => {
 				Math.max(-1, Math.min(i, content.length)),
 			);
 		}
+	});
+
+	test("single br", () => {
+		const node = parseHTML("<div><br></div>");
+		const content = getContent(node);
+		expect(content).toEqual("\n");
+		expect(nodeOffsetFromIndex(node, -2)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, -1)).toEqual([null, 0]);
+		expect(nodeOffsetFromIndex(node, 0)).toEqual([node, 0]);
+		expect(nodeOffsetFromIndex(node, 1)).toEqual([node, 1]);
+		for (let i = -3; i < content.length + 3; i++) {
+			expect(indexFromNodeOffset(node, ...nodeOffsetFromIndex(node, i))).toBe(
+				Math.max(-1, Math.min(i, content.length)),
+			);
+		}
+
+		expect(indexFromNodeOffset(node, node.firstChild, 0)).toEqual(0);
 	});
 });
