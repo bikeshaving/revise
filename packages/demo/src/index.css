@@ -1,3 +1,7 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   background: #0c1227;
@@ -5,10 +9,6 @@ body {
   font-family: sans-serif;
   overflow-y: scroll;
   overflow-x: hidden;
-}
-
-* {
-  box-sizing: border-box;
 }
 
 .app {
@@ -22,23 +22,9 @@ body {
   tab-size: 2;
 }
 
-.editor > div {
-  margin: 30px;
-  padding: 15px;
-  border: none;
-  outline: none;
-  background-color: #2d2d2d;
-  white-space: pre-wrap;
-  white-space: break-spaces;
-}
-
-.editor > pre {
+.block {
+  display: block;
   margin: 30px;
   padding: 15px;
   background-color: #2d2d2d;
-}
-
-.editor pre {
-  white-space: pre-wrap;
-  white-space: break-spaces;
 }

@@ -11,4 +11,8 @@ module.exports = {
   packageOptions: {
     installTypes: true,
   },
+  "devOptions": {
+    "open": "none",
+    "hmrErrorOverlay": false,
+  },
 };

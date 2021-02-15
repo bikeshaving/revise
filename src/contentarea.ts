@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import {Patch} from "./patch";
 
 // TODO: Use a map instead of symbol properties?
@@ -67,6 +68,7 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
+// TODO: Stop exporting this function
 // TODO: It might be faster to construct a patch rather than concatenating a string.
 export function getContent(root: Node, contentOldValue?: string): string {
 	if (contentOldValue && typeof root[ContentLength] !== "undefined") {
@@ -192,6 +194,7 @@ function clean(root: Node): void {
 	}
 }
 
+// TODO: Stop exporting this function
 /**
  * Given an observed root, and an array of mutation records, this function
  * invalidates nodes which have changed by deleting the ContentOffset and
@@ -238,13 +241,12 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	}
 }
 
-// TODO: Should we be exporting this???
+// TODO: Stop exporting this function
 export function indexFromNodeOffset(
 	root: Node,
 	node: Node | null,
 	offset: number,
 ): number {
-	debugger;
 	if (
 		node == null ||
 		!root.contains(node) ||
@@ -313,6 +315,7 @@ function findSuccessorNode(walker: TreeWalker): Node | null {
 	return null;
 }
 
+// TODO: Stop exporting this function
 export function nodeOffsetFromIndex(
 	root: Node,
 	index: number,
@@ -645,7 +648,6 @@ export class ContentAreaElement extends HTMLElement {
 function validate(
 	area: ContentAreaElement,
 	records?: Array<MutationRecord> | undefined,
-	skip: boolean = false,
 ): void {
 	if (records === undefined) {
 		records = area[$observer].takeRecords();
@@ -655,21 +657,24 @@ function validate(
 	const oldSelectionInfo = area[$selectionInfo];
 	const value = (area[$value] = getContent(area, area[$value]));
 	const selectionInfo = (area[$selectionInfo] = getSelectionInfo(area));
-	if (records.length && !skip) {
+	if (records.length) {
 		const patch = Patch.diff(
 			oldValue,
 			value,
 			Math.min(oldSelectionInfo.selectionStart, selectionInfo.selectionStart),
 		);
 		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
+		// TODO: Handle infinite loops due to infinite mutations.
 		const records1 = area[$observer].takeRecords();
-		if (records1.length || true) {
-			validate(area, records1, true);
-			area.setSelectionRange(
-				selectionInfo.selectionStart,
-				selectionInfo.selectionEnd,
-				selectionInfo.selectionDirection,
-			);
+		if (records1.length) {
+			validate(area, records1);
+			if (value === area[$value]) {
+				area.setSelectionRange(
+					selectionInfo.selectionStart,
+					selectionInfo.selectionEnd,
+					selectionInfo.selectionDirection,
+				);
+			}
 		}
 	}
 }

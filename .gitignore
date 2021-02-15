@@ -5,6 +5,6 @@ lib
 *.log
 subseq.js
 patch.js
-content-observer.js
+contentarea.js
 *.js.map
 *.d.ts

@@ -10,14 +10,9 @@ Prism.manual = true;
 import { splitLines } from './prism-utils';
 import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
-import type {Cursor} from '@bikeshaving/revise/content-observer.js';
 import type {Patch} from '@bikeshaving/revise/patch.js';
-import {
-  ContentObserver,
-  indexFromNodeOffset,
-  nodeOffsetFromIndex,
-  setSelection,
-} from '@bikeshaving/revise/content-observer.js';
+import {ContentAreaElement, ContentChangeEvent} from '@bikeshaving/revise/contentarea.js';
+window.customElements.define("content-area", ContentAreaElement);
 
 function printTokens(tokens: Array<Token | string>): Array<Child> {
   const result: Array<Child> = [];
@@ -46,8 +41,11 @@ function printLines(
     const length = line.reduce((l, t) => l + t.length, 0);
     i += length + 1;
     return (
-      <div data-key={key} crank-key={key}>
+      <div crank-key={key}>
         <code>{line.length ? printTokens(line) : <br />}</code>
+        {/*
+        {line.length ? <code>{printTokens(line)}</code> : <br />}
+        */}
       </div>
     );
   });
@@ -102,7 +100,7 @@ class Keyer {
     return this._keys[i];
   }
 
-  handlePatch(patch: Patch): void {
+  ingest(patch: Patch): void {
     const operations = patch.operations();
     for (let i = operations.length - 1; i >= 0; i--) {
       const op = operations[i];
@@ -126,76 +124,84 @@ class Keyer {
   }
 }
 
+declare global {
+  module Crank {
+    interface EventMap {
+      "contentchange": ContentChangeEvent;
+    }
+  }
+}
+
 function* Editable(this: Context, { children }: any) {
-  let content = '\n';
-  let cursor: Cursor = -1;
-  let operations: string | undefined;
+  let content = "\n";
   let el: any;
   const keyer = new Keyer(content.length);
-  const observer = new ContentObserver(
-    (record) => {
-      switch (record.type) {
-        case "cursor": {
-          if (cursor !== record.cursor) {
-            cursor = record.cursor;
-            //this.refresh();
-          }
-          break;
-        }
-        case "content": {
-          if (content !== record.content) {
-            const patch = record.patch;
-            if (patch) {
-              keyer.handlePatch(patch);
-            }
+  this.addEventListener("contentchange", (ev) => {
+    content = (ev.target as ContentAreaElement).value;
+    keyer.ingest(ev.detail.patch);
+    this.refresh();
+  });
 
-            cursor = record.cursor;
-            content = record.content;
-          }
-
-          observer.repair(() => this.refresh());
-          break;
-        }
-      }
-    },
-  );
-
+  let initial = true;
+  let html = "";
   this.schedule(() => {
-    observer.observe(el!);
+    html = el.innerHTML;
     this.refresh();
   });
 
   try {
     for ({} of this) {
+      this.schedule(() => {
+        if (html !== el.innerHTML) {
+          html = el.innerHTML;
+          this.refresh();
+        }
+      });
       yield (
         <div class="editor">
-          <pre
-            crank-ref={(el1: Node) => (el = el1)}
-            contenteditable="true"
-            spellcheck={false}
-          >
-            {parse(content, keyer)}
-          </pre>
+          {
+            initial ? (
+              <content-area
+                spellcheck={false}
+                crank-ref={(el1: Node) => (el = el1)}
+              >
+                <div contenteditable="true" class="block">
+                  {print(content, keyer)}
+                </div>
+              </content-area>
+            ) : <Copy />
+          }
           {/*
-          <div
-            crank-ref={(el1: Node) => (el = el1)}
-            contenteditable="true"
-            spellcheck={false}
-          >
-            {print(content, keyer)}
-          </div>
+          {
+            initial || true ? (
+              <content-area
+                spellcheck={false}
+                crank-ref={(el1: Node) => (el = el1)}
+              >
+                <pre
+                  class="block"
+                  crank-ref={(el1: Node) => (el = el1)}
+                  contenteditable="true"
+                  spellcheck={false}
+                >
+                  {parse(content, keyer)}
+                </pre>
+              </content-area>
+            ) : <Copy />
+          }
           */}
+          <div class="block">Content: <pre style="white-space: pre-wrap">{JSON.stringify(content)}</pre></div>
+          <div class="block">HTML: <pre style="white-space: pre-wrap">{html}</pre></div>
           {/*
-          <div>HTML: <pre>{el && el.innerHTML}</pre></div>
-          <div>Content: <pre>{JSON.stringify(content)}</pre></div>
-          <div>Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
-          <div>Operations: <pre>{operations}</pre></div>
+          <div class="block">Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
+          <div class="block">Operations: <pre>{operations}</pre></div>
           */}
         </div>
       );
+      initial = false;
     }
   } finally {
-    observer.disconnect();
+    //observer.disconnect();
   }
 }
 
