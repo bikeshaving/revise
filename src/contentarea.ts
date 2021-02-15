@@ -70,13 +70,13 @@ function isBlocklikeElement(node: Node): node is Element {
 
 // TODO: Stop exporting this function
 // TODO: It might be faster to construct a patch rather than concatenating a string.
-export function getContent(root: Node, contentOldValue?: string): string {
-	if (contentOldValue && typeof root[ContentLength] !== "undefined") {
-		if (contentOldValue.length !== root[ContentLength]) {
-			throw new Error("contentOldValue does not match root length");
+export function getContent(root: Node, oldValue?: string): string {
+	if (oldValue && typeof root[ContentLength] !== "undefined") {
+		if (oldValue.length !== root[ContentLength]) {
+			throw new Error("oldValue does not match root length");
 		}
 
-		return contentOldValue;
+		return oldValue;
 	}
 
 	const walker = document.createTreeWalker(
@@ -96,7 +96,7 @@ export function getContent(root: Node, contentOldValue?: string): string {
 	const seen = new Set<Node>();
 	for (let node: Node | null = root; node !== null; ) {
 		if (!seen.has(node)) {
-			while (!contentOldValue || typeof node[ContentLength] === "undefined") {
+			while (!oldValue || typeof node[ContentLength] === "undefined") {
 				node[ContentOffset] = offset;
 				const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
 				if (newlineBefore) {
@@ -123,7 +123,7 @@ export function getContent(root: Node, contentOldValue?: string): string {
 			}
 		}
 
-		if (contentOldValue && typeof node[ContentLength] !== "undefined") {
+		if (oldValue && typeof node[ContentLength] !== "undefined") {
 			const oldOffset = oldIndex - oldIndexRelative;
 			if (oldOffset < node[ContentOffset]!) {
 				// A deletion has been detected.
@@ -133,7 +133,7 @@ export function getContent(root: Node, contentOldValue?: string): string {
 			// Set the offset to the new offset
 			node[ContentOffset] = offset;
 			const length = node[ContentLength]!;
-			const content1 = contentOldValue.slice(oldIndex, oldIndex + length);
+			const content1 = oldValue.slice(oldIndex, oldIndex + length);
 			if (content1.length !== length) {
 				throw new Error("String length mismatch");
 			}
