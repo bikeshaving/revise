@@ -149,59 +149,55 @@ function* Editable(this: Context, { children }: any) {
     this.refresh();
   });
 
-  try {
-    for ({} of this) {
-      this.schedule(() => {
-        if (html !== el.innerHTML) {
-          html = el.innerHTML;
-          this.refresh();
+  for ({} of this) {
+    this.schedule(() => {
+      if (html !== el.innerHTML) {
+        html = el.innerHTML;
+        this.refresh();
+      }
+    });
+    yield (
+      <div class="editor">
+        {
+          initial || true ? (
+            <content-area
+              spellcheck={false}
+              crank-ref={(el1: Node) => (el = el1)}
+            >
+              <div contenteditable="true" class="block">
+                {print(content, keyer)}
+              </div>
+            </content-area>
+          ) : <Copy />
         }
-      });
-      yield (
-        <div class="editor">
-          {
-            initial ? (
-              <content-area
-                spellcheck={false}
+        {/*
+        {
+          initial || true ? (
+            <content-area
+              spellcheck={false}
+              crank-ref={(el1: Node) => (el = el1)}
+            >
+              <pre
+                class="block"
                 crank-ref={(el1: Node) => (el = el1)}
-              >
-                <div contenteditable="true" class="block">
-                  {print(content, keyer)}
-                </div>
-              </content-area>
-            ) : <Copy />
-          }
-          {/*
-          {
-            initial || true ? (
-              <content-area
+                contenteditable="true"
                 spellcheck={false}
-                crank-ref={(el1: Node) => (el = el1)}
               >
-                <pre
-                  class="block"
-                  crank-ref={(el1: Node) => (el = el1)}
-                  contenteditable="true"
-                  spellcheck={false}
-                >
-                  {parse(content, keyer)}
-                </pre>
-              </content-area>
-            ) : <Copy />
-          }
-          */}
-          <div class="block">Content: <pre style="white-space: pre-wrap">{JSON.stringify(content)}</pre></div>
-          <div class="block">HTML: <pre style="white-space: pre-wrap">{html}</pre></div>
-          {/*
-          <div class="block">Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
-          <div class="block">Operations: <pre>{operations}</pre></div>
-          */}
-        </div>
-      );
-      initial = false;
-    }
-  } finally {
-    //observer.disconnect();
+                {parse(content, keyer)}
+              </pre>
+            </content-area>
+          ) : <Copy />
+        }
+        */}
+        <div class="block">Content: <pre style="white-space: pre-wrap">{JSON.stringify(content)}</pre></div>
+        <div class="block">HTML: <pre style="white-space: pre-wrap">{html}</pre></div>
+        {/*
+        <div class="block">Cursor: <pre>{JSON.stringify(cursor)}</pre></div>
+        <div class="block">Operations: <pre>{operations}</pre></div>
+        */}
+      </div>
+    );
+    initial = false;
   }
 }
 

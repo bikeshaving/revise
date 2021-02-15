@@ -444,6 +444,7 @@ describe("nodeOffset/index conversions", () => {
 			);
 		}
 
+		// TODO: fix this edge case
 		expect(indexFromNodeOffset(node, node.firstChild, 0)).toEqual(0);
 	});
 });

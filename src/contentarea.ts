@@ -199,6 +199,8 @@ function clean(root: Node): void {
  * Given an observed root, and an array of mutation records, this function
  * invalidates nodes which have changed by deleting the ContentOffset and
  * ContentLength properties from them.
+ *
+ * @returns a boolean indicating whether or not the DOM node has been invalidated
  */
 export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
@@ -258,8 +260,7 @@ export function indexFromNodeOffset(
 	let index = offset;
 	if (node.nodeType === Node.ELEMENT_NODE) {
 		if (offset >= node.childNodes.length) {
-			// Handling an edge case where node is a br element and offset is zero.
-			if (offset > 0) {
+			if (index > 0) {
 				index = node[ContentLength] || 0;
 			}
 		} else {
@@ -589,7 +590,10 @@ export class ContentAreaElement extends HTMLElement {
 		}
 
 		validate(this);
-		const length = this[$value].length;
+		// We bound selection range to the length of value minus the trailing
+		// newline because attempting to select after the first newline when there
+		// is only newline can cause the editable area to lose focus.
+		const length = this[$value].replace(/(\r|\n|\r\n)$/, "").length;
 		selectionStart = selectionStart || 0;
 		selectionEnd = selectionEnd || 0;
 		selectionStart = Math.max(0, Math.min(selectionStart, length));
@@ -629,17 +633,34 @@ export class ContentAreaElement extends HTMLElement {
 			if (anchorNode === null && focusNode === null) {
 				selection.collapse(null);
 			} else if (anchorNode === null) {
-				selection.collapse(focusNode, focusOffset);
+				if (
+					selection.focusNode !== focusNode ||
+					selection.focusOffset !== focusOffset
+				) {
+					selection.collapse(focusNode, focusOffset);
+				}
 			} else if (focusNode === null) {
-				selection.collapse(anchorNode, anchorOffset);
+				if (
+					selection.anchorNode !== anchorNode ||
+					selection.anchorOffset !== anchorOffset
+				) {
+					selection.collapse(anchorNode, anchorOffset);
+				}
 			} else {
-				// TODO: IE support or nah?
-				selection.setBaseAndExtent(
-					anchorNode,
-					anchorOffset,
-					focusNode,
-					focusOffset,
-				);
+				if (
+					selection.focusNode !== focusNode ||
+					selection.focusOffset !== focusOffset ||
+					selection.anchorNode !== anchorNode ||
+					selection.anchorOffset !== anchorOffset
+				) {
+					// TODO: IE support or nah?
+					selection.setBaseAndExtent(
+						anchorNode,
+						anchorOffset,
+						focusNode,
+						focusOffset,
+					);
+				}
 			}
 		}
 	}
@@ -652,6 +673,7 @@ function validate(
 	if (records === undefined) {
 		records = area[$observer].takeRecords();
 	}
+
 	invalidate(area, records);
 	const oldValue = area[$value];
 	const oldSelectionInfo = area[$selectionInfo];
@@ -664,17 +686,11 @@ function validate(
 			Math.min(oldSelectionInfo.selectionStart, selectionInfo.selectionStart),
 		);
 		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
-		// TODO: Handle infinite loops due to infinite mutations.
-		const records1 = area[$observer].takeRecords();
-		if (records1.length) {
-			validate(area, records1);
-			if (value === area[$value]) {
-				area.setSelectionRange(
-					selectionInfo.selectionStart,
-					selectionInfo.selectionEnd,
-					selectionInfo.selectionDirection,
-				);
-			}
-		}
+		// TODO: figure out how to deal with infinite validate loops.
+		area.setSelectionRange(
+			selectionInfo.selectionStart,
+			selectionInfo.selectionEnd,
+			selectionInfo.selectionDirection,
+		);
 	}
 }
