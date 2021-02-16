@@ -392,6 +392,7 @@ export class ContentAreaElement extends HTMLElement {
 		this[$slot] = slot;
 		slot.contentEditable = this.contentEditable;
 		shadow.appendChild(slot);
+
 		this.addEventListener("focusin", () => {
 			const {selectionStart, selectionEnd, selectionDirection} = this[
 				$selectionInfo
