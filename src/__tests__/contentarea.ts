@@ -17,253 +17,7 @@ function parseHTML(text: string): Node {
 	return fragment.firstChild!;
 }
 
-// TODO: Make all tests rely on the contentarea element and stop importing other functions
-describe("content", () => {
-	test("divs basic", () => {
-		const node = parseHTML("<div><div>Hello</div><div>World</div></div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("divs with trailing brs", () => {
-		const node = parseHTML("<div>Hello<br /></div><div>World<br /></div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("nested divs", () => {
-		const node = parseHTML("<div><div>Hello</div><div>World</div></div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("nested divs 1", () => {
-		const node = parseHTML(
-			"<div><div><div>Hello</div></div><div>World</div></div>",
-		);
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("br between divs", () => {
-		const node = parseHTML("<div><div>Hello</div><br /><div>World</div></div>");
-		expect(getContent(node)).toEqual("Hello\n\nWorld\n");
-	});
-
-	test("div before text", () => {
-		const node = parseHTML("<div><div>Hello</div>World</div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("div after text", () => {
-		const node = parseHTML("<div>Hello<div>World</div></div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("nested div before text", () => {
-		const node = parseHTML("<div><div><div>Hello</div></div>World</div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("nested div after text and spans", () => {
-		const node = parseHTML(
-			"<div><span>H</span>ell<span>o</span><div><div><span>W</span>orl<span>d</span></div></div></div>",
-		);
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("div br between text", () => {
-		const node = parseHTML("<div>Hello<div><br></div>World</div>");
-		expect(getContent(node)).toEqual("Hello\n\nWorld\n");
-	});
-
-	test("empty div", () => {
-		const node = parseHTML("<div></div>Hello<div>World</div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("empty div at the end", () => {
-		const node = parseHTML("<div>Hello<div>World</div><div></div></div>");
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-
-	test("span basic", () => {
-		const node = parseHTML("<span>Hello World</span>");
-		expect(getContent(node)).toEqual("Hello World");
-	});
-
-	test("span with br", () => {
-		const node = parseHTML("<span>Hello World<br /></span>");
-		expect(getContent(node)).toEqual("Hello World\n");
-	});
-
-	test("empty span with br at end of div", () => {
-		const node = parseHTML(
-			"<div>Hello<span><br /></span>World<span><br /></span></div>",
-		);
-		expect(getContent(node)).toEqual("Hello\nWorld\n");
-	});
-});
-
-describe("incremental", () => {
-	test("append div", () => {
-		const node = parseHTML("<div><div>12</div><div>34</div></div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n34\n");
-		node.appendChild(parseHTML("<div>56</div>"));
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n34\n56\n");
-	});
-
-	test("insert div between divs", () => {
-		const node = parseHTML("<div><div>12</div><div>56</div></div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n56\n");
-		node.insertBefore(parseHTML("<div>34</div>"), node.lastChild);
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n34\n56\n");
-	});
-
-	test("delete first div", () => {
-		const node = parseHTML("<div><div>12</div><div>34</div></div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n34\n");
-		node.childNodes[0].remove();
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("34\n");
-	});
-
-	test("delete second div", () => {
-		const node = parseHTML("<div><div>12</div><div>34</div></div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n34\n");
-		node.childNodes[1].remove();
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n");
-	});
-
-	test("delete div between existing divs", () => {
-		const node = parseHTML(
-			"<div><div>12</div><div>34</div><div>56</div></div>",
-		);
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n34\n56\n");
-		node.childNodes[1].remove();
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n56\n");
-	});
-
-	test("delete nested delete", () => {
-		const node = parseHTML(
-			"<div><div>12</div><div><div>34</div><div>56</div><div>78</div></div><div>90</div></div>",
-		);
-
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n34\n56\n78\n90\n");
-		node.childNodes[1].childNodes[1].remove();
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n34\n78\n90\n");
-	});
-
-	test("text", () => {
-		const node = parseHTML("<div><div>12</div><div>56</div></div>");
-
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n56\n");
-		const text1 = node.childNodes[0].firstChild! as Text;
-		const text2 = node.childNodes[1].firstChild! as Text;
-		text1.data = "123";
-		text2.data = "456";
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("123\n456\n");
-	});
-
-	test("add div after text", () => {
-		const node = parseHTML("<div>12</div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n");
-		node.appendChild(parseHTML("<div>34</div>"));
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n34\n");
-	});
-
-	test("delete div after text", () => {
-		const node = parseHTML("<div>12<div>34</div></div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n34\n");
-		node.removeChild(node.lastChild!);
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n");
-	});
-
-	test("delete br at the start of a div after text", () => {
-		const node = parseHTML("<div>12<div><br>34</div></div>");
-		const observer = new MutationObserver(() => {});
-		observer.observe(node, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		const content1 = getContent(node);
-		expect(content1).toEqual("12\n\n34\n");
-		node.lastChild!.firstChild!.remove();
-		invalidate(node, observer.takeRecords());
-		expect(getContent(node, content1)).toEqual("12\n34\n");
-	});
-});
-
-describe("nodeOffset/index conversions", () => {
+describe("nodeOffsetAt/indexOf", () => {
 	test("adjacent divs", () => {
 		const node = parseHTML("<div><div>hello</div><div>world</div></div>");
 		const content = getContent(node);
@@ -536,5 +290,94 @@ describe("contentarea", () => {
 		area.innerHTML =
 			"<div>Hello<span><br /></span>World<span><br /></span></div>";
 		expect(area.value).toEqual("Hello\nWorld\n");
+	});
+
+	test("overwriting innerHTML", () => {
+		area.innerHTML = "<div>12</div><div>34</div>";
+		expect(area.value).toEqual("12\n34\n");
+		area.innerHTML = area.innerHTML;
+		expect(area.value).toEqual("12\n34\n");
+	});
+
+	test("overwriting textContent", () => {
+		area.innerHTML = "<div>12</div><div>34</div>";
+		expect(area.value).toEqual("12\n34\n");
+		area.textContent = area.value;
+		expect(area.innerHTML).toEqual(area.textContent);
+		expect(area.value).toEqual("12\n34\n");
+	});
+
+	test("append div", () => {
+		area.innerHTML = "<div><div>12</div><div>34</div></div>";
+		expect(area.value).toEqual("12\n34\n");
+		(area.firstChild as HTMLElement).insertAdjacentHTML("beforeend", "<div>56</div>");
+		expect(area.value).toEqual("12\n34\n56\n");
+	});
+
+	test("insert div between divs", () => {
+		area.innerHTML = "<div><div>12</div><div>56</div></div>";
+		expect(area.value).toEqual("12\n56\n");
+		(area.firstChild!.lastChild as HTMLElement).insertAdjacentHTML("beforebegin", "<div>34</div>");
+		expect(area.value).toEqual("12\n34\n56\n");
+	});
+
+	test("delete first div", () => {
+		area.innerHTML = "<div><div>12</div><div>34</div></div>";
+		expect(area.value).toEqual("12\n34\n");
+		area.firstChild!.childNodes[0].remove();
+		expect(area.value).toEqual("34\n");
+	});
+
+	test("delete second div", () => {
+		area.innerHTML = "<div><div>12</div><div>34</div></div>";
+		expect(area.value).toEqual("12\n34\n");
+		area.firstChild!.childNodes[1].remove();
+		expect(area.value).toEqual("12\n");
+	});
+
+	test("delete div between divs", () => {
+		area.innerHTML = "<div><div>12</div><div>34</div><div>56</div></div>";
+		expect(area.value).toEqual("12\n34\n56\n");
+		area.firstChild!.childNodes[1].remove();
+		expect(area.value).toEqual("12\n56\n");
+	});
+
+	test("delete nested div", () => {
+		area.innerHTML =
+			"<div><div>12</div><div><div>34</div><div>56</div><div>78</div></div><div>90</div></div>";
+		expect(area.value).toEqual("12\n34\n56\n78\n90\n");
+		area.firstChild!.childNodes[1].childNodes[1].remove();
+		expect(area.value).toEqual("12\n34\n78\n90\n");
+	});
+
+	test("text", () => {
+		area.innerHTML = "<div><div>12</div><div>56</div></div>";
+		expect(area.value).toEqual("12\n56\n");
+		const text1 = area.firstChild!.childNodes[0].firstChild! as Text;
+		const text2 = area.firstChild!.childNodes[1].firstChild! as Text;
+		text1.data = "123";
+		text2.data = "456";
+		expect(area.value).toEqual("123\n456\n");
+	});
+
+	test("add div after text", () => {
+		area.innerHTML = "<div>12</div>";
+		expect(area.value).toEqual("12\n");
+		area.insertAdjacentHTML("beforeend", "<div>34</div>");
+		expect(area.value).toEqual("12\n34\n");
+	});
+
+	test("delete div after text", () => {
+		area.innerHTML = "<div>12<div>34</div></div>";
+		expect(area.value).toEqual("12\n34\n");
+		area.firstChild!.lastChild!.remove();
+		expect(area.value).toEqual("12\n");
+	});
+
+	test("delete br at the start of a div after text", () => {
+		area.innerHTML = "<div>12<div><br>34</div></div>";
+		expect(area.value).toEqual("12\n\n34\n");
+		area.firstChild!.lastChild!.firstChild!.remove();
+		expect(area.value).toEqual("12\n34\n");
 	});
 });
