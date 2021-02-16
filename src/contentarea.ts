@@ -1,26 +1,5 @@
 /// <reference lib="dom" />
 import {Patch} from "./patch";
-
-// TODO: Use a map instead of symbol properties?
-/**
- * A symbol property added to DOM nodes whose value is the content offset of a
- * child node relative to its parent.
- */
-export const ContentOffset = Symbol.for("revise.ContentOffset");
-
-/**
- * A symbol property added to DOM nodes whose value is the content length of
- * its children.
- */
-export const ContentLength = Symbol.for("revise.ContentLength");
-
-declare global {
-	interface Node {
-		[ContentOffset]?: number | undefined;
-		[ContentLength]?: number | undefined;
-	}
-}
-
 // TODO: CUSTOM NEWLINES????????????
 const NEWLINE = "\n";
 
@@ -68,9 +47,38 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-// TODO: Stop exporting this function
+// TODO: Use a map instead of symbol properties
+/**
+ * A symbol property added to DOM nodes whose value is the content offset of a
+ * child node relative to its parent.
+ */
+export const ContentOffset = Symbol.for("revise.ContentOffset");
+
+/**
+ * A symbol property added to DOM nodes whose value is the content length of
+ * its children.
+ */
+export const ContentLength = Symbol.for("revise.ContentLength");
+
+declare global {
+	interface Node {
+		[ContentOffset]?: number | undefined;
+		[ContentLength]?: number | undefined;
+	}
+}
+
+export interface ContentInfo {
+	offset: number;
+	length: number;
+}
+
+interface StackFrame {
+	oldIndexRelative: number;
+	offset: number;
+}
+
 // TODO: It might be faster to construct a patch rather than concatenating a string.
-export function getContent(root: Node, oldValue?: string): string {
+function getContent(root: Node, oldValue?: string): string {
 	if (oldValue && typeof root[ContentLength] !== "undefined") {
 		if (oldValue.length !== root[ContentLength]) {
 			throw new Error("oldValue does not match root length");
@@ -89,11 +97,10 @@ export function getContent(root: Node, oldValue?: string): string {
 	let oldIndex = 0;
 	let oldIndexRelative = 0;
 	let offset = 0;
+	const seen = new Set<Node>();
 	// TODO: Both these arrays work like stacks. Maybe we can have a single one.
 	// TODO: the stack is mostly unnecessary for the root, maybe we can start with the firstChild
-	const indexes: Array<number> = [];
-	const offsets: Array<number> = [];
-	const seen = new Set<Node>();
+	const stack: Array<StackFrame> = [];
 	for (let node: Node | null = root; node !== null; ) {
 		if (!seen.has(node)) {
 			while (!oldValue || typeof node[ContentLength] === "undefined") {
@@ -106,8 +113,7 @@ export function getContent(root: Node, oldValue?: string): string {
 
 				const firstChild = walker.firstChild();
 				if (firstChild) {
-					offsets.push(offset);
-					indexes.push(oldIndexRelative);
+					stack.push({offset, oldIndexRelative})
 					oldIndexRelative = oldIndex;
 					if (newlineBefore) {
 						offset = NEWLINE.length;
@@ -168,12 +174,13 @@ export function getContent(root: Node, oldValue?: string): string {
 
 		node = walker.nextSibling();
 		if (node === null && walker.currentNode !== root) {
-			const offset1 = offsets.pop();
-			const oldIndexRelative1 = indexes.pop();
-			if (offset1 === undefined || oldIndexRelative1 === undefined) {
-				throw new Error("Missing offset");
+			if (!stack.length) {
+				throw new Error("Stack is empty");
 			}
-
+			const {
+				offset: offset1,
+				oldIndexRelative: oldIndexRelative1,
+			} = stack.pop()!;
 			offset = offset1 + offset;
 			oldIndexRelative = oldIndexRelative1;
 			node = walker.parentNode();
@@ -194,7 +201,6 @@ function clean(root: Node): void {
 	}
 }
 
-// TODO: Stop exporting this function
 /**
  * Given an observed root, and an array of mutation records, this function
  * invalidates nodes which have changed by deleting the ContentOffset and
@@ -202,7 +208,7 @@ function clean(root: Node): void {
  *
  * @returns a boolean indicating whether or not the DOM node has been invalidated
  */
-export function invalidate(root: Node, records: Array<MutationRecord>): void {
+function invalidate(root: Node, records: Array<MutationRecord>): void {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
@@ -243,56 +249,7 @@ export function invalidate(root: Node, records: Array<MutationRecord>): void {
 	}
 }
 
-// TODO: Stop exporting this function
-export function indexFromNodeOffset(
-	root: Node,
-	node: Node | null,
-	offset: number,
-): number {
-	if (
-		node == null ||
-		!root.contains(node) ||
-		typeof node[ContentLength] === "undefined"
-	) {
-		return -1;
-	}
-
-	let index = offset;
-	if (node.nodeType === Node.ELEMENT_NODE) {
-		if (offset >= node.childNodes.length) {
-			if (index > 0) {
-				index = node[ContentLength] || 0;
-			}
-		} else {
-			node = node.childNodes[offset];
-			index = 0;
-		}
-	}
-
-	const walker = document.createTreeWalker(
-		root,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-	walker.currentNode = node;
-	while (node !== null && node !== root) {
-		const previousSibling = walker.previousSibling();
-		if (previousSibling === null) {
-			const parentNode = walker.parentNode();
-			if (parentNode) {
-				index += node[ContentOffset] || 0;
-			}
-
-			node = parentNode;
-		} else {
-			node = previousSibling;
-			index += node[ContentLength] || 0;
-		}
-	}
-
-	return index;
-}
-
-function createParentNodeOffset(node: Node): [Node | null, number] {
+function nodeOffsetFromChild(node: Node): [Node | null, number] {
 	const parentNode = node.parentNode;
 	if (parentNode === null) {
 		throw new Error("Node has no parent");
@@ -316,76 +273,6 @@ function findSuccessorNode(walker: TreeWalker): Node | null {
 	return null;
 }
 
-// TODO: Stop exporting this function
-export function nodeOffsetFromIndex(
-	root: Node,
-	index: number,
-): [Node | null, number] {
-	if (index < 0) {
-		return [null, 0];
-	}
-
-	const walker = document.createTreeWalker(
-		root,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-	let node: Node | null = root;
-	let offset = index;
-	while (node !== null) {
-		const length = node[ContentLength] || 0;
-		if (offset <= length) {
-			if (node.nodeType === Node.TEXT_NODE) {
-				return [node, offset];
-			}
-
-			const firstChild = walker.firstChild();
-			if (firstChild) {
-				offset -= firstChild[ContentOffset] || 0;
-				node = firstChild;
-			} else if (offset > 0) {
-				const successor = findSuccessorNode(walker);
-				if (successor) {
-					if (successor.nodeName === "BR") {
-						return createParentNodeOffset(successor);
-					}
-
-					return [successor, 0];
-				} else {
-					break;
-				}
-			} else if (node.nodeName === "BR") {
-				return createParentNodeOffset(node);
-			} else {
-				return [node, 0];
-			}
-		} else {
-			offset -= length;
-			const nextSibling = walker.nextSibling();
-			if (nextSibling) {
-				node = nextSibling;
-			} else {
-				const successor = findSuccessorNode(walker);
-				if (successor) {
-					if (successor.nodeName === "BR") {
-						return createParentNodeOffset(successor);
-					}
-
-					return [successor, 0];
-				} else {
-					break;
-				}
-			}
-		}
-	}
-
-	return [
-		root,
-		root.nodeType === Node.TEXT_NODE
-			? (root as Text).data.length
-			: root.childNodes.length,
-	];
-}
-
 export type SelectionDirection = "forward" | "backward" | "none";
 
 export interface SelectionInfo {
@@ -400,21 +287,12 @@ function getSelectionInfo(area: ContentAreaElement): SelectionInfo {
 		return area[$selectionInfo];
 	}
 
-	const focus = indexFromNodeOffset(
-		area,
-		selection.focusNode,
-		selection.focusOffset,
-	);
-
+	const focus = area.indexOf(selection.focusNode, selection.focusOffset);
 	let anchor: number;
 	if (selection.isCollapsed) {
 		anchor = focus;
 	} else {
-		anchor = indexFromNodeOffset(
-			area,
-			selection.anchorNode,
-			selection.anchorOffset,
-		);
+		anchor = area.indexOf(selection.anchorNode, selection.anchorOffset);
 	}
 
 	if (focus === -1 || anchor === -1) {
@@ -579,6 +457,110 @@ export class ContentAreaElement extends HTMLElement {
 		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 	}
 
+	nodeOffsetAt(index: number): [Node | null, number] {
+		validate(this);
+		if (index < 0) {
+			return [null, 0];
+		}
+
+		const walker = document.createTreeWalker(
+			this,
+			NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+		);
+
+		let node: Node | null = this;
+		let offset = index;
+		while (node !== null) {
+			const length = node[ContentLength] || 0;
+			if (offset <= length) {
+				if (node.nodeType === Node.TEXT_NODE) {
+					return [node, offset];
+				}
+
+				const firstChild = walker.firstChild();
+				if (firstChild) {
+					offset -= firstChild[ContentOffset] || 0;
+					node = firstChild;
+				} else if (offset > 0) {
+					const successor = findSuccessorNode(walker);
+					if (successor) {
+						if (successor.nodeName === "BR") {
+							return nodeOffsetFromChild(successor);
+						}
+
+						return [successor, 0];
+					} else {
+						break;
+					}
+				} else if (node.nodeName === "BR") {
+					return nodeOffsetFromChild(node);
+				} else {
+					return [node, 0];
+				}
+			} else {
+				offset -= length;
+				const nextSibling = walker.nextSibling();
+				if (nextSibling) {
+					node = nextSibling;
+				} else {
+					const successor = findSuccessorNode(walker);
+					if (successor) {
+						if (successor.nodeName === "BR") {
+							return nodeOffsetFromChild(successor);
+						}
+
+						return [successor, 0];
+					} else {
+						break;
+					}
+				}
+			}
+		}
+
+		return [this, this.childNodes.length];
+	}
+
+	indexOf(node: Node | null, offset: number): number {
+		validate(this);
+		if (node == null || !this.contains(node)) {
+			return -1;
+		}
+
+		let index = offset;
+		if (node.nodeType === Node.ELEMENT_NODE) {
+			if (offset >= node.childNodes.length) {
+				if (index > 0) {
+					index = node[ContentLength] || 0;
+				}
+			} else {
+				node = node.childNodes[offset];
+				index = 0;
+			}
+		}
+
+		const walker = document.createTreeWalker(
+			this,
+			NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+		);
+		walker.currentNode = node;
+		while (node !== null && node !== this) {
+			const previousSibling = walker.previousSibling();
+			if (previousSibling === null) {
+				const parentNode = walker.parentNode();
+				if (parentNode) {
+					index += node[ContentOffset] || 0;
+				}
+
+				node = parentNode;
+			} else {
+				node = previousSibling;
+				index += node[ContentLength] || 0;
+			}
+		}
+
+		return index;
+	}
+
 	setSelectionRange(
 		selectionStart: number,
 		selectionEnd: number,
@@ -589,7 +571,6 @@ export class ContentAreaElement extends HTMLElement {
 			return;
 		}
 
-		validate(this);
 		// We bound selection range to the length of value minus the trailing
 		// newline because attempting to select after the first newline when there
 		// is only newline can cause the editable area to lose focus.
@@ -613,7 +594,7 @@ export class ContentAreaElement extends HTMLElement {
 		}
 
 		if (anchor === focus) {
-			const [node, offset] = nodeOffsetFromIndex(this, focus);
+			const [node, offset] = this.nodeOffsetAt(focus);
 			if (
 				selection.focusNode !== node ||
 				selection.focusOffset !== offset ||
@@ -628,8 +609,8 @@ export class ContentAreaElement extends HTMLElement {
 				selection.collapse(node, offset);
 			}
 		} else {
-			const [anchorNode, anchorOffset] = nodeOffsetFromIndex(this, anchor);
-			const [focusNode, focusOffset] = nodeOffsetFromIndex(this, focus);
+			const [anchorNode, anchorOffset] = this.nodeOffsetAt(anchor);
+			const [focusNode, focusOffset] = this.nodeOffsetAt(focus);
 			if (anchorNode === null && focusNode === null) {
 				selection.collapse(null);
 			} else if (anchorNode === null) {
@@ -675,11 +656,11 @@ function validate(
 	}
 
 	invalidate(area, records);
-	const oldValue = area[$value];
-	const oldSelectionInfo = area[$selectionInfo];
-	const value = (area[$value] = getContent(area, area[$value]));
-	const selectionInfo = (area[$selectionInfo] = getSelectionInfo(area));
 	if (records.length) {
+		const oldValue = area[$value];
+		const oldSelectionInfo = area[$selectionInfo];
+		const value = (area[$value] = getContent(area, area[$value]));
+		const selectionInfo = (area[$selectionInfo] = getSelectionInfo(area));
 		const patch = Patch.diff(
 			oldValue,
 			value,
