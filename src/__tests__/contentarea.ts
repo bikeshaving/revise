@@ -95,6 +95,7 @@ describe("contentarea", () => {
 		test("overwriting innerHTML", () => {
 			area.innerHTML = "<div>12</div><div>34</div>";
 			expect(area.value).toEqual("12\n34\n");
+			// eslint-disable-next-line no-self-assign
 			area.innerHTML = area.innerHTML;
 			expect(area.value).toEqual("12\n34\n");
 		});
@@ -110,14 +111,20 @@ describe("contentarea", () => {
 		test("append div", () => {
 			area.innerHTML = "<div><div>12</div><div>34</div></div>";
 			expect(area.value).toEqual("12\n34\n");
-			(area.firstChild as HTMLElement).insertAdjacentHTML("beforeend", "<div>56</div>");
+			(area.firstChild as HTMLElement).insertAdjacentHTML(
+				"beforeend",
+				"<div>56</div>",
+			);
 			expect(area.value).toEqual("12\n34\n56\n");
 		});
 
 		test("insert div between divs", () => {
 			area.innerHTML = "<div><div>12</div><div>56</div></div>";
 			expect(area.value).toEqual("12\n56\n");
-			(area.firstChild!.lastChild as HTMLElement).insertAdjacentHTML("beforebegin", "<div>34</div>");
+			(area.firstChild!.lastChild as HTMLElement).insertAdjacentHTML(
+				"beforebegin",
+				"<div>34</div>",
+			);
 			expect(area.value).toEqual("12\n34\n56\n");
 		});
 
@@ -277,7 +284,7 @@ describe("contentarea", () => {
 			expect(area.nodeOffsetAt(11)).toEqual([
 				area.firstChild!.childNodes[1].firstChild,
 				5,
-			])
+			]);
 			expect(area.nodeOffsetAt(12)).toEqual([area, 1]);
 			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
 			expect(area.nodeOffsetAt(14)).toEqual([area, 1]);
@@ -304,9 +311,18 @@ describe("contentarea", () => {
 			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.childNodes[3], 0]);
 			expect(area.nodeOffsetAt(8)).toEqual([area.firstChild!.childNodes[3], 1]);
 			expect(area.nodeOffsetAt(9)).toEqual([area.firstChild!.childNodes[3], 2]);
-			expect(area.nodeOffsetAt(10)).toEqual([area.firstChild!.childNodes[3], 3]);
-			expect(area.nodeOffsetAt(11)).toEqual([area.firstChild!.childNodes[3], 4]);
-			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild!.childNodes[3], 5]);
+			expect(area.nodeOffsetAt(10)).toEqual([
+				area.firstChild!.childNodes[3],
+				3,
+			]);
+			expect(area.nodeOffsetAt(11)).toEqual([
+				area.firstChild!.childNodes[3],
+				4,
+			]);
+			expect(area.nodeOffsetAt(12)).toEqual([
+				area.firstChild!.childNodes[3],
+				5,
+			]);
 			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
 			expect(area.nodeOffsetAt(14)).toEqual([area, 1]);
 			expect(area.nodeOffsetAt(15)).toEqual([area, 1]);
@@ -332,8 +348,14 @@ describe("contentarea", () => {
 			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.childNodes[2], 1]);
 			expect(area.nodeOffsetAt(8)).toEqual([area.firstChild!.childNodes[2], 2]);
 			expect(area.nodeOffsetAt(9)).toEqual([area.firstChild!.childNodes[2], 3]);
-			expect(area.nodeOffsetAt(10)).toEqual([area.firstChild!.childNodes[2], 4]);
-			expect(area.nodeOffsetAt(11)).toEqual([area.firstChild!.childNodes[2], 5]);
+			expect(area.nodeOffsetAt(10)).toEqual([
+				area.firstChild!.childNodes[2],
+				4,
+			]);
+			expect(area.nodeOffsetAt(11)).toEqual([
+				area.firstChild!.childNodes[2],
+				5,
+			]);
 			expect(area.nodeOffsetAt(12)).toEqual([area, 1]);
 			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
 			expect(area.nodeOffsetAt(14)).toEqual([area, 1]);
