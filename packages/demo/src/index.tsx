@@ -41,7 +41,7 @@ function printLines(
 		const length = line.reduce((l, t) => l + t.length, 0);
 		i += length + 1;
 		return (
-			<div crank-key={key}>
+			<div style="font-family: monospace;" crank-key={key}>
 				{line.length ? <code>{printTokens(line)}</code> : <br />}
 			</div>
 		);
@@ -129,14 +129,32 @@ declare global {
 	}
 }
 
+function debounce(fn: Function, delay: number = 50): any {
+	let handle: any;
+	return function(this: any) {
+		let context = this, args = arguments;
+		const wrapped = function() {
+			handle = undefined;
+			return fn.apply(context, args);
+		};
+
+		if (handle != null) {
+			clearTimeout(handle);
+		}
+
+		handle = setTimeout(wrapped, delay);
+	};
+}
+
 function* Editable(this: Context, { children }: any) {
 	let content = "\n";
 	let el: any;
 	const keyer = new Keyer(content.length);
+	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));
 	this.addEventListener("contentchange", (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.ingest(ev.detail.patch);
-		this.refresh();
+		debouncedRefresh();
 	});
 
 	let initial = true;
@@ -145,7 +163,6 @@ function* Editable(this: Context, { children }: any) {
 	//	html = el.innerHTML;
 	//	this.refresh();
 	//});
-
 	for ({} of this) {
 		//this.schedule(() => {
 		//	if (html !== el.innerHTML) {
