@@ -760,21 +760,19 @@ function setSelectionRange(
 			) {
 				selection.collapse(anchorNode, anchorOffset);
 			}
-		} else {
-			if (
-				selection.focusNode !== focusNode ||
-				selection.focusOffset !== focusOffset ||
-				selection.anchorNode !== anchorNode ||
-				selection.anchorOffset !== anchorOffset
-			) {
-				// TODO: IE support or nah?
-				selection.setBaseAndExtent(
-					anchorNode,
-					anchorOffset,
-					focusNode,
-					focusOffset,
-				);
-			}
+		} else if (
+			selection.focusNode !== focusNode ||
+			selection.focusOffset !== focusOffset ||
+			selection.anchorNode !== anchorNode ||
+			selection.anchorOffset !== anchorOffset
+		) {
+			// TODO: IE support or nah?
+			selection.setBaseAndExtent(
+				anchorNode,
+				anchorOffset,
+				focusNode,
+				focusOffset,
+			);
 		}
 	}
 }
