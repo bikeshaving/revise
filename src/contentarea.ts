@@ -20,9 +20,272 @@ import {Patch} from "./patch";
 //		undoing = false;
 //	});
 //});
-// TODO: CUSTOM NEWLINES????????????
+
+export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
+	// TODO: Align second parameter with other event constructors
+	constructor(typeArg: string, patch: Patch) {
+		super(typeArg, {detail: {patch}, bubbles: true});
+	}
+}
+
+// TODO: Maybe these properties can be grouped on a hidden controller class?
+/*** ContentAreaElement symbol properties ***/
+const $value = Symbol.for("ContentArea.$value");
+const $cache = Symbol.for("ContentArea.$cache");
+const $observer = Symbol.for("ContentArea.$observer");
+const $onselectionchange = Symbol.for("ContentArea.$onselectionchange");
+const $selectionInfo = Symbol.for("ContentArea.$selectionInfo");
+const $slot = Symbol.for("ContentArea.$slot");
+const css = `
+:host {
+	display: contents;
+	white-space: break-spaces;
+	word-break: break-all;
+}`;
+
+export class ContentAreaElement extends HTMLElement {
+	[$cache]: NodeInfoCache;
+	[$value]: string;
+	[$slot]: HTMLSlotElement;
+	[$selectionInfo]: SelectionInfo;
+	[$observer]: MutationObserver;
+	[$onselectionchange]: (ev: Event) => unknown;
+
+	static get observedAttributes(): Array<string> {
+		return ["contenteditable"];
+	}
+
+	constructor() {
+		super();
+		this[$value] = "";
+		this[$cache] = new Map();
+		this[$selectionInfo] = {
+			selectionStart: 0,
+			selectionEnd: 0,
+			selectionDirection: "none",
+		};
+
+		this[$observer] = new MutationObserver((records) =>
+			validate(this, records),
+		);
+
+		this[$onselectionchange] = () => validate(this);
+		const shadow = this.attachShadow({mode: "closed"});
+		const style = document.createElement("style");
+		style.textContent = css;
+		shadow.appendChild(style);
+		const slot = document.createElement("slot");
+		this[$slot] = slot;
+		slot.contentEditable = this.contentEditable;
+		shadow.appendChild(slot);
+		this.addEventListener("focusin", () => {
+			const {selectionStart, selectionEnd, selectionDirection} = this[
+				$selectionInfo
+			];
+
+			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
+		});
+		this.addEventListener("input", () => validate(this));
+	}
+
+	connectedCallback() {
+		this[$value] = getValueAndMarkNodes(this, this[$cache], this[$value]);
+		this[$selectionInfo] =
+			getSelectionInfo(this, this[$cache]) || this[$selectionInfo];
+		// TODO: listen to attributes like contenteditable, data-contentbefore, data-content
+		this[$observer].observe(this, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+		});
+	}
+
+	disconnectedCallback() {
+		this[$cache].clear();
+		this[$observer].disconnect();
+		// JSDOM-based environments like jest will make the global document null
+		// before calling the disconnectedCallback.
+		if (document) {
+			document.removeEventListener("selectionchange", this[$onselectionchange]);
+		}
+	}
+
+	attributeChangedCallback(
+		name: string,
+		//oldValue: string,
+		//newValue: string,
+	) {
+		switch (name) {
+			case "contenteditable": {
+				const slot = this[$slot];
+				// We have to set slot.contentEditable to this.contentEditable because
+				// Chrome has trouble selecting elements across shadow DOM boundaries.
+				// See https://bugs.chromium.org/p/chromium/issues/detail?id=1175930
+
+				// Chrome has additional issues with using the host element as a
+				// contenteditable element but this normalizes some behavior.
+				slot.contentEditable = this.contentEditable;
+				break;
+			}
+		}
+	}
+
+	get value(): string {
+		validate(this);
+		return this[$value];
+	}
+
+	get selectionStart(): number {
+		validate(this);
+		return this[$selectionInfo].selectionStart;
+	}
+
+	set selectionStart(selectionStart: number) {
+		validate(this);
+		const value = this[$value];
+		const cache = this[$cache];
+		const {selectionEnd, selectionDirection} = this[$selectionInfo];
+		setSelectionRange(
+			this,
+			cache,
+			value,
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		);
+	}
+
+	get selectionEnd(): number {
+		validate(this);
+		return this[$selectionInfo].selectionEnd;
+	}
+
+	set selectionEnd(selectionEnd: number) {
+		validate(this);
+		const cache = this[$cache];
+		const value = this[$value];
+		const {selectionStart, selectionDirection} = this[$selectionInfo];
+		setSelectionRange(
+			this,
+			cache,
+			value,
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		);
+	}
+
+	get selectionDirection(): SelectionDirection {
+		validate(this);
+		return this[$selectionInfo].selectionDirection;
+	}
+
+	set selectionDirection(selectionDirection: SelectionDirection) {
+		validate(this);
+		const cache = this[$cache];
+		const value = this[$value];
+		const {selectionStart, selectionEnd} = this[$selectionInfo];
+		setSelectionRange(
+			this,
+			cache,
+			value,
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		);
+	}
+
+	nodeOffsetAt(index: number): [Node | null, number] {
+		validate(this);
+		const cache = this[$cache];
+		return nodeOffsetAt(this, cache, index);
+	}
+
+	indexOf(node: Node | null, offset: number): number {
+		validate(this);
+		const cache = this[$cache];
+		return indexOf(this, cache, node, offset);
+	}
+
+	setSelectionRange(
+		selectionStart: number,
+		selectionEnd: number,
+		selectionDirection: SelectionDirection = "none",
+	): void {
+		validate(this);
+		const cache = this[$cache];
+		const value = this[$value];
+		setSelectionRange(
+			this,
+			cache,
+			value,
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		);
+	}
+
+	repair(callback: Function): void {
+		validate(this);
+		const cache = this[$cache];
+		const value = this[$value];
+		const {selectionStart, selectionEnd, selectionDirection} =
+			getSelectionInfo(this, cache) || this[$selectionInfo];
+		callback();
+		validate(this);
+		setSelectionRange(
+			this,
+			cache,
+			value,
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		);
+	}
+}
+
+function validate(
+	area: ContentAreaElement,
+	records?: Array<MutationRecord> | undefined,
+	avoidDispatch = false,
+): void {
+	if (records === undefined) {
+		records = area[$observer].takeRecords();
+	}
+
+	const cache = area[$cache];
+	invalidate(area, cache, records);
+	if (records.length) {
+		const oldValue = area[$value];
+		const oldSelectionInfo = area[$selectionInfo];
+		const value = (area[$value] = getValueAndMarkNodes(area, cache, oldValue));
+		const selectionInfo = (area[$selectionInfo] =
+			getSelectionInfo(area, cache) || oldSelectionInfo);
+		if (avoidDispatch) {
+			return;
+		}
+
+		const patch = Patch.diff(
+			oldValue,
+			value,
+			Math.min(oldSelectionInfo.selectionStart, selectionInfo.selectionStart),
+		);
+
+		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
+		// We do not fire a second ContentChangeEvent if this dispatchEvent call
+		// causes further mutations, on the basis that the user should be aware of
+		// the new changes, to prevent infinite loops and confusing stack traces.
+		const records1 = area[$observer].takeRecords();
+		if (records1.length) {
+			validate(area, records1, true);
+		}
+	}
+}
+
+// TODO: PARAMETERIZE NEWLINE BEHAVIOR????????????
 const NEWLINE = "\n";
 
+// TODO: PARAMETERIZE BLOCKLIKE ELEMENTS??????????????
 const BLOCKLIKE_ELEMENTS = new Set([
 	"ADDRESS",
 	"ARTICLE",
@@ -67,42 +330,42 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-function clean(area: ContentAreaElement, root: Node = area): void {
-	const cache = area[$cache];
+function clean(root: Node, cache: NodeInfoCache): void {
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
+
 	for (let node: Node | null = root; node !== null; node = walker.nextNode()) {
 		cache.delete(node);
 	}
 }
 
 function invalidate(
-	area: ContentAreaElement,
+	root: Element,
+	cache: NodeInfoCache,
 	records: Array<MutationRecord>,
 ): void {
-	const cache = area[$cache];
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
 		for (let j = 0; j < record.addedNodes.length; j++) {
-			clean(area, record.addedNodes[j]);
+			clean(record.addedNodes[j], cache);
 		}
 
 		for (let j = 0; j < record.removedNodes.length; j++) {
-			clean(area, record.removedNodes[j]);
+			clean(record.removedNodes[j], cache);
 		}
 
 		let node = record.target;
-		if (node === area) {
+		if (node === root) {
 			invalidated = true;
 			continue;
-		} else if (!cache.has(node) || !area.contains(node)) {
+		} else if (!cache.has(node) || !root.contains(node)) {
 			continue;
 		}
 
-		for (; node !== area; node = node.parentNode!) {
+		for (; node !== root; node = node.parentNode!) {
 			if (!cache.has(node)) {
 				break;
 			}
@@ -113,112 +376,55 @@ function invalidate(
 	}
 
 	if (invalidated) {
-		cache.delete(area);
+		cache.delete(root);
 	}
 }
 
-function validate(
-	area: ContentAreaElement,
-	records?: Array<MutationRecord> | undefined,
-	ignore = false,
-): void {
-	if (records === undefined) {
-		records = area[$observer].takeRecords();
-	}
-
-	invalidate(area, records);
-	if (records.length) {
-		const oldValue = area[$value];
-		const oldSelectionInfo = area[$selectionInfo];
-		const value = (area[$value] = getValueAndMarkNodes(area, area[$value]));
-		const selectionInfo = (area[$selectionInfo] = getSelectionInfo(area));
-		if (ignore) {
-			return;
-		}
-
-		const patch = Patch.diff(
-			oldValue,
-			value,
-			Math.min(oldSelectionInfo.selectionStart, selectionInfo.selectionStart),
-		);
-		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
-		const records1 = area[$observer].takeRecords();
-		if (records1.length) {
-			validate(area, records1, true);
-			area.setSelectionRange(
-				selectionInfo.selectionStart,
-				selectionInfo.selectionEnd,
-				selectionInfo.selectionDirection,
-			);
-		}
-	}
-}
-
-function nodeOffsetFromChild(node: Node): [Node | null, number] {
-	const parentNode = node.parentNode;
-	if (parentNode === null) {
-		throw new Error("Node has no parent");
-	}
-
-	const offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
-	return [parentNode, offset];
-}
-
-function findSuccessorNode(walker: TreeWalker): Node | null {
-	let node: Node | null = walker.currentNode;
-	while (node !== null) {
-		node = walker.nextSibling();
-		if (node === null) {
-			node = walker.parentNode();
-		} else {
-			return node;
-		}
-	}
-
-	return null;
-}
-
-interface NodeInfo {
+export interface NodeInfo {
 	offset: number;
 	length: number;
 }
+
+export type NodeInfoCache = Map<Node, NodeInfo>;
 
 interface StackFrame {
 	oldIndexRelative: number;
 	nodeInfo: NodeInfo;
 }
 
-// TODO: It might be faster to construct a patch rather than concatenating a string.
+// TODO: It might be faster to construct a patch rather than concatenating a giant string.
 function getValueAndMarkNodes(
-	area: ContentAreaElement,
-	oldValue?: string,
+	root: Element,
+	cache: NodeInfoCache,
+	oldValue: string,
 ): string {
-	const cache = area[$cache];
-	if (oldValue && cache.has(area)) {
-		const {length} = cache.get(area)!;
+	if (cache.has(root)) {
+		const {length} = cache.get(root)!;
 		if (oldValue.length !== length) {
-			throw new Error("oldValue does not match area length");
+			throw new Error("oldValue does not match cached root length");
 		}
 
 		return oldValue;
 	}
 
 	const walker = document.createTreeWalker(
-		area,
+		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 	let content = "";
 	let hasNewline = false;
+	// index into the old string
 	let oldIndex = 0;
+	// index into the old string of the first sibling of the current node
 	let oldIndexRelative = 0;
+	// the offset of the current node relative to its parent
 	let offset = 0;
+	let nodeInfo: NodeInfo = {offset, length: 0};
 	const seen = new Set<Node>();
 	const stack: Array<StackFrame> = [];
-	let nodeInfo: NodeInfo = {offset, length: 0};
-	// TODO: the stack is mostly unnecessary for the area, maybe we can start with the firstChild
-	for (let node: Node | null = area; node !== null; ) {
+	for (let node: Node | null = root; node !== null; ) {
 		if (!seen.has(node)) {
-			while (!oldValue || !cache.has(node)) {
+			while (!cache.has(node)) {
 				const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
 				if (newlineBefore) {
 					content += NEWLINE;
@@ -244,7 +450,7 @@ function getValueAndMarkNodes(
 			}
 		}
 
-		if (oldValue && cache.has(node)) {
+		if (cache.has(node)) {
 			nodeInfo = cache.get(node)!;
 			const oldOffset = oldIndex - oldIndexRelative;
 			if (oldOffset < nodeInfo.offset) {
@@ -288,7 +494,7 @@ function getValueAndMarkNodes(
 
 		cache.set(node, nodeInfo);
 		node = walker.nextSibling();
-		if (node === null && walker.currentNode !== area) {
+		if (node === null && walker.currentNode !== root) {
 			if (!stack.length) {
 				throw new Error("Stack is empty");
 			}
@@ -304,30 +510,178 @@ function getValueAndMarkNodes(
 	return content;
 }
 
+function nodeOffsetFromChild(node: Node): [Node | null, number] {
+	const parentNode = node.parentNode;
+	if (parentNode === null) {
+		throw new Error("Node has no parent");
+	}
+
+	const offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
+	return [parentNode, offset];
+}
+
+function findSuccessorNode(walker: TreeWalker): Node | null {
+	let node: Node | null = walker.currentNode;
+	while (node !== null) {
+		node = walker.nextSibling();
+		if (node === null) {
+			node = walker.parentNode();
+		} else {
+			return node;
+		}
+	}
+
+	return null;
+}
+
+function indexOf(
+	root: Element,
+	cache: NodeInfoCache,
+	node: Node | null,
+	offset: number,
+) {
+	if (node == null || !root.contains(node)) {
+		return -1;
+	}
+
+	let index = offset;
+	// TODO: handle the node being missing from the cache when we do widgets
+	if (node.nodeType === Node.ELEMENT_NODE) {
+		if (offset >= node.childNodes.length) {
+			if (index > 0) {
+				index = cache.get(node)!.length;
+			}
+		} else {
+			node = node.childNodes[offset];
+			index = 0;
+		}
+	}
+
+	const walker = document.createTreeWalker(
+		root,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+	walker.currentNode = node;
+	while (node !== null && node !== root) {
+		const previousSibling = walker.previousSibling();
+		if (previousSibling === null) {
+			const parentNode = walker.parentNode();
+			if (parentNode) {
+				index += cache.get(node)!.offset;
+			}
+
+			node = parentNode;
+		} else {
+			node = previousSibling;
+			index += cache.get(node)!.length;
+		}
+	}
+
+	return index;
+}
+
+function nodeOffsetAt(
+	root: Element,
+	cache: NodeInfoCache,
+	index: number,
+): [Node | null, number] {
+	if (index < 0) {
+		return [null, 0];
+	}
+
+	const walker = document.createTreeWalker(
+		root,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+
+	let node: Node | null = root;
+	let offset = index;
+	while (node !== null) {
+		if (!cache.has(node)) {
+			throw new Error("Unknown node");
+		}
+
+		const {length} = cache.get(node)!;
+		if (offset <= length) {
+			if (node.nodeType === Node.TEXT_NODE) {
+				return [node, offset];
+			}
+
+			const firstChild = walker.firstChild();
+			if (firstChild) {
+				offset -= cache.get(firstChild)!.offset;
+				node = firstChild;
+			} else if (offset > 0) {
+				const successor = findSuccessorNode(walker);
+				if (successor) {
+					if (successor.nodeName === "BR") {
+						return nodeOffsetFromChild(successor);
+					}
+
+					return [successor, 0];
+				} else {
+					break;
+				}
+			} else if (node.nodeName === "BR") {
+				return nodeOffsetFromChild(node);
+			} else {
+				return [node, 0];
+			}
+		} else {
+			offset -= length;
+			const nextSibling = walker.nextSibling();
+			if (nextSibling) {
+				node = nextSibling;
+			} else {
+				const successor = findSuccessorNode(walker);
+				if (successor) {
+					if (successor.nodeName === "BR") {
+						return nodeOffsetFromChild(successor);
+					}
+
+					return [successor, 0];
+				} else {
+					break;
+				}
+			}
+		}
+	}
+
+	return [root, root.childNodes.length];
+}
+
 export type SelectionDirection = "forward" | "backward" | "none";
 
-interface SelectionInfo {
+export interface SelectionInfo {
 	selectionStart: number;
 	selectionEnd: number;
 	selectionDirection: SelectionDirection;
 }
 
-function getSelectionInfo(area: ContentAreaElement): SelectionInfo {
+function getSelectionInfo(
+	root: Element,
+	cache: NodeInfoCache,
+): SelectionInfo | null {
 	const selection = document.getSelection();
-	if (selection === null) {
-		return area[$selectionInfo];
+	if (selection == null) {
+		return null;
 	}
 
-	const focus = area.indexOf(selection.focusNode, selection.focusOffset);
+	const focus = indexOf(
+		root,
+		cache,
+		selection.focusNode,
+		selection.focusOffset,
+	);
 	let anchor: number;
 	if (selection.isCollapsed) {
 		anchor = focus;
 	} else {
-		anchor = area.indexOf(selection.anchorNode, selection.anchorOffset);
+		anchor = indexOf(root, cache, selection.anchorNode, selection.anchorOffset);
 	}
 
 	if (focus === -1 || anchor === -1) {
-		return area[$selectionInfo];
+		return null;
 	}
 
 	const selectionStart = Math.min(focus, anchor);
@@ -337,332 +691,89 @@ function getSelectionInfo(area: ContentAreaElement): SelectionInfo {
 	return {selectionStart, selectionEnd, selectionDirection};
 }
 
-export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
-	// TODO: Align second parameter with other event constructors
-	constructor(typeArg: string, patch: Patch) {
-		super(typeArg, {detail: {patch}, bubbles: true});
-	}
-}
-
-// TODO: maybe some of these properties can be moved to a hidden controller type
-// symbol properties
-const $value = Symbol.for("ContentArea.$value");
-const $cache = Symbol.for("ContentArea.$cache");
-const $observer = Symbol.for("ContentArea.$observer");
-const $selectionInfo = Symbol.for("ContentArea.$selectionInfo");
-const $onselectionchange = Symbol.for("ContentArea.$onselectionchange");
-const $slot = Symbol.for("ContentArea.$slot");
-const css = `
-:host {
-	display: contents;
-	white-space: break-spaces;
-	word-break: break-all;
-}`;
-
-export class ContentAreaElement extends HTMLElement {
-	[$value]: string;
-	[$cache]: Map<Node, NodeInfo>;
-	[$slot]: HTMLSlotElement;
-	[$selectionInfo]: SelectionInfo;
-	[$observer]: MutationObserver;
-	[$onselectionchange]: (ev: Event) => unknown;
-
-	static get observedAttributes(): Array<string> {
-		return ["contenteditable"];
+function setSelectionRange(
+	root: Element,
+	cache: NodeInfoCache,
+	value: string,
+	selectionStart: number,
+	selectionEnd: number,
+	selectionDirection: SelectionDirection,
+): void {
+	const selection = document.getSelection();
+	if (!selection) {
+		return;
 	}
 
-	constructor() {
-		super();
-		this[$value] = "";
-		this[$cache] = new Map();
-		this[$selectionInfo] = {
-			selectionStart: 0,
-			selectionEnd: 0,
-			selectionDirection: "none",
-		};
-		this[$observer] = new MutationObserver((records) =>
-			validate(this, records),
-		);
-		this[$onselectionchange] = () => validate(this);
-		const shadow = this.attachShadow({mode: "closed"});
-		const style = document.createElement("style");
-		style.textContent = css;
-		shadow.appendChild(style);
-		const slot = document.createElement("slot");
-		this[$slot] = slot;
-		slot.contentEditable = this.contentEditable;
-		shadow.appendChild(slot);
-
-		this.addEventListener("focusin", () => {
-			const {selectionStart, selectionEnd, selectionDirection} = this[
-				$selectionInfo
-			];
-
-			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
-		});
-		this.addEventListener("input", () => validate(this));
+	// We bound selection range to the length of value minus the trailing
+	// newline because attempting to select after the first newline when there
+	// is only newline can cause the editable root to lose focus.
+	const length = value.replace(/(\r|\n|\r\n)$/, "").length;
+	selectionStart = selectionStart || 0;
+	selectionEnd = selectionEnd || 0;
+	selectionStart = Math.max(0, Math.min(selectionStart, length));
+	selectionEnd = Math.max(0, Math.min(selectionEnd, length));
+	if (selectionEnd < selectionStart) {
+		selectionStart = selectionEnd;
 	}
 
-	connectedCallback() {
-		// TODO: listen to attributes like contenteditable, data-contentbefore, data-content
-		this[$observer].observe(this, {
-			subtree: true,
-			childList: true,
-			characterData: true,
-		});
-		document.addEventListener("selectionchange", this[$onselectionchange]);
+	let anchor: number;
+	let focus: number;
+	if (selectionDirection === "backward") {
+		anchor = selectionEnd;
+		focus = selectionStart;
+	} else {
+		anchor = selectionStart;
+		focus = selectionEnd;
 	}
 
-	disconnectedCallback() {
-		this[$cache].clear();
-		this[$observer].disconnect();
-		// JSDOM-based environments like jest will make the global document null
-		// before calling the disconnectedCallback.
-		if (document) {
-			clean(this);
-			document.removeEventListener("selectionchange", this[$onselectionchange]);
+	if (anchor === focus) {
+		const [node, offset] = nodeOffsetAt(root, cache, focus);
+		if (
+			selection.focusNode !== node ||
+			selection.focusOffset !== offset ||
+			// Chrome seems to draw collapsed selections which point to a BR element
+			// incorrectly when there are two adjacent BR elements and one has been
+			// deleted backward, so we force a redraw of the selection.
+			(node &&
+				node.nodeType === Node.ELEMENT_NODE &&
+				node.childNodes[offset] &&
+				node.childNodes[offset].nodeName === "BR")
+		) {
+			selection.collapse(node, offset);
 		}
-	}
-
-	attributeChangedCallback(
-		name: string,
-		//oldValue: string,
-		//newValue: string,
-	) {
-		switch (name) {
-			case "contenteditable": {
-				const slot = this[$slot];
-				// We have to set slot.contentEditable to this.contentEditable because
-				// Chrome has trouble selecting elements across shadow DOM boundaries.
-				// See https://bugs.chromium.org/p/chromium/issues/detail?id=1175930
-
-				// Chrome has additional issues with using the host element as a
-				// contenteditable element but this normalizes some behavior.
-				slot.contentEditable = this.contentEditable;
-				break;
-			}
-		}
-	}
-
-	get value(): string {
-		validate(this);
-		return this[$value];
-	}
-
-	get selectionStart(): number {
-		return this[$selectionInfo].selectionStart;
-	}
-
-	set selectionStart(selectionStart: number) {
-		const {selectionEnd, selectionDirection} = this[$selectionInfo];
-		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
-	}
-
-	get selectionEnd(): number {
-		return this[$selectionInfo].selectionEnd;
-	}
-
-	set selectionEnd(selectionEnd: number) {
-		const {selectionStart, selectionDirection} = this[$selectionInfo];
-		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
-	}
-
-	get selectionDirection(): SelectionDirection {
-		return this[$selectionInfo].selectionDirection;
-	}
-
-	set selectionDirection(selectionDirection: SelectionDirection) {
-		const {selectionStart, selectionEnd} = this[$selectionInfo];
-		this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
-	}
-
-	nodeOffsetAt(index: number): [Node | null, number] {
-		if (index < 0) {
-			return [null, 0];
-		}
-
-		validate(this);
-		const cache = this[$cache];
-		const walker = document.createTreeWalker(
-			this,
-			NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-		);
-
-		let node: Node | null = this;
-		let offset = index;
-		while (node !== null) {
-			const {length} = cache.get(node)!;
-			if (offset <= length) {
-				if (node.nodeType === Node.TEXT_NODE) {
-					return [node, offset];
-				}
-
-				const firstChild = walker.firstChild();
-				if (firstChild) {
-					offset -= cache.get(firstChild)!.offset;
-					node = firstChild;
-				} else if (offset > 0) {
-					const successor = findSuccessorNode(walker);
-					if (successor) {
-						if (successor.nodeName === "BR") {
-							return nodeOffsetFromChild(successor);
-						}
-
-						return [successor, 0];
-					} else {
-						break;
-					}
-				} else if (node.nodeName === "BR") {
-					return nodeOffsetFromChild(node);
-				} else {
-					return [node, 0];
-				}
-			} else {
-				offset -= length;
-				const nextSibling = walker.nextSibling();
-				if (nextSibling) {
-					node = nextSibling;
-				} else {
-					const successor = findSuccessorNode(walker);
-					if (successor) {
-						if (successor.nodeName === "BR") {
-							return nodeOffsetFromChild(successor);
-						}
-
-						return [successor, 0];
-					} else {
-						break;
-					}
-				}
-			}
-		}
-
-		return [this, this.childNodes.length];
-	}
-
-	indexOf(node: Node | null, offset: number): number {
-		if (node == null || !this.contains(node)) {
-			return -1;
-		}
-
-		validate(this);
-		const cache = this[$cache];
-		let index = offset;
-		if (node.nodeType === Node.ELEMENT_NODE) {
-			if (offset >= node.childNodes.length) {
-				if (index > 0) {
-					index = cache.get(node)!.length;
-				}
-			} else {
-				node = node.childNodes[offset];
-				index = 0;
-			}
-		}
-
-		const walker = document.createTreeWalker(
-			this,
-			NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-		);
-		walker.currentNode = node;
-		while (node !== null && node !== this) {
-			const previousSibling = walker.previousSibling();
-			if (previousSibling === null) {
-				const parentNode = walker.parentNode();
-				if (parentNode) {
-					index += cache.get(node)!.offset;
-				}
-
-				node = parentNode;
-			} else {
-				node = previousSibling;
-				index += cache.get(node)!.length;
-			}
-		}
-
-		return index;
-	}
-
-	setSelectionRange(
-		selectionStart: number,
-		selectionEnd: number,
-		selectionDirection: SelectionDirection = "none",
-	): void {
-		const selection = document.getSelection();
-		if (!selection) {
-			return;
-		}
-
-		// We bound selection range to the length of value minus the trailing
-		// newline because attempting to select after the first newline when there
-		// is only newline can cause the editable area to lose focus.
-		const length = this[$value].replace(/(\r|\n|\r\n)$/, "").length;
-		selectionStart = selectionStart || 0;
-		selectionEnd = selectionEnd || 0;
-		selectionStart = Math.max(0, Math.min(selectionStart, length));
-		selectionEnd = Math.max(0, Math.min(selectionEnd, length));
-		if (selectionEnd < selectionStart) {
-			selectionStart = selectionEnd;
-		}
-
-		let anchor: number;
-		let focus: number;
-		if (selectionDirection === "backward") {
-			anchor = selectionEnd;
-			focus = selectionStart;
-		} else {
-			anchor = selectionStart;
-			focus = selectionEnd;
-		}
-
-		if (anchor === focus) {
-			const [node, offset] = this.nodeOffsetAt(focus);
+	} else {
+		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchor);
+		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focus);
+		if (anchorNode === null && focusNode === null) {
+			selection.collapse(null);
+		} else if (anchorNode === null) {
 			if (
-				selection.focusNode !== node ||
-				selection.focusOffset !== offset ||
-				// Chrome seems to draw collapsed selections which point to a BR element
-				// incorrectly when there are two adjacent BR elements and one has been
-				// deleted backward, so we force a redraw of the selection.
-				(node &&
-					node.nodeType === Node.ELEMENT_NODE &&
-					node.childNodes[offset] &&
-					node.childNodes[offset].nodeName === "BR")
+				selection.focusNode !== focusNode ||
+				selection.focusOffset !== focusOffset
 			) {
-				selection.collapse(node, offset);
+				selection.collapse(focusNode, focusOffset);
+			}
+		} else if (focusNode === null) {
+			if (
+				selection.anchorNode !== anchorNode ||
+				selection.anchorOffset !== anchorOffset
+			) {
+				selection.collapse(anchorNode, anchorOffset);
 			}
 		} else {
-			const [anchorNode, anchorOffset] = this.nodeOffsetAt(anchor);
-			const [focusNode, focusOffset] = this.nodeOffsetAt(focus);
-			if (anchorNode === null && focusNode === null) {
-				selection.collapse(null);
-			} else if (anchorNode === null) {
-				if (
-					selection.focusNode !== focusNode ||
-					selection.focusOffset !== focusOffset
-				) {
-					selection.collapse(focusNode, focusOffset);
-				}
-			} else if (focusNode === null) {
-				if (
-					selection.anchorNode !== anchorNode ||
-					selection.anchorOffset !== anchorOffset
-				) {
-					selection.collapse(anchorNode, anchorOffset);
-				}
-			} else {
-				if (
-					selection.focusNode !== focusNode ||
-					selection.focusOffset !== focusOffset ||
-					selection.anchorNode !== anchorNode ||
-					selection.anchorOffset !== anchorOffset
-				) {
-					// TODO: IE support or nah?
-					selection.setBaseAndExtent(
-						anchorNode,
-						anchorOffset,
-						focusNode,
-						focusOffset,
-					);
-				}
+			if (
+				selection.focusNode !== focusNode ||
+				selection.focusOffset !== focusOffset ||
+				selection.anchorNode !== anchorNode ||
+				selection.anchorOffset !== anchorOffset
+			) {
+				// TODO: IE support or nah?
+				selection.setBaseAndExtent(
+					anchorNode,
+					anchorOffset,
+					focusNode,
+					focusOffset,
+				);
 			}
 		}
 	}
