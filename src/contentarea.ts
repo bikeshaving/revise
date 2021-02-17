@@ -1,6 +1,21 @@
 /// <reference lib="dom" />
 import {Patch} from "./patch";
 
+export interface NodeInfo {
+	offset: number;
+	length: number;
+}
+
+export type NodeInfoCache = Map<Node, NodeInfo>;
+
+export type SelectionDirection = "forward" | "backward" | "none";
+
+export interface SelectionInfo {
+	selectionStart: number;
+	selectionEnd: number;
+	selectionDirection: SelectionDirection;
+}
+
 // TODO: incorporate this code somewhere.
 //let undoing = false;
 //el.addEventListener("beforeinput", (ev: InputEvent) => {
@@ -380,13 +395,6 @@ function invalidate(
 	}
 }
 
-export interface NodeInfo {
-	offset: number;
-	length: number;
-}
-
-export type NodeInfoCache = Map<Node, NodeInfo>;
-
 interface StackFrame {
 	oldIndexRelative: number;
 	nodeInfo: NodeInfo;
@@ -648,14 +656,6 @@ function nodeOffsetAt(
 	}
 
 	return [root, root.childNodes.length];
-}
-
-export type SelectionDirection = "forward" | "backward" | "none";
-
-export interface SelectionInfo {
-	selectionStart: number;
-	selectionEnd: number;
-	selectionDirection: SelectionDirection;
 }
 
 function getSelectionInfo(
