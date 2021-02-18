@@ -19,10 +19,17 @@ interface SelectionInfo {
 	selectionDirection: SelectionDirection;
 }
 
-export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
-	// TODO: Align second parameter with other event constructors
-	constructor(typeArg: string, patch: Patch) {
-		super(typeArg, {detail: {patch}, bubbles: true});
+export interface ContentChangeEventDetail {
+	patch: Patch;
+}
+
+export interface ContentChangeEventInit
+	extends CustomEventInit<ContentChangeEventDetail> {}
+
+export class ContentChangeEvent extends CustomEvent<ContentChangeEventDetail> {
+	constructor(typeArg: string, eventInit: ContentChangeEventInit) {
+		// Maybe we should do some runtime eventInit validation.
+		super(typeArg, {bubbles: true, ...eventInit});
 	}
 }
 
@@ -283,7 +290,9 @@ function validate(
 			...(Array.isArray(cursor) ? cursor : [cursor]),
 		);
 		const patch = Patch.diff(oldValue, value, hint);
-		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
+		area.dispatchEvent(
+			new ContentChangeEvent("contentchange", {detail: {patch}}),
+		);
 	}
 }
 
