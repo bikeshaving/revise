@@ -8,9 +8,11 @@ export interface NodeInfo {
 
 export type NodeInfoCache = Map<Node, NodeInfo>;
 
+export type Cursor = [number, number] | number;
+
 export type SelectionDirection = "forward" | "backward" | "none";
 
-export interface SelectionInfo {
+interface SelectionInfo {
 	selectionStart: number;
 	selectionEnd: number;
 	selectionDirection: SelectionDirection;
@@ -25,12 +27,12 @@ export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
 
 // TODO: Maybe these properties can be grouped on a hidden controller class?
 /*** ContentAreaElement symbol properties ***/
-const $value = Symbol.for("ContentArea.$value");
-const $cache = Symbol.for("ContentArea.$cache");
-const $observer = Symbol.for("ContentArea.$observer");
-const $onselectionchange = Symbol.for("ContentArea.$onselectionchange");
-const $selectionInfo = Symbol.for("ContentArea.$selectionInfo");
-const $slot = Symbol.for("ContentArea.$slot");
+const $value = Symbol.for("revise$value");
+const $cache = Symbol.for("revise$cache");
+const $observer = Symbol.for("revise$observer");
+const $onselectionchange = Symbol.for("revise$onselectionchange");
+const $cursor = Symbol.for("revise$cursor");
+const $slot = Symbol.for("revise$slot");
 const css = `
 :host {
 	display: contents;
@@ -44,7 +46,7 @@ export class ContentAreaElement extends HTMLElement {
 	[$cache]: NodeInfoCache;
 	[$value]: string;
 	[$slot]: HTMLSlotElement;
-	[$selectionInfo]: SelectionInfo;
+	[$cursor]: Cursor;
 	[$observer]: MutationObserver;
 	[$onselectionchange]: (ev: Event) => unknown;
 
@@ -56,20 +58,17 @@ export class ContentAreaElement extends HTMLElement {
 		super();
 		this[$value] = "";
 		this[$cache] = new Map();
-		this[$selectionInfo] = {
-			selectionStart: 0,
-			selectionEnd: 0,
-			selectionDirection: "none",
-		};
-
+		this[$cursor] = 0;
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, records);
 		});
 
 		this[$onselectionchange] = () => {
 			validate(this);
-			this[$selectionInfo] =
-				getSelectionInfo(this, this[$cache]) || this[$selectionInfo];
+			const cursor = getCursor(this, this[$cache]);
+			if (cursor !== -1) {
+				this[$cursor] = cursor;
+			}
 		};
 
 		const shadow = this.attachShadow({mode: "closed"});
@@ -82,10 +81,11 @@ export class ContentAreaElement extends HTMLElement {
 		shadow.appendChild(slot);
 
 		this.addEventListener("focusin", () => {
-			const {selectionStart, selectionEnd, selectionDirection} = this[
-				$selectionInfo
-			];
-
+			const {
+				selectionStart,
+				selectionEnd,
+				selectionDirection,
+			} = selectionInfoFromCursor(this[$cursor]);
 			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 		});
 
@@ -95,8 +95,10 @@ export class ContentAreaElement extends HTMLElement {
 	connectedCallback() {
 		// TODO: Figure out a way to call validate here instead
 		this[$value] = getValueAndMarkNodes(this, this[$cache], this[$value]);
-		this[$selectionInfo] =
-			getSelectionInfo(this, this[$cache]) || this[$selectionInfo];
+		const cursor = getCursor(this, this[$cache]);
+		if (cursor !== -1) {
+			this[$cursor] = cursor;
+		}
 		// TODO: listen to attributes like data-contentbefore, data-contentafter for widgets
 		this[$observer].observe(this, {
 			subtree: true,
@@ -141,16 +143,30 @@ export class ContentAreaElement extends HTMLElement {
 		return this[$value];
 	}
 
+	nodeOffsetAt(index: number): [Node | null, number] {
+		validate(this);
+		const cache = this[$cache];
+		return nodeOffsetAt(this, cache, index);
+	}
+
+	indexOf(node: Node | null, offset: number): number {
+		validate(this);
+		const cache = this[$cache];
+		return indexOf(this, cache, node, offset);
+	}
+
 	get selectionStart(): number {
 		validate(this);
-		return this[$selectionInfo].selectionStart;
+		return selectionInfoFromCursor(this[$cursor]).selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
 		validate(this);
 		const value = this[$value];
 		const cache = this[$cache];
-		const {selectionEnd, selectionDirection} = this[$selectionInfo];
+		const {selectionEnd, selectionDirection} = selectionInfoFromCursor(
+			this[$cursor],
+		);
 		setSelectionRange(
 			this,
 			cache,
@@ -163,14 +179,16 @@ export class ContentAreaElement extends HTMLElement {
 
 	get selectionEnd(): number {
 		validate(this);
-		return this[$selectionInfo].selectionEnd;
+		return selectionInfoFromCursor(this[$cursor]).selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
 		validate(this);
-		const cache = this[$cache];
 		const value = this[$value];
-		const {selectionStart, selectionDirection} = this[$selectionInfo];
+		const cache = this[$cache];
+		const {selectionStart, selectionDirection} = selectionInfoFromCursor(
+			this[$cursor],
+		);
 		setSelectionRange(
 			this,
 			cache,
@@ -183,14 +201,16 @@ export class ContentAreaElement extends HTMLElement {
 
 	get selectionDirection(): SelectionDirection {
 		validate(this);
-		return this[$selectionInfo].selectionDirection;
+		return selectionInfoFromCursor(this[$cursor]).selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
 		validate(this);
 		const cache = this[$cache];
 		const value = this[$value];
-		const {selectionStart, selectionEnd} = this[$selectionInfo];
+		const {selectionStart, selectionEnd} = selectionInfoFromCursor(
+			this[$cursor],
+		);
 		setSelectionRange(
 			this,
 			cache,
@@ -199,18 +219,6 @@ export class ContentAreaElement extends HTMLElement {
 			selectionEnd,
 			selectionDirection,
 		);
-	}
-
-	nodeOffsetAt(index: number): [Node | null, number] {
-		validate(this);
-		const cache = this[$cache];
-		return nodeOffsetAt(this, cache, index);
-	}
-
-	indexOf(node: Node | null, offset: number): number {
-		validate(this);
-		const cache = this[$cache];
-		return indexOf(this, cache, node, offset);
 	}
 
 	setSelectionRange(
@@ -235,8 +243,11 @@ export class ContentAreaElement extends HTMLElement {
 		validate(this);
 		const cache = this[$cache];
 		const value = this[$value];
-		const {selectionStart, selectionEnd, selectionDirection} =
-			getSelectionInfo(this, cache) || this[$selectionInfo];
+		const {
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		} = selectionInfoFromCursor(this[$cursor]);
 		callback();
 		validate(this);
 		setSelectionRange(
@@ -263,20 +274,22 @@ function validate(
 	invalidate(area, cache, records);
 	if (records.length) {
 		const oldValue = area[$value];
-		const oldSelectionInfo = area[$selectionInfo];
+		const oldCursor = area[$cursor];
 		const value = (area[$value] = getValueAndMarkNodes(area, cache, oldValue));
-		const selectionInfo = (area[$selectionInfo] =
-			getSelectionInfo(area, cache) || oldSelectionInfo);
+		const cursor = getCursor(area, cache);
+		if (cursor !== -1) {
+			area[$cursor] = cursor;
+		}
+
 		if (avoidDispatch) {
 			return;
 		}
 
-		const patch = Patch.diff(
-			oldValue,
-			value,
-			Math.min(oldSelectionInfo.selectionStart, selectionInfo.selectionStart),
+		const hint = Math.min(
+			...(Array.isArray(oldCursor) ? oldCursor : [oldCursor]),
+			...(Array.isArray(cursor) ? cursor : [cursor]),
 		);
-
+		const patch = Patch.diff(oldValue, value, hint);
 		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
 		// We do not fire a second ContentChangeEvent if this dispatchEvent call
 		// causes further mutations, on the basis that the user should be aware of
@@ -288,10 +301,10 @@ function validate(
 	}
 }
 
-// TODO: PARAMETERIZE NEWLINE BEHAVIOR????????????
+// TODO: PARAMETERIZE NEWLINE BEHAVIOR?
 const NEWLINE = "\n";
 
-// TODO: PARAMETERIZE BLOCKLIKE ELEMENTS??????????????
+// TODO: PARAMETERIZE BLOCKLIKE ELEMENTS?
 const BLOCKLIKE_ELEMENTS = new Set([
 	"ADDRESS",
 	"ARTICLE",
@@ -649,15 +662,11 @@ function nodeOffsetAt(
 	return [root, root.childNodes.length];
 }
 
-function getSelectionInfo(
-	root: Element,
-	cache: NodeInfoCache,
-): SelectionInfo | null {
+function getCursor(root: Element, cache: NodeInfoCache): Cursor {
 	const selection = document.getSelection();
 	if (selection == null) {
-		return null;
+		return -1;
 	}
-
 	const focus = indexOf(
 		root,
 		cache,
@@ -671,14 +680,34 @@ function getSelectionInfo(
 		anchor = indexOf(root, cache, selection.anchorNode, selection.anchorOffset);
 	}
 
-	if (focus === -1 || anchor === -1) {
-		return null;
+	if (focus === anchor || anchor === -1) {
+		return focus;
+	} else if (focus === -1) {
+		return anchor;
 	}
 
-	const selectionStart = Math.min(focus, anchor);
-	const selectionEnd = Math.max(focus, anchor);
-	const selectionDirection: SelectionDirection =
-		focus === anchor ? "none" : focus < anchor ? "backward" : "forward";
+	return [anchor, focus];
+}
+
+function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
+	if (cursor === -1) {
+		// We do not allow the cursor to be -1 in the ContentAreaElement,
+		// preferring to keep the last known cursor instead.
+		// Nevertheless, we return the default selection just in case here.
+		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
+	}
+
+	let selectionStart: number;
+	let selectionEnd: number;
+	let selectionDirection: SelectionDirection = "none";
+	if (Array.isArray(cursor)) {
+		selectionStart = Math.max(0, Math.min.apply(null, cursor));
+		selectionEnd = Math.max(0, Math.max.apply(null, cursor));
+		selectionDirection = cursor[0] <= cursor[1] ? "forward" : "backward";
+	} else {
+		selectionStart = selectionEnd = cursor;
+	}
+
 	return {selectionStart, selectionEnd, selectionDirection};
 }
 
