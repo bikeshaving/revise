@@ -16,26 +16,6 @@ export interface SelectionInfo {
 	selectionDirection: SelectionDirection;
 }
 
-// TODO: incorporate this code somewhere.
-//let undoing = false;
-//el.addEventListener("beforeinput", (ev: InputEvent) => {
-//	if (ev.inputType !== "historyUndo" && undoing) {
-//		ev.preventDefault();
-//	}
-//});
-//
-//el.addEventListener("input", (ev: InputEvent) => {
-//	if (ev.inputType === "historyUndo") {
-//		return;
-//	}
-//
-//	undoing = true;
-//	requestAnimationFrame(() => {
-//		document.execCommand("undo");
-//		undoing = false;
-//	});
-//});
-
 export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
 	// TODO: Align second parameter with other event constructors
 	constructor(typeArg: string, patch: Patch) {
@@ -93,6 +73,7 @@ export class ContentAreaElement extends HTMLElement {
 		this[$slot] = slot;
 		slot.contentEditable = this.contentEditable;
 		shadow.appendChild(slot);
+
 		this.addEventListener("focusin", () => {
 			const {selectionStart, selectionEnd, selectionDirection} = this[
 				$selectionInfo
@@ -100,6 +81,7 @@ export class ContentAreaElement extends HTMLElement {
 
 			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 		});
+
 		this.addEventListener("input", () => validate(this));
 	}
 
