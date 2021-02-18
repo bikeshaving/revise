@@ -265,13 +265,8 @@ export class ContentAreaElement extends HTMLElement {
 
 function validate(
 	area: ContentAreaElement,
-	records?: Array<MutationRecord> | undefined,
-	avoidDispatch = false,
+	records: Array<MutationRecord> = area[$observer].takeRecords(),
 ): void {
-	if (records === undefined) {
-		records = area[$observer].takeRecords();
-	}
-
 	const cache = area[$cache];
 	invalidate(area, cache, records);
 	if (records.length) {
@@ -283,23 +278,12 @@ function validate(
 			area[$cursor] = cursor;
 		}
 
-		if (avoidDispatch) {
-			return;
-		}
-
 		const hint = Math.min(
 			...(Array.isArray(oldCursor) ? oldCursor : [oldCursor]),
 			...(Array.isArray(cursor) ? cursor : [cursor]),
 		);
 		const patch = Patch.diff(oldValue, value, hint);
 		area.dispatchEvent(new ContentChangeEvent("contentchange", patch));
-		// We do not fire a second ContentChangeEvent if this dispatchEvent call
-		// causes further mutations, on the basis that the user should be aware of
-		// the new changes, to prevent infinite loops and confusing stack traces.
-		const records1 = area[$observer].takeRecords();
-		if (records1.length) {
-			validate(area, records1, true);
-		}
 	}
 }
 
