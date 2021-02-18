@@ -34,7 +34,9 @@ const $slot = Symbol.for("ContentArea.$slot");
 const css = `
 :host {
 	display: contents;
+	white-space: pre-wrap;
 	white-space: break-spaces;
+	overflow-wrap: break-word;
 	word-break: break-all;
 }`;
 
@@ -60,11 +62,16 @@ export class ContentAreaElement extends HTMLElement {
 			selectionDirection: "none",
 		};
 
-		this[$observer] = new MutationObserver((records) =>
-			validate(this, records),
-		);
+		this[$observer] = new MutationObserver((records) => {
+			validate(this, records);
+		});
 
-		this[$onselectionchange] = () => validate(this);
+		this[$onselectionchange] = () => {
+			validate(this);
+			this[$selectionInfo] =
+				getSelectionInfo(this, this[$cache]) || this[$selectionInfo];
+		};
+
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
@@ -86,15 +93,17 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	connectedCallback() {
+		// TODO: Figure out a way to call validate here instead
 		this[$value] = getValueAndMarkNodes(this, this[$cache], this[$value]);
 		this[$selectionInfo] =
 			getSelectionInfo(this, this[$cache]) || this[$selectionInfo];
-		// TODO: listen to attributes like contenteditable, data-contentbefore, data-content
+		// TODO: listen to attributes like data-contentbefore, data-contentafter for widgets
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
 			characterData: true,
 		});
+		document.addEventListener("selectionchange", this[$onselectionchange]);
 	}
 
 	disconnectedCallback() {
