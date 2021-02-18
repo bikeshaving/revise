@@ -8,6 +8,7 @@ export interface NodeInfo {
 
 export type NodeInfoCache = Map<Node, NodeInfo>;
 
+// TODO: Move this type to its own module?
 export type Cursor = [number, number] | number;
 
 export type SelectionDirection = "forward" | "backward" | "none";
@@ -27,12 +28,13 @@ export class ContentChangeEvent extends CustomEvent<{patch: Patch}> {
 
 // TODO: Maybe these properties can be grouped on a hidden controller class?
 /*** ContentAreaElement symbol properties ***/
-const $value = Symbol.for("revise$value");
 const $cache = Symbol.for("revise$cache");
+const $value = Symbol.for("revise$value");
 const $observer = Symbol.for("revise$observer");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 const $cursor = Symbol.for("revise$cursor");
 const $slot = Symbol.for("revise$slot");
+
 const css = `
 :host {
 	display: contents;
