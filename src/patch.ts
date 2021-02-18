@@ -187,7 +187,7 @@ export class Patch {
 			.expand(insertSeq)
 			.align(insertSeq)) {
 			if (inserting) {
-				if (!prevDeleting) {
+				if (retainOffset > 0 && !prevDeleting) {
 					parts.push(retainOffset);
 				}
 
