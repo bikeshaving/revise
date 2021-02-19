@@ -172,6 +172,18 @@ export class Patch {
 		this.deleted = deleted;
 	}
 
+	get inserted(): string {
+		let value = "";
+		for (let i = 0; i < this.parts.length; i++) {
+			const part = this.parts[i];
+			if (typeof part === "string") {
+				value += part;
+			}
+		}
+
+		return value;
+	}
+
 	static synthesize(
 		insertSeq: Subseq,
 		inserted: string,
@@ -263,6 +275,7 @@ export class Patch {
 		);
 	}
 
+	// TODO: Should this be a getter?
 	operations(): Array<Operation> {
 		const result: Array<Operation> = [];
 		let insertOffset = 0;
