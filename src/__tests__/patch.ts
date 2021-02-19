@@ -275,6 +275,21 @@ describe("Patch", () => {
 			const result = new Patch([6, "   ", 11], "");
 			expect(patch1.compose(patch2)).toEqual(result);
 		});
+
+		test("compose 10", () => {
+			// s0: "x"
+			// d1:  -
+			//      "ab"
+			// i1:  =++
+			// s1: "ab"
+			// d2:  ==
+			// i2:  =+=
+			// s2: "aab"
+			const patch1 = new Patch([0, 1, "ab"], "x");
+			const patch2 = new Patch([1, "a", 2], "");
+			const result = new Patch([0, 1, "aab"], "x");
+			expect(patch1.compose(patch2)).toEqual(result);
+		});
 	});
 
 	describe("build", () => {

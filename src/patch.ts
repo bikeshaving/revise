@@ -43,10 +43,10 @@ function consolidate(
 		if (flag1 && flag2) {
 			throw new Error("Overlapping subseqs");
 		} else if (flag1) {
-			result += text1.slice(i1, size);
+			result += text1.slice(i1, i1 + size);
 			i1 += size;
 		} else if (flag2) {
-			result += text2.slice(i2, size);
+			result += text2.slice(i2, i2 + size);
 			i2 += size;
 		}
 	}
