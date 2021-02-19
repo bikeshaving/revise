@@ -486,11 +486,7 @@ function getValueAndMarkNodes(
 				content += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
-			} else if (
-				!hasNewline &&
-				isBlocklikeElement(node) &&
-				node.firstChild !== null
-			) {
+			} else if (!hasNewline && isBlocklikeElement(node)) {
 				content += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;

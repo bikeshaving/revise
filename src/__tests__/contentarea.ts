@@ -66,7 +66,7 @@ describe("contentarea", () => {
 
 		test("empty div", () => {
 			area.innerHTML = "<div></div>Hello<div>World</div>";
-			expect(area.value).toEqual("Hello\nWorld\n");
+			expect(area.value).toEqual("\nHello\nWorld\n");
 		});
 
 		test("empty div at the end", () => {
