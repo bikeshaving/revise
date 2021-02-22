@@ -22,6 +22,9 @@ export interface InsertOperation {
 
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
+// TODO: Does this belong here?
+export type Cursor = [number, number] | number;
+
 /**
  * Given two subseqs and strings which are represented by the included segments
  * of the subseqs, this function combines the two strings so that they overlap
@@ -165,25 +168,6 @@ function overlapping(
 }
 
 export class Patch {
-	parts: Array<string | number>;
-	deleted?: string;
-	constructor(parts: Array<string | number>, deleted?: string) {
-		this.parts = parts;
-		this.deleted = deleted;
-	}
-
-	get inserted(): string {
-		let value = "";
-		for (let i = 0; i < this.parts.length; i++) {
-			const part = this.parts[i];
-			if (typeof part === "string") {
-				value += part;
-			}
-		}
-
-		return value;
-	}
-
 	static synthesize(
 		insertSeq: Subseq,
 		inserted: string,
@@ -275,6 +259,18 @@ export class Patch {
 		);
 	}
 
+	parts: Array<string | number>;
+	deleted?: string;
+
+	constructor(parts: Array<string | number>, deleted?: string) {
+		this.parts = parts;
+		this.deleted = deleted;
+	}
+
+	get inserted(): string {
+		return this.factor()[1];
+	}
+
 	// TODO: Should this be a getter?
 	operations(): Array<Operation> {
 		const result: Array<Operation> = [];
@@ -314,6 +310,24 @@ export class Patch {
 		}
 
 		return result;
+	}
+
+	apply(text: string): string {
+		const operations = this.operations();
+		let text1 = "";
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
+			switch (op.type) {
+				case "retain":
+					text1 += text.slice(op.start, op.end);
+					break;
+				case "insert":
+					text1 += op.value;
+					break;
+			}
+		}
+
+		return text1;
 	}
 
 	factor(): [Subseq, string, Subseq, string | undefined] {
@@ -397,5 +411,16 @@ export class Patch {
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
 		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted);
+	}
+
+	invert(): Patch {
+		if (typeof this.deleted === "undefined") {
+			throw new Error("Cannot invert patch without deleted");
+		}
+
+		let [insertSeq, inserted, deleteSeq, deleted] = this.factor();
+		deleteSeq = deleteSeq.expand(insertSeq);
+		insertSeq = insertSeq.shrink(deleteSeq);
+		return Patch.synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
 }

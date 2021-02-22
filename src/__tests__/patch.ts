@@ -325,4 +325,38 @@ describe("Patch", () => {
 			);
 		});
 	});
+
+	describe("invert", () => {
+		test("invert 1", () => {
+			const text = "hello world";
+			const patch = Patch.build(text, "oo", 5);
+			const inverted = patch.invert();
+			expect(inverted).toEqual(new Patch([5, 7, 13], "oo"));
+			expect(inverted.apply(patch.apply(text))).toEqual(text);
+		});
+
+		test("invert 2", () => {
+			const text = "hello world";
+			const patch = Patch.build(text, "era", 1, 9);
+			const inverted = patch.invert();
+			expect(inverted).toEqual(new Patch([1, "ello wor", 1, 4, 6], "era"));
+			expect(inverted.apply(patch.apply(text))).toEqual(text);
+		});
+
+		test("invert 3", () => {
+			const text = "hello world";
+			const patch = Patch.build(text, "buddy", 6, 11);
+			const inverted = patch.invert();
+			expect(inverted).toEqual(new Patch([6, "world", 6, 11], "buddy"));
+			expect(inverted.apply(patch.apply(text))).toEqual(text);
+		});
+
+		test("invert 4", () => {
+			const text = "hello world";
+			const patch = Patch.build("hello world", "", 10, 11);
+			const inverted = patch.invert();
+			expect(inverted).toEqual(new Patch([10, "d"], ""));
+			expect(inverted.apply(patch.apply(text))).toEqual(text);
+		});
+	});
 });
