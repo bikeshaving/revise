@@ -1,5 +1,4 @@
 /// <reference lib="dom" />
-
 import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
@@ -87,7 +86,9 @@ export class ContentAreaElement extends HTMLElement {
 		});
 
 		// TODO: Should we consider passing input event information to this function?
-		this.addEventListener("input", () => validate(this));
+		this.addEventListener("input", () => {
+			validate(this, this[$observer].takeRecords());
+		});
 
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, records);
@@ -96,10 +97,14 @@ export class ContentAreaElement extends HTMLElement {
 		// Because this listener is added to the document, we have to add and
 		// remove the listener in the connected callback.
 		this[$onselectionchange] = () => {
-			validate(this);
-			const cursor = getCursor(this, this[$cache]);
-			if (cursor !== -1) {
-				this[$cursor] = cursor;
+			const records = this[$observer].takeRecords();
+			if (records.length) {
+				validate(this, records);
+			} else {
+				const cursor = getCursor(this, this[$cache]);
+				if (cursor !== -1) {
+					this[$cursor] = cursor;
+				}
 			}
 		};
 	}
@@ -158,29 +163,39 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get value(): string {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		return this[$value];
 	}
 
+	get cursor(): Cursor {
+		validate(this, this[$observer].takeRecords());
+		const cursor = this[$cursor];
+		if (typeof cursor === "number") {
+			return cursor;
+		}
+
+		return cursor.slice() as Cursor;
+	}
+
 	nodeOffsetAt(index: number): [Node | null, number] {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		return nodeOffsetAt(this, cache, index);
 	}
 
 	indexOf(node: Node | null, offset: number): number {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		return indexOf(this, cache, node, offset);
 	}
 
 	get selectionStart(): number {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		return selectionInfoFromCursor(this[$cursor]).selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const value = this[$value];
 		const cache = this[$cache];
 		const {selectionEnd, selectionDirection} = selectionInfoFromCursor(
@@ -197,12 +212,12 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get selectionEnd(): number {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		return selectionInfoFromCursor(this[$cursor]).selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const value = this[$value];
 		const cache = this[$cache];
 		const {selectionStart, selectionDirection} = selectionInfoFromCursor(
@@ -219,12 +234,12 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get selectionDirection(): SelectionDirection {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		return selectionInfoFromCursor(this[$cursor]).selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		const value = this[$value];
 		const {selectionStart, selectionEnd} = selectionInfoFromCursor(
@@ -245,7 +260,7 @@ export class ContentAreaElement extends HTMLElement {
 		selectionEnd: number,
 		selectionDirection: SelectionDirection = "none",
 	): void {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		const value = this[$value];
 		setSelectionRange(
@@ -259,7 +274,7 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	repair(callback: Function): void {
-		validate(this);
+		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		const value = this[$value];
 		const {
@@ -268,7 +283,7 @@ export class ContentAreaElement extends HTMLElement {
 			selectionDirection,
 		} = selectionInfoFromCursor(this[$cursor]);
 		callback();
-		validate(this);
+		validate(this, this[$observer].takeRecords(), true);
 		setSelectionRange(
 			this,
 			cache,
@@ -280,19 +295,28 @@ export class ContentAreaElement extends HTMLElement {
 	}
 }
 
+// TODO: consider using an options object for third parameter.
 function validate(
 	area: ContentAreaElement,
-	records: Array<MutationRecord> = area[$observer].takeRecords(),
+	records: Array<MutationRecord>,
+	ignoreSelection = false,
 ): void {
-	const cache = area[$cache];
-	invalidate(area, cache, records);
 	if (records.length) {
+		const cache = area[$cache];
+		invalidate(area, cache, records);
 		const oldValue = area[$value];
 		const oldCursor = area[$cursor];
 		const value = (area[$value] = getValueAndMarkNodes(area, cache, oldValue));
-		const cursor = getCursor(area, cache);
-		if (cursor !== -1) {
-			area[$cursor] = cursor;
+		let cursor = oldCursor;
+		// There appears to be a strange race condition in Safari where
+		// document.getSelection() returns erroneous information when repair is
+		// called from within a requestAnimationFrame callback, so we just skip
+		// finding the new cursor information.
+		if (!ignoreSelection) {
+			cursor = getCursor(area, cache);
+			if (cursor !== -1) {
+				area[$cursor] = cursor;
+			}
 		}
 
 		const hint = Math.min(
@@ -300,6 +324,7 @@ function validate(
 			...(Array.isArray(cursor) ? cursor : [cursor]),
 		);
 		const patch = Patch.diff(oldValue, value, hint);
+		// TODO: pass in inputType information?
 		area.dispatchEvent(
 			new ContentChangeEvent("contentchange", {detail: {patch}}),
 		);
