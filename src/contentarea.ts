@@ -1,4 +1,6 @@
 /// <reference lib="dom" />
+
+import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
 export interface NodeInfo {
@@ -7,9 +9,6 @@ export interface NodeInfo {
 }
 
 export type NodeInfoCache = Map<Node, NodeInfo>;
-
-// TODO: Move this type to its own module?
-export type Cursor = [number, number] | number;
 
 export type SelectionDirection = "forward" | "backward" | "none";
 
@@ -33,15 +32,6 @@ export class ContentChangeEvent extends CustomEvent<ContentChangeEventDetail> {
 	}
 }
 
-// TODO: Maybe these properties can be grouped on a hidden controller class?
-/*** ContentAreaElement symbol properties ***/
-const $cache = Symbol.for("revise$cache");
-const $value = Symbol.for("revise$value");
-const $observer = Symbol.for("revise$observer");
-const $onselectionchange = Symbol.for("revise$onselectionchange");
-const $cursor = Symbol.for("revise$cursor");
-const $slot = Symbol.for("revise$slot");
-
 const css = `
 :host {
 	display: contents;
@@ -51,11 +41,20 @@ const css = `
 	word-break: break-all;
 }`;
 
+// TODO: Maybe these properties can be grouped on a hidden controller class?
+/*** ContentAreaElement symbol properties ***/
+const $cache = Symbol.for("revise$cache");
+const $value = Symbol.for("revise$value");
+const $cursor = Symbol.for("revise$cursor");
+const $slot = Symbol.for("revise$slot");
+const $observer = Symbol.for("revise$observer");
+const $onselectionchange = Symbol.for("revise$onselectionchange");
+
 export class ContentAreaElement extends HTMLElement {
 	[$cache]: NodeInfoCache;
 	[$value]: string;
-	[$slot]: HTMLSlotElement;
 	[$cursor]: Cursor;
+	[$slot]: HTMLSlotElement;
 	[$observer]: MutationObserver;
 	[$onselectionchange]: (ev: Event) => unknown;
 
@@ -65,20 +64,9 @@ export class ContentAreaElement extends HTMLElement {
 
 	constructor() {
 		super();
-		this[$value] = "";
 		this[$cache] = new Map();
+		this[$value] = "";
 		this[$cursor] = 0;
-		this[$observer] = new MutationObserver((records) => {
-			validate(this, records);
-		});
-
-		this[$onselectionchange] = () => {
-			validate(this);
-			const cursor = getCursor(this, this[$cache]);
-			if (cursor !== -1) {
-				this[$cursor] = cursor;
-			}
-		};
 
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
@@ -98,7 +86,22 @@ export class ContentAreaElement extends HTMLElement {
 			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
 		});
 
+		// TODO: Should we consider passing input event information to this function?
 		this.addEventListener("input", () => validate(this));
+
+		this[$observer] = new MutationObserver((records) => {
+			validate(this, records);
+		});
+
+		// Because this listener is added to the document, we have to add and
+		// remove the listener in the connected callback.
+		this[$onselectionchange] = () => {
+			validate(this);
+			const cursor = getCursor(this, this[$cache]);
+			if (cursor !== -1) {
+				this[$cursor] = cursor;
+			}
+		};
 	}
 
 	connectedCallback() {
@@ -108,12 +111,19 @@ export class ContentAreaElement extends HTMLElement {
 		if (cursor !== -1) {
 			this[$cursor] = cursor;
 		}
-		// TODO: listen to attributes like data-contentbefore, data-contentafter for widgets
+
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
 			characterData: true,
+			attributes: true,
+			attributeFilter: [
+				"data-content",
+				"data-contentbefore",
+				"data-contentafter",
+			],
 		});
+
 		document.addEventListener("selectionchange", this[$onselectionchange]);
 	}
 
@@ -140,7 +150,7 @@ export class ContentAreaElement extends HTMLElement {
 				// See https://bugs.chromium.org/p/chromium/issues/detail?id=1175930
 
 				// Chrome has additional issues with using the host element as a
-				// contenteditable element but this normalizes some behavior.
+				// contenteditable element but this normalizes some of the behavior.
 				slot.contentEditable = this.contentEditable;
 				break;
 			}
@@ -702,6 +712,7 @@ function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
 	return {selectionStart, selectionEnd, selectionDirection};
 }
 
+// TODO: Maybe we can have the internal function work with cursors instead.
 function setSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
@@ -715,9 +726,9 @@ function setSelectionRange(
 		return;
 	}
 
-	// We bound selection range to the length of value minus the trailing
-	// newline because attempting to select after the first newline when there
-	// is only newline can cause the editable root to lose focus.
+	// We bound selection range to the length of value minus the trailing newline
+	// because attempting to select after the first newline when there is only
+	// one can cause the editable root to lose focus.
 	const length = value.replace(/(\r|\n|\r\n)$/, "").length;
 	selectionStart = selectionStart || 0;
 	selectionEnd = selectionEnd || 0;
