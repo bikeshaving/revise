@@ -4,7 +4,7 @@ import {Subseq} from "../subseq";
 describe("Patch", () => {
 	describe("operations", () => {
 		test("operations 1", () => {
-			expect(new Patch([5, "oo", 11]).operations()).toEqual([
+			expect(new Patch([5, "oo", 11]).operations).toEqual([
 				{type: "retain", start: 0, end: 5},
 				{type: "insert", start: 5, value: "oo"},
 				{type: "retain", start: 5, end: 11},
@@ -12,7 +12,7 @@ describe("Patch", () => {
 		});
 
 		test("operations 2", () => {
-			expect(new Patch([1, 9, "era", 11]).operations()).toEqual([
+			expect(new Patch([1, 9, "era", 11]).operations).toEqual([
 				{type: "retain", start: 0, end: 1},
 				{type: "delete", start: 1, end: 9},
 				{type: "insert", start: 1, value: "era"},
@@ -21,7 +21,7 @@ describe("Patch", () => {
 		});
 
 		test("operations 3", () => {
-			expect(new Patch([0, 2, "je", 5, 11]).operations()).toEqual([
+			expect(new Patch([0, 2, "je", 5, 11]).operations).toEqual([
 				{type: "delete", start: 0, end: 2},
 				{type: "insert", start: 0, value: "je"},
 				{type: "retain", start: 2, end: 5},
@@ -30,7 +30,7 @@ describe("Patch", () => {
 		});
 
 		test("operations 4", () => {
-			expect(new Patch([4, " ", 5, 11, "n Earth"]).operations()).toEqual([
+			expect(new Patch([4, " ", 5, 11, "n Earth"]).operations).toEqual([
 				{type: "retain", start: 0, end: 4},
 				{type: "insert", start: 4, value: " "},
 				{type: "retain", start: 4, end: 5},
@@ -40,7 +40,7 @@ describe("Patch", () => {
 		});
 
 		test("operations 5", () => {
-			expect(new Patch([6, 11, "buddy"]).operations()).toEqual([
+			expect(new Patch([6, 11, "buddy"]).operations).toEqual([
 				{type: "retain", start: 0, end: 6},
 				{type: "delete", start: 6, end: 11},
 				{type: "insert", start: 6, value: "buddy"},
@@ -48,7 +48,7 @@ describe("Patch", () => {
 		});
 
 		test("operations 6", () => {
-			expect(new Patch([10, 11]).operations()).toEqual([
+			expect(new Patch([10, 11]).operations).toEqual([
 				{type: "retain", start: 0, end: 10},
 				{type: "delete", start: 10, end: 11},
 			]);

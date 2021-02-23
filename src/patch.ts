@@ -1,4 +1,3 @@
-// TODO: use this
 import {Subseq} from "./subseq";
 
 export interface RetainOperation {
@@ -11,7 +10,6 @@ export interface DeleteOperation {
 	type: "delete";
 	start: number;
 	end: number;
-	value?: string | undefined;
 }
 
 export interface InsertOperation {
@@ -24,6 +22,26 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
 // TODO: Does this belong here?
 export type Cursor = [number, number] | number;
+
+export function normalizeCursor(cursor: Cursor): Cursor {
+	if (Array.isArray(cursor)) {
+		if (cursor[0] < 0) {
+			cursor = cursor[1] || -1;
+		} else if (cursor[1] < 0) {
+			cursor = cursor[0] || -1;
+		} else if (cursor[0] === cursor[1]) {
+			cursor = cursor[0];
+		} else {
+			return cursor;
+		}
+	}
+
+	if (cursor < 0) {
+		return -1;
+	}
+
+	return cursor;
+}
 
 /**
  * Given two subseqs and strings which are represented by the included segments
@@ -238,16 +256,16 @@ export class Patch {
 	}
 
 	static diff(text1: string, text2: string, hint?: number): Patch {
-		// TODO: Use hint to guess prefix and suffix?
 		let prefix = commonPrefixLength(text1, text2);
 		let suffix = commonSuffixLength(text1, text2);
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {
-			// Prefix and suffix may overlap when there are runs of the same character.
+			// prefix and suffix overlap when edits are runs of the same character.
 			if (hint !== undefined && hint > -1) {
 				prefix = Math.min(prefix, hint);
 			}
 
-			// TODO: We can probably avoid the commonSuffixLength() call here.
+			// TODO: We can probably avoid the commonSuffixLength() call here in
+			// favor of arithmetic.
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
@@ -261,62 +279,32 @@ export class Patch {
 
 	parts: Array<string | number>;
 	deleted?: string;
+	operations!: Array<Operation>;
 
 	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
 		this.deleted = deleted;
+		let operations: Array<Operation> | undefined;
+		Object.defineProperty(this, "operations", {
+			get() {
+				if (!operations) {
+					operations = createOperations(this.parts);
+				}
+
+				// defensive clone
+				return operations.slice();
+			},
+		});
 	}
 
 	get inserted(): string {
 		return this.factor()[1];
 	}
 
-	// TODO: Should this be a getter?
-	operations(): Array<Operation> {
-		const result: Array<Operation> = [];
-		let insertOffset = 0;
-		let retainOffset = 0;
-		let retaining = true;
-		for (let i = 0; i < this.parts.length; i++) {
-			const part = this.parts[i];
-			if (typeof part === "number") {
-				if (retaining) {
-					if (part < retainOffset) {
-						throw new TypeError("Malformed patch");
-					} else if (part > retainOffset) {
-						result.push({type: "retain", start: retainOffset, end: part});
-						insertOffset = part;
-						retainOffset = part;
-					}
-
-					retaining = false;
-				} else {
-					if (part <= retainOffset) {
-						throw new TypeError("Malformed patch");
-					}
-
-					result.push({type: "delete", start: retainOffset, end: part});
-					insertOffset = retainOffset;
-					retainOffset = part;
-					retaining = true;
-				}
-			} else if (typeof part === "string") {
-				result.push({type: "insert", start: insertOffset, value: part});
-				insertOffset = retainOffset;
-				retaining = true;
-			} else {
-				throw new TypeError("Malformed patch");
-			}
-		}
-
-		return result;
-	}
-
 	apply(text: string): string {
-		const operations = this.operations();
 		let text1 = "";
-		for (let i = 0; i < operations.length; i++) {
-			const op = operations[i];
+		for (let i = 0; i < this.operations.length; i++) {
+			const op = this.operations[i];
 			switch (op.type) {
 				case "retain":
 					text1 += text.slice(op.start, op.end);
@@ -331,12 +319,11 @@ export class Patch {
 	}
 
 	factor(): [Subseq, string, Subseq, string | undefined] {
-		const operations = this.operations();
 		const insertSizes: Array<number> = [];
 		const deleteSizes: Array<number> = [];
 		let inserted = "";
-		for (let i = 0; i < operations.length; i++) {
-			const op = operations[i];
+		for (let i = 0; i < this.operations.length; i++) {
+			const op = this.operations[i];
 			switch (op.type) {
 				case "retain":
 					Subseq.pushSegment(insertSizes, op.end - op.start, false);
@@ -415,7 +402,7 @@ export class Patch {
 
 	invert(): Patch {
 		if (typeof this.deleted === "undefined") {
-			throw new Error("Cannot invert patch without deleted");
+			throw new Error("Missing deleted property");
 		}
 
 		let [insertSeq, inserted, deleteSeq, deleted] = this.factor();
@@ -423,4 +410,44 @@ export class Patch {
 		insertSeq = insertSeq.shrink(deleteSeq);
 		return Patch.synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
+}
+
+function createOperations(parts: Array<number | string>): Array<Operation> {
+	const operations: Array<Operation> = [];
+	let insertOffset = 0;
+	let retainOffset = 0;
+	let retaining = true;
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i];
+		if (typeof part === "number") {
+			if (retaining) {
+				if (part < retainOffset) {
+					throw new TypeError("Malformed patch");
+				} else if (part > retainOffset) {
+					operations.push({type: "retain", start: retainOffset, end: part});
+					insertOffset = part;
+					retainOffset = part;
+				}
+
+				retaining = false;
+			} else {
+				if (part <= retainOffset) {
+					throw new TypeError("Malformed patch");
+				}
+
+				operations.push({type: "delete", start: retainOffset, end: part});
+				insertOffset = retainOffset;
+				retainOffset = part;
+				retaining = true;
+			}
+		} else if (typeof part === "string") {
+			operations.push({type: "insert", start: insertOffset, value: part});
+			insertOffset = retainOffset;
+			retaining = true;
+		} else {
+			throw new TypeError("Malformed patch");
+		}
+	}
+
+	return operations;
 }
