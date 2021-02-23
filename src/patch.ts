@@ -279,32 +279,62 @@ export class Patch {
 
 	parts: Array<string | number>;
 	deleted?: string;
-	operations!: Array<Operation>;
-
 	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
 		this.deleted = deleted;
-		let operations: Array<Operation> | undefined;
-		Object.defineProperty(this, "operations", {
-			get() {
-				if (!operations) {
-					operations = createOperations(this.parts);
-				}
-
-				// defensive clone
-				return operations.slice();
-			},
-		});
 	}
 
 	get inserted(): string {
 		return this.factor()[1];
 	}
 
+	// This could be a getter but we do not want to incur the cost of retaining
+	// the array of operations in memory.
+	operations(): Array<Operation> {
+		const operations: Array<Operation> = [];
+		let insertOffset = 0;
+		let retainOffset = 0;
+		let retaining = true;
+		for (let i = 0; i < this.parts.length; i++) {
+			const part = this.parts[i];
+			if (typeof part === "number") {
+				if (retaining) {
+					if (part < retainOffset) {
+						throw new TypeError("Malformed patch");
+					} else if (part > retainOffset) {
+						operations.push({type: "retain", start: retainOffset, end: part});
+						insertOffset = part;
+						retainOffset = part;
+					}
+
+					retaining = false;
+				} else {
+					if (part <= retainOffset) {
+						throw new TypeError("Malformed patch");
+					}
+
+					operations.push({type: "delete", start: retainOffset, end: part});
+					insertOffset = retainOffset;
+					retainOffset = part;
+					retaining = true;
+				}
+			} else if (typeof part === "string") {
+				operations.push({type: "insert", start: insertOffset, value: part});
+				insertOffset = retainOffset;
+				retaining = true;
+			} else {
+				throw new TypeError("Malformed patch");
+			}
+		}
+
+		return operations;
+	}
+
 	apply(text: string): string {
 		let text1 = "";
-		for (let i = 0; i < this.operations.length; i++) {
-			const op = this.operations[i];
+		const operations = this.operations();
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
 			switch (op.type) {
 				case "retain":
 					text1 += text.slice(op.start, op.end);
@@ -322,8 +352,9 @@ export class Patch {
 		const insertSizes: Array<number> = [];
 		const deleteSizes: Array<number> = [];
 		let inserted = "";
-		for (let i = 0; i < this.operations.length; i++) {
-			const op = this.operations[i];
+		const operations = this.operations();
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
 			switch (op.type) {
 				case "retain":
 					Subseq.pushSegment(insertSizes, op.end - op.start, false);
@@ -410,44 +441,4 @@ export class Patch {
 		insertSeq = insertSeq.shrink(deleteSeq);
 		return Patch.synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
-}
-
-function createOperations(parts: Array<number | string>): Array<Operation> {
-	const operations: Array<Operation> = [];
-	let insertOffset = 0;
-	let retainOffset = 0;
-	let retaining = true;
-	for (let i = 0; i < parts.length; i++) {
-		const part = parts[i];
-		if (typeof part === "number") {
-			if (retaining) {
-				if (part < retainOffset) {
-					throw new TypeError("Malformed patch");
-				} else if (part > retainOffset) {
-					operations.push({type: "retain", start: retainOffset, end: part});
-					insertOffset = part;
-					retainOffset = part;
-				}
-
-				retaining = false;
-			} else {
-				if (part <= retainOffset) {
-					throw new TypeError("Malformed patch");
-				}
-
-				operations.push({type: "delete", start: retainOffset, end: part});
-				insertOffset = retainOffset;
-				retainOffset = part;
-				retaining = true;
-			}
-		} else if (typeof part === "string") {
-			operations.push({type: "insert", start: insertOffset, value: part});
-			insertOffset = retainOffset;
-			retaining = true;
-		} else {
-			throw new TypeError("Malformed patch");
-		}
-	}
-
-	return operations;
 }
