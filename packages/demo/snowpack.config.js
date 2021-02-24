@@ -1,4 +1,5 @@
 module.exports = {
+	workspaceRoot: "../..",
   mount: {
     public: "/",
     src: "/js",

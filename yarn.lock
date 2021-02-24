@@ -3998,10 +3998,10 @@ snapdragon@^0.8.1:
     source-map-resolve "^0.5.0"
     use "^3.1.0"
 
-snowpack@^3.0.11:
-  version "3.0.13"
-  resolved "https://registry.yarnpkg.com/snowpack/-/snowpack-3.0.13.tgz#25e6434b186d916f69b0bae6325bda4f1451c035"
-  integrity sha512-USTcpfJ68rbuFvUygw+3n9qS1CC/tGsr/JNVc6FNk0ZRfGBE4OmB+Mmk5nWtdxi546GeCr/GvveJenYLen/WpA==
+snowpack@^3.1.0-pre.3:
+  version "3.1.0-pre.3"
+  resolved "https://registry.yarnpkg.com/snowpack/-/snowpack-3.1.0-pre.3.tgz#36ad78863141af0d78bdc65243bd04f330bf2121"
+  integrity sha512-n8vwRPg9WmDA0UJGIjKYjyMcs8Uz+IOBnz5aPCAe/AELAjozOv3r5es5N4a/Yfr4Opbqw5Cik2A/MsvvKquu7w==
   dependencies:
     default-browser-id "^2.0.0"
     esbuild "^0.8.7"
