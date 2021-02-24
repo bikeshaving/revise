@@ -48,7 +48,6 @@ const $cursor = Symbol.for("revise$cursor");
 const $slot = Symbol.for("revise$slot");
 const $observer = Symbol.for("revise$observer");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
-
 export class ContentAreaElement extends HTMLElement {
 	[$cache]: NodeInfoCache;
 	[$value]: string;
@@ -56,7 +55,6 @@ export class ContentAreaElement extends HTMLElement {
 	[$slot]: HTMLSlotElement;
 	[$observer]: MutationObserver;
 	[$onselectionchange]: (ev: Event) => unknown;
-
 	static get observedAttributes(): Array<string> {
 		return ["contenteditable"];
 	}
@@ -111,7 +109,7 @@ export class ContentAreaElement extends HTMLElement {
 
 	connectedCallback() {
 		// TODO: Figure out a way to call validate here instead
-		this[$value] = getValueAndMarkNodes(this, this[$cache], this[$value]);
+		this[$value] = getValue(this, this[$cache], this[$value]);
 		const cursor = getCursor(this, this[$cache]);
 		if (cursor !== -1) {
 			this[$cursor] = cursor;
@@ -306,7 +304,7 @@ function validate(
 		invalidate(area, cache, records);
 		const oldValue = area[$value];
 		const oldCursor = area[$cursor];
-		const value = (area[$value] = getValueAndMarkNodes(area, cache, oldValue));
+		const value = (area[$value] = getValue(area, cache, oldValue));
 		let cursor = oldCursor;
 		// There appears to be a strange race condition in Safari where
 		// document.getSelection() returns erroneous information when repair is
@@ -435,7 +433,7 @@ interface StackFrame {
 }
 
 // TODO: It might be faster to construct a patch rather than concatenating a giant string.
-function getValueAndMarkNodes(
+function getValue(
 	root: Element,
 	cache: NodeInfoCache,
 	oldValue: string,
@@ -685,6 +683,7 @@ function nodeOffsetAt(
 		}
 	}
 
+	// TODO: Maybe we should return the node/offset before the end.
 	return [root, root.childNodes.length];
 }
 
