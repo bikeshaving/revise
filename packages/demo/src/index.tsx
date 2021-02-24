@@ -10,7 +10,7 @@ Prism.manual = true;
 import { splitLines } from './prism-utils';
 import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
-import type {Cursor, Patch} from '@bikeshaving/revise/patch.js';
+import type {Patch, TextCursor} from '@bikeshaving/revise/patch.js';
 import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
 import type {ContentChangeEvent} from "@bikeshaving/revise/contentarea.js";
 
@@ -252,7 +252,7 @@ function isRedoKeyboardEvent(ev: KeyboardEvent): boolean {
 
 function* Editable(this: Context, { children }: any) {
 	let content = "\n";
-	let cursor: Cursor = 0;
+	let cursor: TextCursor = 0;
 	let el: any;
 	const keyer = new Keyer(content.length);
 	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));

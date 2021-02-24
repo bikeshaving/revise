@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import type {Cursor} from "./patch";
+import type {TextCursor} from "./patch";
 import {Patch} from "./patch";
 
 export interface NodeInfo {
@@ -51,7 +51,7 @@ const $onselectionchange = Symbol.for("revise$onselectionchange");
 export class ContentAreaElement extends HTMLElement {
 	[$cache]: NodeInfoCache;
 	[$value]: string;
-	[$cursor]: Cursor;
+	[$cursor]: TextCursor;
 	[$slot]: HTMLSlotElement;
 	[$observer]: MutationObserver;
 	[$onselectionchange]: (ev: Event) => unknown;
@@ -100,7 +100,7 @@ export class ContentAreaElement extends HTMLElement {
 				validate(this, records);
 			} else {
 				const cursor = getCursor(this, this[$cache]);
-				if (cursor !== -1) {
+				if (cursor !== undefined) {
 					this[$cursor] = cursor;
 				}
 			}
@@ -111,7 +111,7 @@ export class ContentAreaElement extends HTMLElement {
 		// TODO: Figure out a way to call validate here instead
 		this[$value] = getValue(this, this[$cache], this[$value]);
 		const cursor = getCursor(this, this[$cache]);
-		if (cursor !== -1) {
+		if (cursor !== undefined) {
 			this[$cursor] = cursor;
 		}
 
@@ -165,14 +165,15 @@ export class ContentAreaElement extends HTMLElement {
 		return this[$value];
 	}
 
-	get cursor(): Cursor {
+	get cursor(): TextCursor {
 		validate(this, this[$observer].takeRecords());
 		const cursor = this[$cursor];
 		if (typeof cursor === "number") {
 			return cursor;
 		}
 
-		return cursor.slice() as Cursor;
+		// defensive copy array cursors
+		return cursor.slice() as TextCursor;
 	}
 
 	nodeOffsetAt(index: number): [Node | null, number] {
@@ -293,6 +294,19 @@ export class ContentAreaElement extends HTMLElement {
 	}
 }
 
+function getLowerBound(...cursors: Array<TextCursor>): number {
+	const cursors1: Array<number> = [];
+	for (const cursor of cursors) {
+		if (Array.isArray(cursor)) {
+			cursors1.push(...cursor);
+		} else {
+			cursors1.push(cursor);
+		}
+	}
+
+	return Math.min.apply(null, cursors1);
+}
+
 // TODO: consider using an options object for third parameter.
 function validate(
 	area: ContentAreaElement,
@@ -311,16 +325,14 @@ function validate(
 		// called from within a requestAnimationFrame callback, so we just skip
 		// finding the new cursor information.
 		if (!ignoreSelection) {
-			cursor = getCursor(area, cache);
-			if (cursor !== -1) {
+			const cursor1 = getCursor(area, cache);
+			if (cursor1 !== undefined) {
+				cursor = cursor1;
 				area[$cursor] = cursor;
 			}
 		}
 
-		const hint = Math.min(
-			...(Array.isArray(oldCursor) ? oldCursor : [oldCursor]),
-			...(Array.isArray(cursor) ? cursor : [cursor]),
-		);
+		const hint = getLowerBound(oldCursor, cursor);
 		const patch = Patch.diff(oldValue, value, hint);
 		// TODO: pass in inputType information?
 		area.dispatchEvent(
@@ -575,7 +587,7 @@ function indexOf(
 	cache: NodeInfoCache,
 	node: Node | null,
 	offset: number,
-) {
+): number {
 	if (node == null || !root.contains(node)) {
 		return -1;
 	}
@@ -687,11 +699,15 @@ function nodeOffsetAt(
 	return [root, root.childNodes.length];
 }
 
-function getCursor(root: Element, cache: NodeInfoCache): Cursor {
+function getCursor(
+	root: Element,
+	cache: NodeInfoCache,
+): TextCursor | undefined {
 	const selection = document.getSelection();
 	if (selection == null) {
-		return -1;
+		return undefined;
 	}
+
 	const focus = indexOf(
 		root,
 		cache,
@@ -705,16 +721,26 @@ function getCursor(root: Element, cache: NodeInfoCache): Cursor {
 		anchor = indexOf(root, cache, selection.anchorNode, selection.anchorOffset);
 	}
 
-	if (focus === anchor || anchor === -1) {
+	if (focus === -1) {
+		if (anchor !== -1) {
+			return anchor;
+		}
+
+		return;
+	} else if (anchor === -1) {
+		if (focus !== -1) {
+			return focus;
+		}
+
+		return;
+	} else if (focus === anchor) {
 		return focus;
-	} else if (focus === -1) {
-		return anchor;
 	}
 
 	return [anchor, focus];
 }
 
-function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
+function selectionInfoFromCursor(cursor: TextCursor): SelectionInfo {
 	if (cursor === -1) {
 		// We do not allow the cursor to be -1 in the ContentAreaElement,
 		// preferring to keep the last known cursor instead.

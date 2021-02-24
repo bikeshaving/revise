@@ -20,28 +20,12 @@ export interface InsertOperation {
 
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
-// TODO: Does this belong here?
-export type Cursor = [number, number] | number;
-
-export function normalizeCursor(cursor: Cursor): Cursor {
-	if (Array.isArray(cursor)) {
-		if (cursor[0] < 0) {
-			cursor = cursor[1] || -1;
-		} else if (cursor[1] < 0) {
-			cursor = cursor[0] || -1;
-		} else if (cursor[0] === cursor[1]) {
-			cursor = cursor[0];
-		} else {
-			return cursor;
-		}
-	}
-
-	if (cursor < 0) {
-		return -1;
-	}
-
-	return cursor;
-}
+/**
+ * An abstract type which represents positions and selections for a string.
+ *
+ * TODO: Does this belong in this file?
+ */
+export type TextCursor = [number, number] | number;
 
 /**
  * Given two subseqs and strings which are represented by the included segments
