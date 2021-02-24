@@ -10,9 +10,9 @@ Prism.manual = true;
 import { splitLines } from './prism-utils';
 import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
-import type {Patch} from '@bikeshaving/revise/patch.js';
-import {ContentAreaElement, ContentChangeEvent} from '@bikeshaving/revise/contentarea.js';
-window.customElements.define("content-area", ContentAreaElement);
+import type {Cursor, Patch} from '@bikeshaving/revise/patch.js';
+import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
+import type {ContentChangeEvent} from "@bikeshaving/revise/contentarea.js";
 
 function printTokens(tokens: Array<Token | string>): Array<Child> {
 	const result: Array<Child> = [];
@@ -121,15 +121,101 @@ class Keyer {
 	}
 }
 
-declare global {
-	module Crank {
-		interface EventMap {
-			"contentchange": ContentChangeEvent;
+function isEmpty(patch: Patch): boolean {
+	return patch.parts.length === 1 && typeof patch.parts[0] === "number";
+}
+
+function isComplex(patch: Patch): boolean {
+	const operations = patch.operations();
+	let count = 0;
+	for (const op of operations) {
+		if (op.type !== "retain") {
+			count++;
+			if (count > 1) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+function canCompose(oldPatch: Patch, patch: Patch): boolean {
+	if (isComplex(oldPatch) || isComplex(patch)) {
+		return false;
+	}
+
+	return true;
+}
+
+// TODO: Is this just... a model?
+class PatchHistory {
+	_current: Patch | undefined;
+	_undoStack: Array<Patch>;
+	_redoStack: Array<Patch>;
+
+	constructor() {
+		this._current = undefined;
+		this._undoStack = [];
+		this._redoStack = [];
+	}
+
+	split(): void {
+		const patch = this._current;
+		if (patch) {
+			this._undoStack.push(patch);
+			this._current = undefined;
+		}
+	}
+
+	push(patch: Patch): void {
+		if (isEmpty(patch)) {
+			return;
+		} else if (this._redoStack.length) {
+			this._redoStack.length = 0;
+		}
+
+		if (this._current) {
+			const oldPatch = this._current;
+			if (canCompose(oldPatch, patch)) {
+				this._current = oldPatch.compose(patch);
+				return;
+			} else {
+				this.split();
+			}
+		}
+
+		this._current = patch;
+	}
+
+	canUndo(): boolean {
+		return !!(this._current || this._undoStack.length);
+	}
+
+	undo(): Patch | undefined {
+		this.split();
+		const patch = this._undoStack.pop();
+		if (patch) {
+			this._redoStack.push(patch);
+			return patch.invert();
+		}
+	}
+
+	canRedo(): boolean {
+		return !!this._redoStack.length;
+	}
+
+	redo(): Patch | undefined {
+		this.split();
+		const patch = this._redoStack.pop();
+		if (patch) {
+			this._undoStack.push(patch);
+			return patch;
 		}
 	}
 }
 
-function debounce(fn: Function, delay: number = 50): any {
+function debounce(fn: Function, ms = 50): any {
 	let handle: any;
 	return function(this: any) {
 		let context = this, args = arguments;
@@ -140,22 +226,115 @@ function debounce(fn: Function, delay: number = 50): any {
 
 		if (handle != null) {
 			clearTimeout(handle);
+			//cancelAnimationFrame(handle);
 		}
 
-		handle = setTimeout(wrapped, delay);
+		handle = setTimeout(wrapped, ms);
+		//handle = requestAnimationFrame(wrapped);
 	};
+}
+
+function isMacPlatform(): boolean {
+	return window.navigator && /Mac/.test(window.navigator.platform);
+}
+
+function isUndoKeyboardEvent(ev: KeyboardEvent): boolean {
+	return (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key === "z";
+}
+
+function isRedoKeyboardEvent(ev: KeyboardEvent): boolean {
+	return (
+		(ev.metaKey || ev.ctrlKey) &&
+		((ev.shiftKey && ev.key === "z") ||
+			(!ev.shiftKey && ev.key === "y" && !isMacPlatform()))
+	);
 }
 
 function* Editable(this: Context, { children }: any) {
 	let content = "\n";
+	let cursor: Cursor = 0;
 	let el: any;
 	const keyer = new Keyer(content.length);
 	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));
+	const patchHistory = new PatchHistory();
+	// @ts-ignore
+	window.patchHistory = patchHistory;
+	let isHistoryRefresh = false;
 	this.addEventListener("contentchange", (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.ingest(ev.detail.patch);
+		if (isHistoryRefresh) {
+			isHistoryRefresh = false;
+		} else {
+			patchHistory.push(ev.detail.patch);
+		}
+
 		debouncedRefresh();
 	});
+
+	this.addEventListener("keydown", (ev) => {
+		if (isUndoKeyboardEvent(ev)) {
+			console.log("UNDOING");
+			const patch = patchHistory.undo();
+			ev.preventDefault();
+			if (patch) {
+				console.log(patch);
+				content = patch.apply(content);
+				isHistoryRefresh = true;
+				this.refresh();
+			}
+		} else if (isRedoKeyboardEvent(ev)) {
+			console.log("REDOING");
+			const patch = patchHistory.redo();
+			ev.preventDefault();
+			if (patch) {
+				console.log(patch);
+				content = patch.apply(content);
+				isHistoryRefresh = true;
+				this.refresh();
+			}
+		}
+	});
+
+	//let delaying = false;
+	//this.addEventListener("keydown", (ev) => {
+	//	if (!ev.repeat) {
+	//		delaying = false;
+	//		return;
+	//	} else if (delaying) {
+	//		ev.preventDefault();
+	//		return;
+	//	}
+
+	//	delaying = true;
+	//	setTimeout(() => (delaying = false));
+	//});
+
+	let frame: ReturnType<typeof requestAnimationFrame> | undefined;
+	let undoing = false;
+	let inputs = 0;
+	//this.addEventListener("input", (ev: any) => {
+	//	if (undoing) {
+	//		return;
+	//	}
+
+	//	inputs++;
+	//	if (frame != null) {
+	//		cancelAnimationFrame(frame);
+	//	}
+
+	//	frame = requestAnimationFrame(() => {
+	//		while (inputs > 0) {
+	//			try {
+	//				undoing = true;
+	//				document.execCommand("undo");
+	//				inputs--;
+	//			} finally {
+	//				undoing = false;
+	//			}
+	//		}
+	//	});
+	//});
 
 	let initial = true;
 	//let html = "";
@@ -223,4 +402,13 @@ function App() {
 	);
 }
 
+declare global {
+	module Crank {
+		interface EventMap {
+			"contentchange": ContentChangeEvent;
+		}
+	}
+}
+
+window.customElements.define("content-area", ContentAreaElement);
 renderer.render(<App />, document.getElementById('root')!);

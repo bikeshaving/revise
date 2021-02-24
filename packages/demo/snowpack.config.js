@@ -5,13 +5,13 @@ module.exports = {
   },
   plugins: [
     "@snowpack/plugin-dotenv",
-    "@snowpack/plugin-babel",
     "@snowpack/plugin-typescript",
+    "@snowpack/plugin-babel",
   ],
   packageOptions: {
     installTypes: true,
   },
-  "devOptions": {
+  devOptions: {
     "open": "none",
     "hmrErrorOverlay": false,
   },
