@@ -253,7 +253,7 @@ function* Editable(this: Context, { children }: any) {
 				{
 					initial || true ? (
 						<content-area
-							spellcheck={false}
+							undomode="keydown"
 							crank-ref={(el1: Node) => (el = el1)}
 						>
 							<pre

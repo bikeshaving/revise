@@ -30,6 +30,9 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
+// TODO: add native undo
+export type UndoModeValue = "none" | "keydown";
+
 const css = `
 :host {
 	display: contents;
@@ -110,13 +113,15 @@ export class ContentAreaElement extends HTMLElement {
 		});
 
 		this.addEventListener("keydown", (ev) => {
-			// TODO: add an undoMode attribute for this override
-			if (isUndoKeyboardEvent(ev)) {
-				ev.preventDefault();
-				this.undo();
-			} else if (isRedoKeyboardEvent(ev)) {
-				ev.preventDefault();
-				this.redo();
+			if (this.undoMode === "keydown") {
+				const history = this[$history];
+				if (isUndoKeyboardEvent(ev) && history.canUndo()) {
+					ev.preventDefault();
+					this.undo();
+				} else if (isRedoKeyboardEvent(ev) && history.canRedo()) {
+					ev.preventDefault();
+					this.redo();
+				}
 			}
 		});
 	}
@@ -266,6 +271,20 @@ export class ContentAreaElement extends HTMLElement {
 			selectionEnd,
 			selectionDirection,
 		);
+	}
+
+	get undoMode(): UndoModeValue {
+		let attr = this.getAttribute("undomode");
+		if (!attr) {
+			return "none";
+		}
+
+		attr = attr.toLowerCase();
+		if (attr === "keydown") {
+			return attr;
+		}
+
+		return "none";
 	}
 
 	setSelectionRange(
