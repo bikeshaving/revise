@@ -916,20 +916,10 @@ function setSelectionRange(
 }
 
 /*** History stuff ***/
-
 // TODO: Move this somewhere?
 function isCursorEqual(cursor1: TextCursor, cursor2: TextCursor) {
-	if (typeof cursor1 === "number" && typeof cursor2 === "number") {
-		return cursor1 === cursor2;
-	} else if (typeof cursor1 === "number") {
-		// @ts-ignore
-		return cursor1 === cursor2[0] && cursor1 === cursor2[1];
-	} else if (typeof cursor2 === "number") {
-		// @ts-ignore
-		return cursor2 === cursor1[0] && cursor2 === cursor1[1];
-	}
-
-	// @ts-ignore
+	cursor1 = typeof cursor1 === "number" ? [cursor1, cursor1] : cursor1;
+	cursor2 = typeof cursor2 === "number" ? [cursor2, cursor2] : cursor2;
 	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
 }
 
