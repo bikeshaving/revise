@@ -21,8 +21,7 @@ export interface ContentEventDetail {
 	patch: Patch;
 }
 
-export interface ContentEventInit
-	extends CustomEventInit<ContentEventDetail> {}
+export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
 
 export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	constructor(typeArg: string, eventInit: ContentEventInit) {
@@ -66,7 +65,7 @@ export class ContentAreaElement extends HTMLElement {
 		this[$cache] = new Map();
 		this[$value] = "";
 		this[$cursor] = 0;
-		const history = this[$history] = new PatchHistory();
+		const history = (this[$history] = new PatchHistory());
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
@@ -318,6 +317,24 @@ export class ContentAreaElement extends HTMLElement {
 			this.dispatchEvent(new ContentEvent("contentundo", {detail: {patch}}));
 			this[$value] = value;
 			validate(this, this[$observer].takeRecords(), {historyValue});
+			if (this[$value] === historyValue) {
+				const cursor = cursorFromPatch(patch);
+				const {
+					selectionStart,
+					selectionEnd,
+					selectionDirection,
+				} = selectionInfoFromCursor(cursor);
+				setSelectionRange(
+					this,
+					this[$cache],
+					historyValue,
+					selectionStart,
+					selectionEnd,
+					selectionDirection,
+				);
+			} else {
+				throw new Error("undo was not correctly rendered");
+			}
 		}
 	}
 
@@ -331,6 +348,24 @@ export class ContentAreaElement extends HTMLElement {
 			this.dispatchEvent(new ContentEvent("contentredo", {detail: {patch}}));
 			this[$value] = value;
 			validate(this, this[$observer].takeRecords(), {historyValue});
+			if (this[$value] === historyValue) {
+				const cursor = cursorFromPatch(patch);
+				const {
+					selectionStart,
+					selectionEnd,
+					selectionDirection,
+				} = selectionInfoFromCursor(cursor);
+				setSelectionRange(
+					this,
+					this[$cache],
+					historyValue,
+					selectionStart,
+					selectionEnd,
+					selectionDirection,
+				);
+			} else {
+				throw new Error("redo was not correctly rendered");
+			}
 		}
 	}
 
@@ -363,14 +398,13 @@ function validate(
 	options: ValidateOptions = {},
 ): void {
 	const {historyValue, ignoreSelection} = options;
-	let value: string;
 	if (records.length) {
 		const cache = area[$cache];
 		const history = area[$history];
 		invalidate(area, cache, records);
 		const oldValue = area[$value];
 		const oldCursor = area[$cursor];
-		value = (area[$value] = getValue(area, cache, oldValue));
+		const value = (area[$value] = getValue(area, cache, oldValue));
 		let cursor = oldCursor;
 		// There appears to be a strange race condition in Safari where
 		// document.getSelection() returns erroneous information when repair is
@@ -388,22 +422,9 @@ function validate(
 		const patch = Patch.diff(oldValue, value, hint);
 		if (historyValue === undefined) {
 			history.push(patch);
-		} else {
-			area[$value] = historyValue;
+			// TODO: pass in inputType information?
+			area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
 		}
-
-		// TODO: pass in inputType information?
-		area.dispatchEvent(
-			new ContentEvent("contentchange", {detail: {patch}}),
-		);
-	} else {
-		value = area[$value];
-	}
-
-	if (historyValue !== undefined && historyValue !== value) {
-		area[$value] = value;
-		// TODO: Should we fail more noisily?
-		console.error("History mismatch");
 	}
 }
 
@@ -828,7 +849,7 @@ function selectionInfoFromCursor(cursor: TextCursor): SelectionInfo {
 	return {selectionStart, selectionEnd, selectionDirection};
 }
 
-// TODO: Maybe we can have the internal function work with cursors instead.
+// TODO: Make the internals work based on cursors.
 function setSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
@@ -917,10 +938,51 @@ function setSelectionRange(
 
 /*** History stuff ***/
 // TODO: Move this somewhere?
-function isCursorEqual(cursor1: TextCursor, cursor2: TextCursor) {
+function isCursorEqual(cursor1: TextCursor, cursor2: TextCursor): boolean {
 	cursor1 = typeof cursor1 === "number" ? [cursor1, cursor1] : cursor1;
 	cursor2 = typeof cursor2 === "number" ? [cursor2, cursor2] : cursor2;
 	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
+}
+
+function cursorFromPatch(patch: Patch): TextCursor {
+	const operations = patch.operations();
+	let index = 0;
+	let start: number | undefined;
+	let end: number | undefined;
+	for (const op of operations) {
+		switch (op.type) {
+			case "delete": {
+				if (start === undefined) {
+					start = index;
+				}
+
+				break;
+			}
+
+			case "insert": {
+				if (start === undefined) {
+					start = index;
+				}
+
+				index += op.value.length;
+				end = index;
+				break;
+			}
+
+			case "retain": {
+				index += op.end - op.start;
+				break;
+			}
+		}
+	}
+
+	if (start !== undefined && end !== undefined) {
+		return [start, end];
+	} else if (start !== undefined) {
+		return start;
+	}
+
+	return 0;
 }
 
 function isMacPlatform(): boolean {

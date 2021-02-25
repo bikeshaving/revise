@@ -170,14 +170,12 @@ function* Editable(this: Context, { children }: any) {
 	});
 
 	this.addEventListener("contentundo", (ev) => {
-		console.log("UNDO", ev);
 		content = (ev.target as ContentAreaElement).value;
 		keyer.ingest(ev.detail.patch);
 		this.refresh();
 	});
 
 	this.addEventListener("contentredo", (ev) => {
-		console.log("REDO", ev);
 		content = (ev.target as ContentAreaElement).value;
 		keyer.ingest(ev.detail.patch);
 		this.refresh();
