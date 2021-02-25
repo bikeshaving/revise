@@ -89,6 +89,7 @@ export class ContentAreaElement extends HTMLElement {
 			} else {
 				const cursor = getCursor(this, this[$cache]);
 				if (cursor !== undefined && !isCursorEqual(cursor, this[$cursor])) {
+					// TODO: Dispatch an event here...
 					this[$cursor] = cursor;
 					history.split();
 				}
@@ -331,6 +332,10 @@ export class ContentAreaElement extends HTMLElement {
 			this[$value] = value;
 			validate(this, this[$observer].takeRecords(), {historyValue});
 		}
+	}
+
+	splitHistory(): void {
+		this[$history].split();
 	}
 }
 
