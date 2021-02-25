@@ -21,11 +21,12 @@ export interface InsertOperation {
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
 /**
- * An abstract type which represents positions and selections for a string.
+ * An abstract type which represents positions and ranges in a string or
+ * sequence.
  *
  * TODO: Does this belong in this file?
  */
-export type TextCursor = [number, number] | number;
+export type Cursor = [number, number] | number;
 
 /**
  * Given two subseqs and strings which are represented by the included segments

@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import type {TextCursor} from "./patch";
+import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
 export interface NodeInfo {
@@ -31,7 +31,7 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 }
 
 // TODO: add native undo
-export type UndoModeValue = "none" | "keydown";
+export type UndoMode = "none" | "keydown";
 
 const css = `
 :host {
@@ -54,7 +54,7 @@ const $onselectionchange = Symbol.for("revise$onselectionchange");
 export class ContentAreaElement extends HTMLElement {
 	[$cache]: NodeInfoCache;
 	[$value]: string;
-	[$cursor]: TextCursor;
+	[$cursor]: Cursor;
 	[$history]: PatchHistory;
 	[$slot]: HTMLSlotElement;
 	[$observer]: MutationObserver;
@@ -114,11 +114,10 @@ export class ContentAreaElement extends HTMLElement {
 
 		this.addEventListener("keydown", (ev) => {
 			if (this.undoMode === "keydown") {
-				const history = this[$history];
-				if (isUndoKeyboardEvent(ev) && history.canUndo()) {
+				if (isUndoKeyboardEvent(ev)) {
 					ev.preventDefault();
 					this.undo();
-				} else if (isRedoKeyboardEvent(ev) && history.canRedo()) {
+				} else if (isRedoKeyboardEvent(ev)) {
 					ev.preventDefault();
 					this.redo();
 				}
@@ -184,7 +183,7 @@ export class ContentAreaElement extends HTMLElement {
 		return this[$value];
 	}
 
-	get cursor(): TextCursor {
+	get cursor(): Cursor {
 		validate(this, this[$observer].takeRecords());
 		const cursor = this[$cursor];
 		if (typeof cursor === "number") {
@@ -192,7 +191,7 @@ export class ContentAreaElement extends HTMLElement {
 		}
 
 		// defensive copy array cursors
-		return cursor.slice() as TextCursor;
+		return cursor.slice() as [number, number];
 	}
 
 	nodeOffsetAt(index: number): [Node | null, number] {
@@ -273,7 +272,7 @@ export class ContentAreaElement extends HTMLElement {
 		);
 	}
 
-	get undoMode(): UndoModeValue {
+	get undoMode(): UndoMode {
 		let attr = this.getAttribute("undomode");
 		if (!attr) {
 			return "none";
@@ -393,7 +392,7 @@ export class ContentAreaElement extends HTMLElement {
 	}
 }
 
-function getLowerBound(...cursors: Array<TextCursor>): number {
+function getLowerBound(...cursors: Array<Cursor>): number {
 	const cursors1: Array<number> = [];
 	for (const cursor of cursors) {
 		if (Array.isArray(cursor)) {
@@ -808,7 +807,7 @@ function nodeOffsetAt(
 function getCursor(
 	root: Element,
 	cache: NodeInfoCache,
-): TextCursor | undefined {
+): Cursor | undefined {
 	const selection = document.getSelection();
 	if (selection == null) {
 		return undefined;
@@ -846,7 +845,7 @@ function getCursor(
 	return [anchor, focus];
 }
 
-function selectionInfoFromCursor(cursor: TextCursor): SelectionInfo {
+function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
 	if (cursor === -1) {
 		// We do not allow the cursor to be -1 in the ContentAreaElement,
 		// preferring to keep the last known cursor instead.
@@ -957,13 +956,13 @@ function setSelectionRange(
 
 /*** History stuff ***/
 // TODO: Move this somewhere?
-function isCursorEqual(cursor1: TextCursor, cursor2: TextCursor): boolean {
+function isCursorEqual(cursor1: Cursor, cursor2: Cursor): boolean {
 	cursor1 = typeof cursor1 === "number" ? [cursor1, cursor1] : cursor1;
 	cursor2 = typeof cursor2 === "number" ? [cursor2, cursor2] : cursor2;
 	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
 }
 
-function cursorFromPatch(patch: Patch): TextCursor {
+function cursorFromPatch(patch: Patch): Cursor {
 	const operations = patch.operations();
 	let index = 0;
 	let start: number | undefined;
