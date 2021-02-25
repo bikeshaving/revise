@@ -17,15 +17,15 @@ interface SelectionInfo {
 	selectionDirection: SelectionDirection;
 }
 
-export interface ContentChangeEventDetail {
+export interface ContentEventDetail {
 	patch: Patch;
 }
 
-export interface ContentChangeEventInit
-	extends CustomEventInit<ContentChangeEventDetail> {}
+export interface ContentEventInit
+	extends CustomEventInit<ContentEventDetail> {}
 
-export class ContentChangeEvent extends CustomEvent<ContentChangeEventDetail> {
-	constructor(typeArg: string, eventInit: ContentChangeEventInit) {
+export class ContentEvent extends CustomEvent<ContentEventDetail> {
+	constructor(typeArg: string, eventInit: ContentEventInit) {
 		// Maybe we should do some runtime eventInit validation.
 		super(typeArg, {bubbles: true, ...eventInit});
 	}
@@ -47,11 +47,13 @@ const $value = Symbol.for("revise$value");
 const $cursor = Symbol.for("revise$cursor");
 const $slot = Symbol.for("revise$slot");
 const $observer = Symbol.for("revise$observer");
+const $history = Symbol.for("revise$history");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 export class ContentAreaElement extends HTMLElement {
 	[$cache]: NodeInfoCache;
 	[$value]: string;
 	[$cursor]: TextCursor;
+	[$history]: PatchHistory;
 	[$slot]: HTMLSlotElement;
 	[$observer]: MutationObserver;
 	[$onselectionchange]: (ev: Event) => unknown;
@@ -64,7 +66,7 @@ export class ContentAreaElement extends HTMLElement {
 		this[$cache] = new Map();
 		this[$value] = "";
 		this[$cursor] = 0;
-
+		const history = this[$history] = new PatchHistory();
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
@@ -73,20 +75,6 @@ export class ContentAreaElement extends HTMLElement {
 		this[$slot] = slot;
 		slot.contentEditable = this.contentEditable;
 		shadow.appendChild(slot);
-
-		this.addEventListener("focusin", () => {
-			const {
-				selectionStart,
-				selectionEnd,
-				selectionDirection,
-			} = selectionInfoFromCursor(this[$cursor]);
-			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
-		});
-
-		// TODO: Should we consider passing input event information to this function?
-		this.addEventListener("input", () => {
-			validate(this, this[$observer].takeRecords());
-		});
 
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, records);
@@ -100,11 +88,37 @@ export class ContentAreaElement extends HTMLElement {
 				validate(this, records);
 			} else {
 				const cursor = getCursor(this, this[$cache]);
-				if (cursor !== undefined) {
+				if (cursor !== undefined && !isCursorEqual(cursor, this[$cursor])) {
 					this[$cursor] = cursor;
+					history.split();
 				}
 			}
 		};
+
+		this.addEventListener("focusin", () => {
+			const {
+				selectionStart,
+				selectionEnd,
+				selectionDirection,
+			} = selectionInfoFromCursor(this[$cursor]);
+			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
+		});
+
+		this.addEventListener("input", () => {
+			// TODO: Should we consider passing input event information to this function?
+			validate(this, this[$observer].takeRecords());
+		});
+
+		this.addEventListener("keydown", (ev) => {
+			// TODO: add an undoMode attribute for this override
+			if (isUndoKeyboardEvent(ev)) {
+				ev.preventDefault();
+				this.undo();
+			} else if (isRedoKeyboardEvent(ev)) {
+				ev.preventDefault();
+				this.redo();
+			}
+		});
 	}
 
 	connectedCallback() {
@@ -282,7 +296,7 @@ export class ContentAreaElement extends HTMLElement {
 			selectionDirection,
 		} = selectionInfoFromCursor(this[$cursor]);
 		callback();
-		validate(this, this[$observer].takeRecords(), true);
+		validate(this, this[$observer].takeRecords(), {ignoreSelection: true});
 		setSelectionRange(
 			this,
 			cache,
@@ -291,6 +305,32 @@ export class ContentAreaElement extends HTMLElement {
 			selectionEnd,
 			selectionDirection,
 		);
+	}
+
+	undo(): void {
+		validate(this, this[$observer].takeRecords());
+		const value = this[$value];
+		const patch = this[$history].undo();
+		if (patch) {
+			const historyValue = patch.apply(value);
+			this[$value] = historyValue;
+			this.dispatchEvent(new ContentEvent("contentundo", {detail: {patch}}));
+			this[$value] = value;
+			validate(this, this[$observer].takeRecords(), {historyValue});
+		}
+	}
+
+	redo(): void {
+		validate(this, this[$observer].takeRecords());
+		const value = this[$value];
+		const patch = this[$history].redo();
+		if (patch) {
+			const historyValue = patch.apply(value);
+			this[$value] = historyValue;
+			this.dispatchEvent(new ContentEvent("contentredo", {detail: {patch}}));
+			this[$value] = value;
+			validate(this, this[$observer].takeRecords(), {historyValue});
+		}
 	}
 }
 
@@ -307,18 +347,25 @@ function getLowerBound(...cursors: Array<TextCursor>): number {
 	return Math.min.apply(null, cursors1);
 }
 
-// TODO: consider using an options object for third parameter.
+interface ValidateOptions {
+	ignoreSelection?: boolean;
+	historyValue?: string;
+}
+
 function validate(
 	area: ContentAreaElement,
 	records: Array<MutationRecord>,
-	ignoreSelection = false,
+	options: ValidateOptions = {},
 ): void {
+	const {historyValue, ignoreSelection} = options;
+	let value: string;
 	if (records.length) {
 		const cache = area[$cache];
+		const history = area[$history];
 		invalidate(area, cache, records);
 		const oldValue = area[$value];
 		const oldCursor = area[$cursor];
-		const value = (area[$value] = getValue(area, cache, oldValue));
+		value = (area[$value] = getValue(area, cache, oldValue));
 		let cursor = oldCursor;
 		// There appears to be a strange race condition in Safari where
 		// document.getSelection() returns erroneous information when repair is
@@ -334,17 +381,31 @@ function validate(
 
 		const hint = getLowerBound(oldCursor, cursor);
 		const patch = Patch.diff(oldValue, value, hint);
+		if (historyValue === undefined) {
+			history.push(patch);
+		} else {
+			area[$value] = historyValue;
+		}
+
 		// TODO: pass in inputType information?
 		area.dispatchEvent(
-			new ContentChangeEvent("contentchange", {detail: {patch}}),
+			new ContentEvent("contentchange", {detail: {patch}}),
 		);
+	} else {
+		value = area[$value];
+	}
+
+	if (historyValue !== undefined && historyValue !== value) {
+		area[$value] = value;
+		// TODO: Should we fail more noisily?
+		console.error("History mismatch");
 	}
 }
 
-// TODO: PARAMETERIZE NEWLINE BEHAVIOR?
+// TODO: Should we allow custom newlines?
 const NEWLINE = "\n";
 
-// TODO: PARAMETERIZE BLOCKLIKE ELEMENTS?
+// TODO: Allow this list of block-like elements to be overridden with an attribute.
 const BLOCKLIKE_ELEMENTS = new Set([
 	"ADDRESS",
 	"ARTICLE",
@@ -845,6 +906,129 @@ function setSelectionRange(
 				focusNode,
 				focusOffset,
 			);
+		}
+	}
+}
+
+/*** History stuff ***/
+
+// TODO: Move this somewhere?
+function isCursorEqual(cursor1: TextCursor, cursor2: TextCursor) {
+	if (typeof cursor1 === "number" && typeof cursor2 === "number") {
+		return cursor1 === cursor2;
+	} else if (typeof cursor1 === "number") {
+		// @ts-ignore
+		return cursor1 === cursor2[0] && cursor1 === cursor2[1];
+	} else if (typeof cursor2 === "number") {
+		// @ts-ignore
+		return cursor2 === cursor1[0] && cursor2 === cursor1[1];
+	}
+
+	// @ts-ignore
+	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
+}
+
+function isMacPlatform(): boolean {
+	return window.navigator && /Mac/.test(window.navigator.platform);
+}
+
+function isUndoKeyboardEvent(ev: KeyboardEvent): boolean {
+	return (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key === "z";
+}
+
+function isRedoKeyboardEvent(ev: KeyboardEvent): boolean {
+	return (
+		(ev.metaKey || ev.ctrlKey) &&
+		((ev.shiftKey && ev.key === "z") ||
+			(!ev.shiftKey && ev.key === "y" && !isMacPlatform()))
+	);
+}
+
+// TODO: Should this be a Patch method?
+function isNoop(patch: Patch): boolean {
+	// TODO: Think about if the second part of this condition is actually necessary
+	return patch.parts.length === 1 && typeof patch.parts[0] === "number";
+}
+
+// TODO: Should this be a Patch method?
+function isComplex(patch: Patch): boolean {
+	const operations = patch.operations();
+	let count = 0;
+	for (const op of operations) {
+		if (op.type !== "retain") {
+			count++;
+			if (count > 1) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+// TODO: Should this be in its own module?
+class PatchHistory {
+	currentPatch: Patch | undefined;
+	undoStack: Array<Patch>;
+	redoStack: Array<Patch>;
+
+	constructor() {
+		this.currentPatch = undefined;
+		this.undoStack = [];
+		this.redoStack = [];
+	}
+
+	split(): void {
+		const patch = this.currentPatch;
+		if (patch) {
+			this.undoStack.push(patch);
+			this.currentPatch = undefined;
+		}
+	}
+
+	push(patch: Patch): void {
+		if (isNoop(patch)) {
+			return;
+		} else if (this.redoStack.length) {
+			this.redoStack.length = 0;
+		}
+
+		if (this.currentPatch) {
+			const oldPatch = this.currentPatch;
+			if (!isComplex(oldPatch) && !isComplex(patch)) {
+				this.currentPatch = oldPatch.compose(patch);
+				return;
+			} else {
+				this.split();
+			}
+		}
+
+		this.currentPatch = patch;
+	}
+
+	canUndo(): boolean {
+		return !!(this.currentPatch || this.undoStack.length);
+	}
+
+	undo(): Patch | undefined {
+		this.split();
+		const patch = this.undoStack.pop();
+		if (patch) {
+			this.redoStack.push(patch);
+			return patch.invert();
+		}
+	}
+
+	canRedo(): boolean {
+		return !!this.redoStack.length;
+	}
+
+	redo(): Patch | undefined {
+		this.split();
+		const patch = this.redoStack.pop();
+		if (patch) {
+			this.undoStack.push(patch);
+			return patch;
 		}
 	}
 }

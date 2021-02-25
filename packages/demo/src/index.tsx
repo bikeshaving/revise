@@ -12,7 +12,7 @@ import 'prismjs/themes/prism-tomorrow.css';
 import './index.css';
 import type {Patch, TextCursor} from '@bikeshaving/revise/patch.js';
 import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
-import type {ContentChangeEvent} from "@bikeshaving/revise/contentarea.js";
+import type {ContentEvent} from "@bikeshaving/revise/contentarea.js";
 
 function printTokens(tokens: Array<Token | string>): Array<Child> {
 	const result: Array<Child> = [];
@@ -79,6 +79,7 @@ function print(content: string, keyer: Keyer): Array<Child> {
 	//return lines.map((line) => <div>{line}{"\n"}</div>);
 }
 
+// TODO: MOVE THESE
 class Keyer {
 	_key: number;
 	_keys: Array<number>;
@@ -117,100 +118,6 @@ class Keyer {
 						.concat(this._keys.slice(op.start + 1));
 					break;
 			}
-		}
-	}
-}
-
-function isEmpty(patch: Patch): boolean {
-	return patch.parts.length === 1 && typeof patch.parts[0] === "number";
-}
-
-function isComplex(patch: Patch): boolean {
-	const operations = patch.operations();
-	let count = 0;
-	for (const op of operations) {
-		if (op.type !== "retain") {
-			count++;
-			if (count > 1) {
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-function canCompose(oldPatch: Patch, patch: Patch): boolean {
-	if (isComplex(oldPatch) || isComplex(patch)) {
-		return false;
-	}
-
-	return true;
-}
-
-// TODO: Is this just... a model?
-class PatchHistory {
-	_current: Patch | undefined;
-	_undoStack: Array<Patch>;
-	_redoStack: Array<Patch>;
-
-	constructor() {
-		this._current = undefined;
-		this._undoStack = [];
-		this._redoStack = [];
-	}
-
-	split(): void {
-		const patch = this._current;
-		if (patch) {
-			this._undoStack.push(patch);
-			this._current = undefined;
-		}
-	}
-
-	push(patch: Patch): void {
-		if (isEmpty(patch)) {
-			return;
-		} else if (this._redoStack.length) {
-			this._redoStack.length = 0;
-		}
-
-		if (this._current) {
-			const oldPatch = this._current;
-			if (canCompose(oldPatch, patch)) {
-				this._current = oldPatch.compose(patch);
-				return;
-			} else {
-				this.split();
-			}
-		}
-
-		this._current = patch;
-	}
-
-	canUndo(): boolean {
-		return !!(this._current || this._undoStack.length);
-	}
-
-	undo(): Patch | undefined {
-		this.split();
-		const patch = this._undoStack.pop();
-		if (patch) {
-			this._redoStack.push(patch);
-			return patch.invert();
-		}
-	}
-
-	canRedo(): boolean {
-		return !!this._redoStack.length;
-	}
-
-	redo(): Patch | undefined {
-		this.split();
-		const patch = this._redoStack.pop();
-		if (patch) {
-			this._undoStack.push(patch);
-			return patch;
 		}
 	}
 }
@@ -256,44 +163,24 @@ function* Editable(this: Context, { children }: any) {
 	let el: any;
 	const keyer = new Keyer(content.length);
 	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));
-	const patchHistory = new PatchHistory();
-	// @ts-ignore
-	window.patchHistory = patchHistory;
-	let isHistoryRefresh = false;
 	this.addEventListener("contentchange", (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.ingest(ev.detail.patch);
-		if (isHistoryRefresh) {
-			isHistoryRefresh = false;
-		} else {
-			patchHistory.push(ev.detail.patch);
-		}
-
 		debouncedRefresh();
 	});
 
-	this.addEventListener("keydown", (ev) => {
-		if (isUndoKeyboardEvent(ev)) {
-			console.log("UNDOING");
-			const patch = patchHistory.undo();
-			ev.preventDefault();
-			if (patch) {
-				console.log(patch);
-				content = patch.apply(content);
-				isHistoryRefresh = true;
-				this.refresh();
-			}
-		} else if (isRedoKeyboardEvent(ev)) {
-			console.log("REDOING");
-			const patch = patchHistory.redo();
-			ev.preventDefault();
-			if (patch) {
-				console.log(patch);
-				content = patch.apply(content);
-				isHistoryRefresh = true;
-				this.refresh();
-			}
-		}
+	this.addEventListener("contentundo", (ev) => {
+		console.log("UNDO", ev);
+		content = (ev.target as ContentAreaElement).value;
+		keyer.ingest(ev.detail.patch);
+		this.refresh();
+	});
+
+	this.addEventListener("contentredo", (ev) => {
+		console.log("REDO", ev);
+		content = (ev.target as ContentAreaElement).value;
+		keyer.ingest(ev.detail.patch);
+		this.refresh();
 	});
 
 	//let delaying = false;
@@ -405,7 +292,9 @@ function App() {
 declare global {
 	module Crank {
 		interface EventMap {
-			"contentchange": ContentChangeEvent;
+			"contentchange": ContentEvent;
+			"contentundo": ContentEvent;
+			"contentredo": ContentEvent;
 		}
 	}
 }
