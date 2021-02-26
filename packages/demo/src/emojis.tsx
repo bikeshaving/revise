@@ -15,36 +15,10 @@ function parse(content: string, keyer: Keyer): Array<Child> {
 	}
 
 	let cursor = 0;
-	// Testing different rendering strategies for lines.
 	return lines.map((line) => {
 		const key = keyer.keyOf(cursor);
 		cursor += line.length + 1;
-		// THIS IS THE MOST WELL BEHAVED WAY TO DIVIDE LINES
 		return <div crank-key={key}>{line || <br />}</div>;
-
-		//return (
-		//	<div crank-key={key}>{line || "\n"}</div>
-		//);
-
-		//return (
-		//	<div crank-key={key}>{line}<br /></div>
-		//);
-
-		//return <Fragment crank-key={key}>{line}<br /></Fragment>;
-
-		//return (
-		//	<Fragment crank-key={key}>
-		//		{!!line && <span>{line}</span>}
-		//		<br />
-		//	</Fragment>
-		//);
-
-		//return (
-		//	<Fragment crank-key={key}>
-		//		{!!line && Array.from(line).map((char) => <span>{char}</span>)}
-		//		<br />
-		//	</Fragment>
-		//);
 	});
 }
 
@@ -88,7 +62,10 @@ function* Editable(this: Context) {
 function App() {
 	return (
 		<div class="app">
-			<p class="">Using content-area to render a plaintext field.</p>
+			<p>
+				Using content-area to render emojis with{' '}
+				<a href="https://twemoji.twitter.com">Twemoji.</a>
+			</p>
 			<Editable />
 		</div>
 	);

@@ -1,95 +1,94 @@
-import type {Child, Children, Context} from '@bikeshaving/crank/crank.js';
-import {Copy, createElement, Fragment, Raw} from '@bikeshaving/crank/crank.js';
+import type {Child, Context} from '@bikeshaving/crank/crank.js';
+import {createElement} from '@bikeshaving/crank/crank.js';
 import {renderer} from '@bikeshaving/crank/dom.js';
-import type {Patch, Cursor} from '@bikeshaving/revise/patch.js';
 import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
-import type {ContentEvent} from "@bikeshaving/revise/contentarea.js";
-import {Keyer} from "@bikeshaving/revise/keyer.js";
+import type {ContentEvent} from '@bikeshaving/revise/contentarea.js';
+import {Keyer} from '@bikeshaving/revise/keyer.js';
 import './index.css';
 
 /*** Prism Logic ***/
 import Prism from 'prismjs';
-import type { Token } from 'prismjs';
+import type {Token} from 'prismjs';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/themes/prism.css';
 
 // @ts-ignore
 Prism.manual = true;
 function wrapContent(
-  content: Array<Token | string> | Token | string,
+	content: Array<Token | string> | Token | string,
 ): Array<Token | string> {
-  return Array.isArray(content) ? content : [content];
+	return Array.isArray(content) ? content : [content];
 }
 
 function unwrapContent(
-  content: Array<Token | string>,
+	content: Array<Token | string>,
 ): Array<Token | string> | string {
-  if (content.length === 0) {
-    return '';
-  } else if (content.length === 1 && typeof content[0] === 'string') {
-    return content[0];
-  }
+	if (content.length === 0) {
+		return '';
+	} else if (content.length === 1 && typeof content[0] === 'string') {
+		return content[0];
+	}
 
-  return content;
+	return content;
 }
 
 function splitLinesRec(
-  tokens: Array<Token | string>,
+	tokens: Array<Token | string>,
 ): Array<Array<Token | string>> {
-  let currentLine: Array<Token | string> = [];
-  const lines: Array<Array<Token | string>> = [currentLine];
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (typeof token === 'string') {
-      const split = token.split(/\r\n|\r|\n/);
-      for (let j = 0; j < split.length; j++) {
-        if (j > 0) {
-          lines.push((currentLine = []));
-        }
+	let currentLine: Array<Token | string> = [];
+	const lines: Array<Array<Token | string>> = [currentLine];
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i];
+		if (typeof token === 'string') {
+			const split = token.split(/\r\n|\r|\n/);
+			for (let j = 0; j < split.length; j++) {
+				if (j > 0) {
+					lines.push((currentLine = []));
+				}
 
-        const token1 = split[j];
-        if (token1) {
-          currentLine.push(token1);
-        }
-      }
-    } else {
-      const split = splitLinesRec(wrapContent(token.content));
-      if (split.length > 1) {
-        for (let j = 0; j < split.length; j++) {
-          if (j > 0) {
-            lines.push((currentLine = []));
-          }
+				const token1 = split[j];
+				if (token1) {
+					currentLine.push(token1);
+				}
+			}
+		} else {
+			const split = splitLinesRec(wrapContent(token.content));
+			if (split.length > 1) {
+				for (let j = 0; j < split.length; j++) {
+					if (j > 0) {
+						lines.push((currentLine = []));
+					}
 
-          const line = split[j];
-          if (line.length) {
-            const token1 = new Prism.Token(
-              token.type,
-              unwrapContent(line),
-              token.alias,
-            );
-            token1.length = line.reduce((l, t) => l + t.length, 0);
-            currentLine.push(token1);
-          }
-        }
-      } else {
-        currentLine.push(token);
-      }
-    }
-  }
+					const line = split[j];
+					if (line.length) {
+						const token1 = new Prism.Token(
+							token.type,
+							unwrapContent(line),
+							token.alias,
+						);
+						token1.length = line.reduce((l, t) => l + t.length, 0);
+						currentLine.push(token1);
+					}
+				}
+			} else {
+				currentLine.push(token);
+			}
+		}
+	}
 
-  return lines;
+	return lines;
 }
 
 export function splitLines(
-  tokens: Array<Token | string>,
+	tokens: Array<Token | string>,
 ): Array<Array<Token | string>> {
-  const lines = splitLinesRec(tokens);
-  // Dealing with trailing newlines
-  if (!lines[lines.length - 1].length) {
-    lines.pop();
-  }
+	const lines = splitLinesRec(tokens);
+	// Dealing with trailing newlines
+	if (!lines[lines.length - 1].length) {
+		lines.pop();
+	}
 
-  return lines;
+	return lines;
 }
 function printTokens(tokens: Array<Token | string>): Array<Child> {
 	const result: Array<Child> = [];
@@ -112,7 +111,7 @@ function printLines(
 	lines: Array<Array<Token | string>>,
 	keyer: Keyer,
 ): Array<Child> {
-	let cursor= 0;
+	let cursor = 0;
 	return lines.map((line) => {
 		const key = keyer.keyOf(cursor);
 		const length = line.reduce((l, t) => l + t.length, 0);
@@ -132,9 +131,10 @@ function parse(content: string, keyer: Keyer): Array<Child> {
 
 function debounce(fn: Function, ms = 50): any {
 	let handle: any;
-	return function(this: any) {
-		let context = this, args = arguments;
-		const wrapped = function() {
+	return function (this: any) {
+		let context = this,
+			args = arguments;
+		const wrapped = function () {
 			handle = undefined;
 			return fn.apply(context, args);
 		};
@@ -147,24 +147,24 @@ function debounce(fn: Function, ms = 50): any {
 	};
 }
 
-function* Editable(this: Context, { children }: any) {
-	let content = "\n";
+function* Editable(this: Context) {
+	let content = '\n';
 	let el: any;
 	const keyer = new Keyer(content.length);
 	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));
-	this.addEventListener("contentchange", (ev) => {
+	this.addEventListener('contentchange', (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.push(ev.detail.patch);
 		debouncedRefresh();
 	});
 
-	this.addEventListener("contentundo", (ev) => {
+	this.addEventListener('contentundo', (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.push(ev.detail.patch);
 		this.refresh();
 	});
 
-	this.addEventListener("contentredo", (ev) => {
+	this.addEventListener('contentredo', (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.push(ev.detail.patch);
 		this.refresh();
@@ -172,10 +172,7 @@ function* Editable(this: Context, { children }: any) {
 
 	for ({} of this) {
 		yield (
-			<content-area
-				undomode="keydown"
-				crank-ref={(el1: Node) => (el = el1)}
-			>
+			<content-area undomode="keydown" crank-ref={(el1: Node) => (el = el1)}>
 				<pre
 					class="editable language-typescript"
 					crank-ref={(el1: Node) => (el = el1)}
@@ -201,12 +198,12 @@ function App() {
 declare global {
 	module Crank {
 		interface EventMap {
-			"contentchange": ContentEvent;
-			"contentundo": ContentEvent;
-			"contentredo": ContentEvent;
+			contentchange: ContentEvent;
+			contentundo: ContentEvent;
+			contentredo: ContentEvent;
 		}
 	}
 }
 
-window.customElements.define("content-area", ContentAreaElement);
+window.customElements.define('content-area', ContentAreaElement);
 renderer.render(<App />, document.getElementById('root')!);

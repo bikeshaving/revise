@@ -10,7 +10,7 @@
     "develop": "yarn test --watch",
     "test": "jest --rootDir src",
     "debug": "node --inspect-brk ./node_modules/.bin/jest --runInBand --rootDir src",
-    "lint": "eslint --ext js,ts src",
+    "lint": "eslint --ext js,jsx,ts,tsx src packages/demo/src",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -21,6 +21,7 @@
     "eslint-config-prettier": "^7.2.0",
     "eslint-plugin-jest": "^24.1.3",
     "eslint-plugin-prettier": "^3.3.1",
+    "eslint-plugin-react": "^7.22.0",
     "jest": "^26.6.3",
     "magic-string": "^0.25.7",
     "prettier": "^2.2.1",

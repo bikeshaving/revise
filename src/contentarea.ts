@@ -804,10 +804,7 @@ function nodeOffsetAt(
 	return [root, root.childNodes.length];
 }
 
-function getCursor(
-	root: Element,
-	cache: NodeInfoCache,
-): Cursor | undefined {
+function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
 	const selection = document.getSelection();
 	if (selection == null) {
 		return undefined;
