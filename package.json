@@ -35,7 +35,8 @@
     "./": "./",
     "./subseq.js": "./subseq.js",
     "./patch.js": "./patch.js",
-    "./contentarea.js": "./contentarea.js"
+    "./contentarea.js": "./contentarea.js",
+    "./keyer.js": "./keyer.js"
   },
   "workspaces": [
     ".",

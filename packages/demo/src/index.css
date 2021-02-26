@@ -4,8 +4,6 @@
 
 body {
   margin: 0;
-  background: #0c1227;
-  color: #fff;
   font-family: sans-serif;
   overflow-y: scroll;
   overflow-x: hidden;
@@ -13,24 +11,11 @@ body {
 
 .app {
   margin: 10vh auto;
-  color: white;
-}
-
-.editor {
-  margin: 0 auto;
   max-width: 60em;
-  tab-size: 2;
 }
 
-.block {
-  display: block;
-  margin: 30px;
+.editable {
+  tab-size: 2;
+	border: 1px solid black;
   padding: 15px;
-  background-color: #2d2d2d;
-	overflow-x: hidden;
-	overflow-y: hidden;
-	white-space: pre-wrap;
-	white-space: break-spaces;
-	overflow-wrap: break-word;
-	word-break: break-all;
 }
