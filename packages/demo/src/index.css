@@ -16,6 +16,11 @@ body {
 
 .editable {
   tab-size: 2;
-	border: 1px solid black;
+  border: 1px solid black;
   padding: 15px;
+}
+
+.emoji {
+  height: 1em;
+  width: 1em;
 }

@@ -2,12 +2,8 @@
 import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
-export interface NodeInfo {
-	offset: number;
-	length: number;
-}
-
-export type NodeInfoCache = Map<Node, NodeInfo>;
+// TODO: add native undo
+export type UndoMode = "none" | "keydown";
 
 export type SelectionDirection = "forward" | "backward" | "none";
 
@@ -30,9 +26,6 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
-// TODO: add native undo
-export type UndoMode = "none" | "keydown";
-
 const css = `
 :host {
 	display: contents;
@@ -41,6 +34,13 @@ const css = `
 	overflow-wrap: break-word;
 	word-break: break-all;
 }`;
+
+interface NodeInfo {
+	offset: number;
+	length: number;
+}
+
+type NodeInfoCache = Map<Node, NodeInfo>;
 
 // TODO: Maybe these properties can be grouped on a hidden controller class?
 /*** ContentAreaElement symbol properties ***/
@@ -127,7 +127,7 @@ export class ContentAreaElement extends HTMLElement {
 
 	connectedCallback() {
 		// TODO: Figure out a way to call validate here instead
-		this[$value] = getValue(this, this[$cache], this[$value]);
+		this[$value] = getContent(this, this[$cache], this[$value]);
 		const cursor = getCursor(this, this[$cache]);
 		if (cursor !== undefined) {
 			this[$cursor] = cursor;
@@ -314,7 +314,7 @@ export class ContentAreaElement extends HTMLElement {
 			selectionDirection,
 		} = selectionInfoFromCursor(this[$cursor]);
 		callback();
-		validate(this, this[$observer].takeRecords(), {ignoreSelection: true});
+		validate(this, this[$observer].takeRecords(), {skipSelection: true});
 		setSelectionRange(
 			this,
 			cache,
@@ -334,7 +334,7 @@ export class ContentAreaElement extends HTMLElement {
 			this[$value] = historyValue;
 			this.dispatchEvent(new ContentEvent("contentundo", {detail: {patch}}));
 			this[$value] = value;
-			validate(this, this[$observer].takeRecords(), {historyValue});
+			validate(this, this[$observer].takeRecords(), {skipDispatch: true});
 			if (this[$value] === historyValue) {
 				const cursor = cursorFromPatch(patch);
 				const {
@@ -365,7 +365,7 @@ export class ContentAreaElement extends HTMLElement {
 			this[$value] = historyValue;
 			this.dispatchEvent(new ContentEvent("contentredo", {detail: {patch}}));
 			this[$value] = value;
-			validate(this, this[$observer].takeRecords(), {historyValue});
+			validate(this, this[$observer].takeRecords(), {skipDispatch: true});
 			if (this[$value] === historyValue) {
 				const cursor = cursorFromPatch(patch);
 				const {
@@ -406,29 +406,27 @@ function getLowerBound(...cursors: Array<Cursor>): number {
 }
 
 interface ValidateOptions {
-	ignoreSelection?: boolean;
-	historyValue?: string;
+	skipSelection?: boolean;
+	skipDispatch?: boolean;
 }
 
 function validate(
 	area: ContentAreaElement,
 	records: Array<MutationRecord>,
-	options: ValidateOptions = {},
+	{skipSelection, skipDispatch}: ValidateOptions = {},
 ): void {
-	const {historyValue, ignoreSelection} = options;
-	if (records.length) {
-		const cache = area[$cache];
+	const cache = area[$cache];
+	if (invalidate(area, cache, records)) {
 		const history = area[$history];
-		invalidate(area, cache, records);
 		const oldValue = area[$value];
 		const oldCursor = area[$cursor];
-		const value = (area[$value] = getValue(area, cache, oldValue));
+		const value = (area[$value] = getContent(area, cache, oldValue));
 		let cursor = oldCursor;
 		// There appears to be a strange race condition in Safari where
 		// document.getSelection() returns erroneous information when repair is
 		// called from within a requestAnimationFrame callback, so we just skip
 		// finding the new cursor information.
-		if (!ignoreSelection) {
+		if (!skipSelection) {
 			const cursor1 = getCursor(area, cache);
 			if (cursor1 !== undefined) {
 				cursor = cursor1;
@@ -438,9 +436,8 @@ function validate(
 
 		const hint = getLowerBound(oldCursor, cursor);
 		const patch = Patch.diff(oldValue, value, hint);
-		if (historyValue === undefined) {
-			history.push(patch);
-			// TODO: pass in inputType information?
+		history.push(patch);
+		if (!skipDispatch) {
 			area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
 		}
 	}
@@ -509,7 +506,7 @@ function invalidate(
 	root: Element,
 	cache: NodeInfoCache,
 	records: Array<MutationRecord>,
-): void {
+): boolean {
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
@@ -530,7 +527,12 @@ function invalidate(
 		}
 
 		for (; node !== root; node = node.parentNode!) {
-			if (!cache.has(node)) {
+			if (
+				!cache.has(node) ||
+				(node !== record.target &&
+					node.nodeType === Node.ELEMENT_NODE &&
+					(node as Element).hasAttribute("data-content"))
+			) {
 				break;
 			}
 
@@ -542,6 +544,8 @@ function invalidate(
 	if (invalidated) {
 		cache.delete(root);
 	}
+
+	return invalidated;
 }
 
 interface StackFrame {
@@ -550,7 +554,7 @@ interface StackFrame {
 }
 
 // TODO: It might be faster to construct a patch rather than concatenating a giant string.
-function getValue(
+function getContent(
 	root: Element,
 	cache: NodeInfoCache,
 	oldValue: string,
@@ -580,31 +584,36 @@ function getValue(
 	const seen = new Set<Node>();
 	const stack: Array<StackFrame> = [];
 	for (let node: Node | null = root; node !== null; ) {
-		if (!seen.has(node)) {
-			while (!cache.has(node)) {
-				const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
-				if (newlineBefore) {
-					content += NEWLINE;
-					hasNewline = true;
-				}
-
-				const firstChild = walker.firstChild();
-				if (firstChild) {
-					stack.push({oldIndexRelative, nodeInfo});
-					oldIndexRelative = oldIndex;
-					if (newlineBefore) {
-						offset = NEWLINE.length;
-					} else {
-						offset = 0;
-					}
-
-					nodeInfo = {offset, length: 0};
-					seen.add(node);
-					node = firstChild;
-				} else {
-					break;
-				}
+		while (!seen.has(node) && !cache.has(node)) {
+			if (
+				node.nodeType === Node.ELEMENT_NODE &&
+				(node as Element).hasAttribute("data-content")
+			) {
+				break;
 			}
+
+			const newlineBefore = !hasNewline && offset && isBlocklikeElement(node);
+			if (newlineBefore) {
+				content += NEWLINE;
+				hasNewline = true;
+			}
+
+			const firstChild = walker.firstChild();
+			if (!firstChild) {
+				break;
+			}
+
+			stack.push({oldIndexRelative, nodeInfo});
+			oldIndexRelative = oldIndex;
+			if (newlineBefore) {
+				offset = NEWLINE.length;
+			} else {
+				offset = 0;
+			}
+
+			nodeInfo = {offset, length: 0};
+			seen.add(node);
+			node = firstChild;
 		}
 
 		if (cache.has(node)) {
@@ -636,6 +645,14 @@ function getValue(
 				content += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
+			} else if (
+				node.nodeType === Node.ELEMENT_NODE &&
+				(node as Element).hasAttribute("data-content")
+			) {
+				const content1 = (node as Element).getAttribute("data-content") || "";
+				content += content1;
+				offset += content1.length;
+				hasNewline = content1.endsWith(NEWLINE);
 			} else if (!hasNewline && isBlocklikeElement(node)) {
 				content += NEWLINE;
 				offset += NEWLINE.length;
@@ -663,13 +680,20 @@ function getValue(
 	return content;
 }
 
-function nodeOffsetFromChild(node: Node): [Node | null, number] {
+function nodeOffsetFromChild(
+	node: Node,
+	after: boolean = false,
+): [Node | null, number] {
 	const parentNode = node.parentNode;
 	if (parentNode === null) {
 		throw new Error("Node has no parent");
 	}
 
-	const offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
+	let offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
+	if (after) {
+		offset++;
+	}
+
 	return [parentNode, offset];
 }
 
@@ -742,6 +766,8 @@ function nodeOffsetAt(
 		return [null, 0];
 	}
 
+	// A lot of the logic here works around the fact that setting the focusNode
+	// of a DOM selection to a BR element breaks the selection.
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -754,27 +780,32 @@ function nodeOffsetAt(
 			throw new Error("Unknown node");
 		}
 
-		const {length} = cache.get(node)!;
+		const length = cache.get(node)!.length;
 		if (offset <= length) {
 			if (node.nodeType === Node.TEXT_NODE) {
 				return [node, offset];
 			}
 
+			// TODO: Simplify this
 			const firstChild = walker.firstChild();
 			if (firstChild) {
 				offset -= cache.get(firstChild)!.offset;
 				node = firstChild;
 			} else if (offset > 0) {
-				const successor = findSuccessorNode(walker);
-				if (successor) {
-					if (successor.nodeName === "BR") {
-						return nodeOffsetFromChild(successor);
-					}
+				if (node.nodeName === "BR") {
+					const successor = findSuccessorNode(walker);
+					if (successor) {
+						if (successor.nodeName === "BR") {
+							return nodeOffsetFromChild(successor);
+						}
 
-					return [successor, 0];
-				} else {
-					break;
+						return [successor, 0];
+					} else {
+						break;
+					}
 				}
+
+				return nodeOffsetFromChild(node, true);
 			} else if (node.nodeName === "BR") {
 				return nodeOffsetFromChild(node);
 			} else {
@@ -800,8 +831,16 @@ function nodeOffsetAt(
 		}
 	}
 
-	// TODO: Maybe we should return the node/offset before the end.
-	return [root, root.childNodes.length];
+	const lastNode = root.lastChild;
+	if (lastNode === null) {
+		return [root, 0];
+	}
+
+	const lastOffset =
+		lastNode.nodeType === Node.TEXT_NODE
+			? (lastNode as Text).data.length
+			: lastNode.childNodes.length;
+	return [lastNode, lastOffset];
 }
 
 function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
@@ -890,8 +929,8 @@ function setSelectionRange(
 		selectionStart = selectionEnd;
 	}
 
-	let anchor: number;
 	let focus: number;
+	let anchor: number;
 	if (selectionDirection === "backward") {
 		anchor = selectionEnd;
 		focus = selectionStart;
@@ -900,7 +939,7 @@ function setSelectionRange(
 		focus = selectionEnd;
 	}
 
-	if (anchor === focus) {
+	if (focus === anchor) {
 		const [node, offset] = nodeOffsetAt(root, cache, focus);
 		if (
 			selection.focusNode !== node ||

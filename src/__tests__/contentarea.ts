@@ -89,6 +89,17 @@ describe("contentarea", () => {
 				"<div>Hello<span><br /></span>World<span><br /></span></div>";
 			expect(area.value).toEqual("Hello\nWorld\n");
 		});
+
+		test("data-content", () => {
+			area.innerHTML = '<div>12</div><img data-content="image" /><div>34</div>';
+			expect(area.value).toEqual("12\nimage\n34\n");
+		});
+
+		test("data-content with children", () => {
+			area.innerHTML =
+				'<div>12</div><div data-content="widget"><div>ignored</div></div><div>34</div>';
+			expect(area.value).toEqual("12\nwidget\n34\n");
+		});
 	});
 
 	describe("value after mutations", () => {
@@ -187,6 +198,25 @@ describe("contentarea", () => {
 			area.firstChild!.lastChild!.firstChild!.remove();
 			expect(area.value).toEqual("12\n34\n");
 		});
+
+		test("data-content changed", () => {
+			area.innerHTML = '<div>12</div><img data-content="image" /><div>34</div>';
+			expect(area.value).toEqual("12\nimage\n34\n");
+			(area.childNodes[1] as Element).setAttribute("data-content", "replaced");
+			expect(area.value).toEqual("12\nreplaced\n34\n");
+		});
+
+		test("data-content with changed children", () => {
+			area.innerHTML =
+				'<div>12</div><div data-content="widget"><div>ignored</div></div><div>34</div>';
+			expect(area.value).toEqual("12\nwidget\n34\n");
+			area.childNodes[1].firstChild!.remove();
+			expect(area.value).toEqual("12\nwidget\n34\n");
+			(area.childNodes[1] as HTMLElement).insertAdjacentHTML(
+				"beforeend",
+				"<span>ignored</span>",
+			);
+		});
 	});
 
 	describe("nodeOffsetAt/indexOf", () => {
@@ -240,8 +270,8 @@ describe("contentarea", () => {
 				area.firstChild!.childNodes[1].firstChild,
 				5,
 			]);
-			expect(area.nodeOffsetAt(12)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
+			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild, 2]);
+			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 2]);
 
 			for (let i = -3; i < area.value.length + 3; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toEqual(
@@ -285,9 +315,9 @@ describe("contentarea", () => {
 				area.firstChild!.childNodes[1].firstChild,
 				5,
 			]);
-			expect(area.nodeOffsetAt(12)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(14)).toEqual([area, 1]);
+			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild, 2]);
+			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 2]);
+			expect(area.nodeOffsetAt(14)).toEqual([area.firstChild, 2]);
 
 			for (let i = -3; i < area.value.length + 3; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
@@ -323,9 +353,9 @@ describe("contentarea", () => {
 				area.firstChild!.childNodes[3],
 				5,
 			]);
-			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(14)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(15)).toEqual([area, 1]);
+			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 4]);
+			expect(area.nodeOffsetAt(14)).toEqual([area.firstChild, 4]);
+			expect(area.nodeOffsetAt(15)).toEqual([area.firstChild, 4]);
 			for (let i = -3; i < area.value.length + 3; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
@@ -356,10 +386,10 @@ describe("contentarea", () => {
 				area.firstChild!.childNodes[2],
 				5,
 			]);
-			expect(area.nodeOffsetAt(12)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(13)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(14)).toEqual([area, 1]);
-			expect(area.nodeOffsetAt(15)).toEqual([area, 1]);
+			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild, 4]);
+			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 4]);
+			expect(area.nodeOffsetAt(14)).toEqual([area.firstChild, 4]);
+			expect(area.nodeOffsetAt(15)).toEqual([area.firstChild, 4]);
 			for (let i = -3; i < area.value.length + 3; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
@@ -372,8 +402,8 @@ describe("contentarea", () => {
 			expect(area.value).toEqual("\n");
 			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild!, 0]);
-			expect(area.nodeOffsetAt(1)).toEqual([area, 1]);
+			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([area.firstChild, 1]);
 			for (let i = -3; i < area.value.length + 3; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
@@ -382,6 +412,49 @@ describe("contentarea", () => {
 
 			// TODO: fix this edge case
 			expect(area.indexOf(area.firstChild!.firstChild, 0)).toEqual(0);
+		});
+
+		test("data-content", () => {
+			area.innerHTML =
+				'<div><div>Hello <img src="" data-content="😓"/></div></div>';
+			expect(area.value).toEqual("Hello 😓\n");
+			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
+			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
+			expect(area.nodeOffsetAt(0)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				0,
+			]);
+			expect(area.nodeOffsetAt(1)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				1,
+			]);
+			expect(area.nodeOffsetAt(2)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				2,
+			]);
+			expect(area.nodeOffsetAt(3)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				3,
+			]);
+			expect(area.nodeOffsetAt(4)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				4,
+			]);
+			expect(area.nodeOffsetAt(5)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				5,
+			]);
+			expect(area.nodeOffsetAt(6)).toEqual([
+				area.firstChild!.firstChild!.childNodes[0],
+				6,
+			]);
+			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.firstChild!, 2]);
+			for (let i = -3; i < area.value.length + 3; i++) {
+				// any index which is “inside the img” will be set to the end
+				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
+					Math.max(-1, Math.min(i >= 7 && i < 9 ? 9 : i, area.value.length)),
+				);
+			}
 		});
 	});
 });
