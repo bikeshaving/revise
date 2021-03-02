@@ -334,7 +334,7 @@ export class ContentAreaElement extends HTMLElement {
 			this[$value] = historyValue;
 			this.dispatchEvent(new ContentEvent("contentundo", {detail: {patch}}));
 			this[$value] = value;
-			validate(this, this[$observer].takeRecords(), {skipDispatch: true});
+			validate(this, this[$observer].takeRecords(), {skipHistory: true});
 			if (this[$value] === historyValue) {
 				const cursor = cursorFromPatch(patch);
 				const {
@@ -365,7 +365,7 @@ export class ContentAreaElement extends HTMLElement {
 			this[$value] = historyValue;
 			this.dispatchEvent(new ContentEvent("contentredo", {detail: {patch}}));
 			this[$value] = value;
-			validate(this, this[$observer].takeRecords(), {skipDispatch: true});
+			validate(this, this[$observer].takeRecords(), {skipHistory: true});
 			if (this[$value] === historyValue) {
 				const cursor = cursorFromPatch(patch);
 				const {
@@ -407,13 +407,13 @@ function getLowerBound(...cursors: Array<Cursor>): number {
 
 interface ValidateOptions {
 	skipSelection?: boolean;
-	skipDispatch?: boolean;
+	skipHistory?: boolean;
 }
 
 function validate(
 	area: ContentAreaElement,
 	records: Array<MutationRecord>,
-	{skipSelection, skipDispatch}: ValidateOptions = {},
+	{skipSelection, skipHistory}: ValidateOptions = {},
 ): void {
 	const cache = area[$cache];
 	if (invalidate(area, cache, records)) {
@@ -434,10 +434,10 @@ function validate(
 			}
 		}
 
-		const hint = getLowerBound(oldCursor, cursor);
-		const patch = Patch.diff(oldValue, value, hint);
-		history.push(patch);
-		if (!skipDispatch) {
+		if (!skipHistory) {
+			const hint = getLowerBound(oldCursor, cursor);
+			const patch = Patch.diff(oldValue, value, hint);
+			history.push(patch);
 			area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
 		}
 	}
