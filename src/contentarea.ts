@@ -2,6 +2,14 @@
 import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
+function isMacPlatform(): boolean {
+	return window.navigator && /Mac/.test(window.navigator.platform);
+}
+
+function isSafari(): boolean {
+	return window.navigator && /apple/i.test(window.navigator.vendor || "");
+}
+
 // TODO: add native undo
 export type UndoMode = "none" | "keydown";
 
@@ -429,8 +437,7 @@ function validate(
 		if (!skipSelection) {
 			const cursor1 = getCursor(area, cache);
 			if (cursor1 !== undefined) {
-				cursor = cursor1;
-				area[$cursor] = cursor;
+				area[$cursor] = cursor = cursor1;
 			}
 		}
 
@@ -510,6 +517,16 @@ function invalidate(
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
+		// Firefox does not seem to report that nodes from the second line have
+		// been deleted when deleting backwards, so we shallowly dirty them.
+		// https://bugzilla.mozilla.org/show_bug.cgi?id=1695968
+		if (record.addedNodes.length) {
+			for (let node = record.nextSibling; node !== null; node = node.nextSibling) {
+				cache.delete(node);
+				invalidated = true;
+			}
+		}
+
 		for (let j = 0; j < record.addedNodes.length; j++) {
 			clean(record.addedNodes[j], cache);
 		}
