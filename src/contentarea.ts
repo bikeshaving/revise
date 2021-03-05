@@ -1056,10 +1056,6 @@ function cursorFromPatch(patch: Patch): Cursor {
 	return 0;
 }
 
-function isMacPlatform(): boolean {
-	return window.navigator && /Mac/.test(window.navigator.platform);
-}
-
 function isUndoKeyboardEvent(ev: KeyboardEvent): boolean {
 	return (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key === "z";
 }
