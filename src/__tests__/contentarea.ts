@@ -199,6 +199,16 @@ describe("contentarea", () => {
 			expect(area.value).toEqual("12\n34\n");
 		});
 
+		test("Firefox delete backwards", () => {
+			area.innerHTML = "<div>12</div><div><span>34</span></div>";
+			expect(area.value).toEqual("12\n34\n");
+			const div = area.firstChild!;
+			div.remove();
+			area.firstChild!.insertBefore(div.firstChild!, area.firstChild!.lastChild);
+			expect(area.innerHTML).toEqual("<div>12<span>34</span></div>");
+			expect(area.value).toEqual("1234\n");
+		});
+
 		test("data-content changed", () => {
 			area.innerHTML = '<div>12</div><img data-content="image" /><div>34</div>';
 			expect(area.value).toEqual("12\nimage\n34\n");
@@ -448,11 +458,11 @@ describe("contentarea", () => {
 				area.firstChild!.firstChild!.childNodes[0],
 				6,
 			]);
-			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.firstChild!, 2]);
+			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.firstChild!.childNodes[1], 1]);
 			for (let i = -3; i < area.value.length + 3; i++) {
 				// any index which is “inside the img” will be set to the end
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(i >= 7 && i < 9 ? 9 : i, area.value.length)),
+					Math.max(-1, Math.min(i === 7 ? 8 : i, area.value.length)),
 				);
 			}
 		});
