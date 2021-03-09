@@ -43,13 +43,6 @@ const css = `
 	word-break: break-all;
 }`;
 
-interface NodeInfo {
-	offset: number;
-	length: number;
-}
-
-type NodeInfoCache = Map<Node, NodeInfo>;
-
 // TODO: Maybe these properties can be grouped on a hidden controller class?
 /*** ContentAreaElement symbol properties ***/
 const $cache = Symbol.for("revise$cache");
@@ -498,6 +491,13 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
+interface NodeInfo {
+	offset: number;
+	length: number | undefined;
+}
+
+type NodeInfoCache = Map<Node, NodeInfo>;
+
 function clean(root: Node, cache: NodeInfoCache): void {
 	const walker = document.createTreeWalker(
 		root,
@@ -517,16 +517,6 @@ function invalidate(
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
-		// Firefox does not seem to report that nodes from the second line have
-		// been deleted when deleting backwards, so we shallowly dirty them.
-		// https://bugzilla.mozilla.org/show_bug.cgi?id=1695968
-		if (record.addedNodes.length) {
-			for (let node = record.nextSibling; node !== null; node = node.nextSibling) {
-				cache.delete(node);
-				invalidated = true;
-			}
-		}
-
 		for (let j = 0; j < record.addedNodes.length; j++) {
 			clean(record.addedNodes[j], cache);
 		}
@@ -539,7 +529,9 @@ function invalidate(
 		if (node === root) {
 			invalidated = true;
 			continue;
-		} else if (!cache.has(node) || !root.contains(node)) {
+		} else if (!root.contains(node)) {
+			clean(record.target, cache);
+			// THIS IS PROBABLY NOT RIGHT
 			continue;
 		}
 
@@ -553,38 +545,37 @@ function invalidate(
 				break;
 			}
 
-			cache.delete(node);
+			const nodeInfo = cache.get(node);
+			if (nodeInfo) {
+				nodeInfo.length = undefined;
+			}
+
 			invalidated = true;
 		}
 	}
 
 	if (invalidated) {
-		cache.delete(root);
+		const nodeInfo = cache.get(root);
+		if (nodeInfo) {
+			nodeInfo.length = undefined;
+		}
 	}
 
 	return invalidated;
 }
 
 interface StackFrame {
+	offset: number;
 	oldIndexRelative: number;
-	nodeInfo: NodeInfo;
 }
 
+// TODO: SIMPLIFY THIS FUNCTION 😭
 // TODO: It might be faster to construct a patch rather than concatenating a giant string.
 function getContent(
 	root: Element,
 	cache: NodeInfoCache,
 	oldValue: string,
 ): string {
-	if (cache.has(root)) {
-		const {length} = cache.get(root)!;
-		if (oldValue.length !== length) {
-			throw new Error("oldValue does not match cached root length");
-		}
-
-		return oldValue;
-	}
-
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -597,11 +588,26 @@ function getContent(
 	let oldIndexRelative = 0;
 	// the offset of the current node relative to its parent
 	let offset = 0;
-	let nodeInfo: NodeInfo = {offset, length: 0};
+	// TODO: Get rid of the necessity of this seen check.
 	const seen = new Set<Node>();
 	const stack: Array<StackFrame> = [];
 	for (let node: Node | null = root; node !== null; ) {
-		while (!seen.has(node) && !cache.has(node)) {
+		let nodeInfo: NodeInfo;
+		nodeInfo = cache.get(node)!;
+		if (nodeInfo === undefined) {
+			nodeInfo = {offset, length: undefined};
+			cache.set(node, nodeInfo);
+		} else if (!seen.has(node)) {
+			const oldOffset = oldIndex - oldIndexRelative;
+			if (oldOffset < nodeInfo.offset) {
+				oldIndex += nodeInfo.offset - oldOffset;
+			}
+
+			nodeInfo.offset = offset;
+		}
+
+		// Walking down the tree.
+		while (!seen.has(node) && nodeInfo.length === undefined) {
 			if (
 				node.nodeType === Node.ELEMENT_NODE &&
 				(node as Element).hasAttribute("data-content")
@@ -620,7 +626,8 @@ function getContent(
 				break;
 			}
 
-			stack.push({oldIndexRelative, nodeInfo});
+			seen.add(node);
+			stack.push({offset, oldIndexRelative});
 			oldIndexRelative = oldIndex;
 			if (newlineBefore) {
 				offset = NEWLINE.length;
@@ -628,31 +635,22 @@ function getContent(
 				offset = 0;
 			}
 
-			nodeInfo = {offset, length: 0};
-			seen.add(node);
 			node = firstChild;
+			nodeInfo = cache.get(node)!;
+			if (nodeInfo === undefined) {
+				nodeInfo = {offset, length: undefined};
+				cache.set(node, nodeInfo);
+			} else {
+				const oldOffset = oldIndex - oldIndexRelative;
+				if (oldOffset < nodeInfo.offset) {
+					oldIndex += nodeInfo.offset - oldOffset;
+				}
+
+				nodeInfo.offset = offset;
+			}
 		}
 
-		if (cache.has(node)) {
-			nodeInfo = cache.get(node)!;
-			const oldOffset = oldIndex - oldIndexRelative;
-			if (oldOffset < nodeInfo.offset) {
-				// A deletion has been detected.
-				oldIndex += nodeInfo.offset - oldOffset;
-			}
-
-			nodeInfo.offset = offset;
-			const length = nodeInfo.length;
-			const content1 = oldValue.slice(oldIndex, oldIndex + length);
-			if (content1.length !== length) {
-				throw new Error("String length mismatch");
-			}
-
-			content += content1;
-			offset += length;
-			oldIndex += length;
-			hasNewline = content1.endsWith(NEWLINE);
-		} else {
+		if (nodeInfo.length === undefined) {
 			if (node.nodeType === Node.TEXT_NODE) {
 				const content1 = (node as Text).data;
 				content += content1;
@@ -677,20 +675,30 @@ function getContent(
 			}
 
 			nodeInfo.length = offset - nodeInfo.offset;
+		} else {
+			const length = nodeInfo.length;
+			const content1 = oldValue.slice(oldIndex, oldIndex + length);
+			if (content1.length !== length) {
+				throw new Error("String length mismatch");
+			}
+
+			content += content1;
+			offset += length;
+			oldIndex += length;
+			hasNewline = content1.endsWith(NEWLINE);
 		}
 
-		cache.set(node, nodeInfo);
+		// Walking across the tree.
 		node = walker.nextSibling();
 		if (node === null && walker.currentNode !== root) {
 			if (!stack.length) {
 				throw new Error("Stack is empty");
 			}
 
-			({oldIndexRelative, nodeInfo} = stack.pop()!);
-			offset += nodeInfo.offset;
+			let offset1: number;
+			({offset: offset1, oldIndexRelative} = stack.pop()!);
+			offset += offset1;
 			node = walker.parentNode();
-		} else {
-			nodeInfo = {offset, length: 0};
 		}
 	}
 
@@ -743,7 +751,7 @@ function indexOf(
 	if (node.nodeType === Node.ELEMENT_NODE) {
 		if (offset >= node.childNodes.length) {
 			if (index > 0) {
-				index = cache.get(node)!.length;
+				index = cache.get(node)!.length!;
 			}
 		} else {
 			node = node.childNodes[offset];
@@ -767,7 +775,7 @@ function indexOf(
 			node = parentNode;
 		} else {
 			node = previousSibling;
-			index += cache.get(node)!.length;
+			index += cache.get(node)!.length!;
 		}
 	}
 
@@ -789,7 +797,6 @@ function nodeOffsetAt(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-
 	let node: Node | null = root;
 	let offset = index;
 	while (node !== null) {
@@ -797,7 +804,7 @@ function nodeOffsetAt(
 			throw new Error("Unknown node");
 		}
 
-		const length = cache.get(node)!.length;
+		const length = cache.get(node)!.length!;
 		if (offset <= length) {
 			if (node.nodeType === Node.TEXT_NODE) {
 				return [node, offset];
