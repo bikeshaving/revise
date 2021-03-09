@@ -820,6 +820,8 @@ function nodeOffsetAt(
 					} else {
 						break;
 					}
+				} else if (isSafari()) {
+					return [node, 1];
 				}
 
 				return nodeOffsetFromChild(node, true);
