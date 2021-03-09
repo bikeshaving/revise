@@ -7,8 +7,7 @@ describe("contentarea", () => {
 	});
 
 	beforeEach(() => {
-		document.body.innerHTML =
-			'<content-area contenteditable="true"></content-area>';
+		document.body.innerHTML = "<content-area></content-area>";
 		area = document.body.firstChild as ContentAreaElement;
 	});
 
@@ -471,6 +470,48 @@ describe("contentarea", () => {
 					Math.max(-1, Math.min(i === 7 ? 8 : i, area.value.length)),
 				);
 			}
+		});
+	});
+
+	describe("repair", () => {
+		test("replacing line insertion with whitespace", () => {
+			area.innerHTML = "<div>Hello</div>";
+			expect(area.value).toEqual("Hello\n");
+			area.insertAdjacentHTML("beforeend", "<div>World</div>");
+			expect(area.value).toEqual("Hello\nWorld\n");
+			area.repair(() => {
+				area.lastChild!.remove();
+				area.firstChild!.firstChild!.data = "Hello\nWorld";
+			});
+			expect(area.value).toEqual("Hello\nWorld\n");
+			expect(area.innerHTML).toEqual("<div>Hello\nWorld</div>");
+		});
+
+		test("invalid", () => {
+			area.innerHTML = "<div>Hello</div>";
+			expect(area.value).toEqual("Hello\n");
+			area.insertAdjacentHTML("beforeend", "<div>World</div>");
+			expect(area.value).toEqual("Hello\nWorld\n");
+			expect(() => {
+				area.repair(() => {
+					area.lastChild!.remove();
+					area.firstChild!.firstChild!.data = "Hello\n\nWorld";
+				});
+			}).toThrow("Expected");
+			expect(area.value).toEqual("Hello\n\nWorld\n");
+			expect(area.innerHTML).toEqual("<div>Hello\n\nWorld</div>");
+		});
+
+		test("tab insertion assertion", () => {
+			area.innerHTML = "<div>Hello</div>";
+			expect(area.value).toEqual("Hello\n");
+			area.insertAdjacentHTML("beforeend", "<div>World</div>");
+			expect(area.value).toEqual("Hello\nWorld\n");
+			area.repair(() => {
+				(area.lastChild as Element).insertAdjacentText("afterbegin", "\t");
+			}, "Hello\n\tWorld\n");
+			expect(area.value).toEqual("Hello\n\tWorld\n");
+			expect(area.innerHTML).toEqual("<div>Hello</div><div>\tWorld</div>");
 		});
 	});
 });

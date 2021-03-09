@@ -305,7 +305,7 @@ export class ContentAreaElement extends HTMLElement {
 		);
 	}
 
-	repair(callback: Function): void {
+	repair(callback: Function, expectedValue?: string | undefined): void {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		const value = this[$value];
@@ -314,6 +314,10 @@ export class ContentAreaElement extends HTMLElement {
 			selectionEnd,
 			selectionDirection,
 		} = selectionInfoFromCursor(this[$cursor]);
+		if (typeof expectedValue !== "string") {
+			expectedValue = value;
+		}
+
 		callback();
 		validate(this, this[$observer].takeRecords(), {skipSelection: true});
 		setSelectionRange(
@@ -324,6 +328,10 @@ export class ContentAreaElement extends HTMLElement {
 			selectionEnd,
 			selectionDirection,
 		);
+
+		if (this[$value] !== expectedValue) {
+			throw new Error("Expected value did not match current value");
+		}
 	}
 
 	undo(): void {
