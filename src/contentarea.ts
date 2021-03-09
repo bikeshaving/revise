@@ -423,10 +423,10 @@ function validate(
 		const oldCursor = area[$cursor];
 		const value = (area[$value] = getContent(area, cache, oldValue));
 		let cursor = oldCursor;
-		// There appears to be a strange race condition in Safari where
+		// There appears to be a race condition in Safari where
 		// document.getSelection() returns erroneous information when repair is
-		// called from within a requestAnimationFrame callback, so we just skip
-		// finding the new cursor information.
+		// called from within a requestAnimationFrame() callback, but the cursor is
+		// usually correct, so we just skip finding the new cursor information.
 		if (!skipSelection) {
 			const cursor1 = getCursor(area, cache);
 			if (cursor1 !== undefined) {
@@ -530,8 +530,7 @@ function invalidate(
 			invalidated = true;
 			continue;
 		} else if (!root.contains(node)) {
-			clean(record.target, cache);
-			// THIS IS PROBABLY NOT RIGHT
+			clean(node, cache);
 			continue;
 		}
 
@@ -564,53 +563,57 @@ function invalidate(
 	return invalidated;
 }
 
-interface StackFrame {
-	offset: number;
-	oldIndexRelative: number;
-}
-
-// TODO: SIMPLIFY THIS FUNCTION 😭
-// TODO: It might be faster to construct a patch rather than concatenating a giant string.
 function getContent(
 	root: Element,
 	cache: NodeInfoCache,
-	oldValue: string,
+	oldContent: string,
 ): string {
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
+
+	// The return value
+	// TODO: It might be faster to construct a patch rather than concatenating a
+	// giant string.
 	let content = "";
+	// A boolean which indicates whether content currently ends in a newline.
+	// Because content is a heavily concatenated string and likely inferred by
+	// engines as requiring a “rope-like” data structure, reading from the end of
+	// the string to detect newliens turns out to be a bottleneck for most
+	// engines, so we cache that info in this boolean.
 	let hasNewline = false;
-	// index into the old string
-	let oldIndex = 0;
-	// index into the old string of the first sibling of the current node
-	let oldIndexRelative = 0;
-	// the offset of the current node relative to its parent
+	// The offset of the current node relative to its parent.
+	// Should be equal to the lengths of every single sibling before the current
+	// node, +1 if the parent node introduces a newline before it.
 	let offset = 0;
-	// TODO: Get rid of the necessity of this seen check.
-	const seen = new Set<Node>();
-	const stack: Array<StackFrame> = [];
+	// The current index into oldContent.
+	// If there are nodes which have cached offset and length information, we
+	// read the old string rather than the DOM directly.
+	let oldIndex = 0;
+	// The current index into oldContent of the first sibling of the current node.
+	// We compare the difference of this and the current oldIndex to the offsets
+	// of nodes cached from previous renders as a way to detect deletions.
+	let oldIndexRelative = 0;
+	// A boolean which indicates whether we’re walking down the tree or back up.
+	let descending = true;
+	// A stack to save oldIndexRelative and nodeInfo as we walk back up the tree.
+	const stack: Array<{oldIndexRelative: number; nodeInfo: NodeInfo}> = [];
+
+	// getNodeInfo
+	let nodeInfo = cache.get(root)!;
+	if (nodeInfo === undefined) {
+		nodeInfo = {offset, length: undefined};
+		cache.set(root, nodeInfo);
+	}
+
 	for (let node: Node | null = root; node !== null; ) {
-		let nodeInfo: NodeInfo;
-		nodeInfo = cache.get(node)!;
-		if (nodeInfo === undefined) {
-			nodeInfo = {offset, length: undefined};
-			cache.set(node, nodeInfo);
-		} else if (!seen.has(node)) {
-			const oldOffset = oldIndex - oldIndexRelative;
-			if (oldOffset < nodeInfo.offset) {
-				oldIndex += nodeInfo.offset - oldOffset;
-			}
-
-			nodeInfo.offset = offset;
-		}
-
 		// Walking down the tree.
-		while (!seen.has(node) && nodeInfo.length === undefined) {
+		while (descending && nodeInfo.length === undefined) {
 			if (
-				node.nodeType === Node.ELEMENT_NODE &&
-				(node as Element).hasAttribute("data-content")
+				node.nodeType === Node.TEXT_NODE ||
+				(node.nodeType === Node.ELEMENT_NODE &&
+					(node as Element).hasAttribute("data-content"))
 			) {
 				break;
 			}
@@ -622,12 +625,13 @@ function getContent(
 			}
 
 			const firstChild = walker.firstChild();
-			if (!firstChild) {
+			if (firstChild) {
+				descending = true;
+			} else {
 				break;
 			}
 
-			seen.add(node);
-			stack.push({offset, oldIndexRelative});
+			stack.push({oldIndexRelative, nodeInfo});
 			oldIndexRelative = oldIndex;
 			if (newlineBefore) {
 				offset = NEWLINE.length;
@@ -636,6 +640,7 @@ function getContent(
 			}
 
 			node = firstChild;
+			// getNodeInfo
 			nodeInfo = cache.get(node)!;
 			if (nodeInfo === undefined) {
 				nodeInfo = {offset, length: undefined};
@@ -643,6 +648,7 @@ function getContent(
 			} else {
 				const oldOffset = oldIndex - oldIndexRelative;
 				if (oldOffset < nodeInfo.offset) {
+					// deletion detected
 					oldIndex += nodeInfo.offset - oldOffset;
 				}
 
@@ -656,10 +662,6 @@ function getContent(
 				content += content1;
 				offset += content1.length;
 				hasNewline = content1.endsWith(NEWLINE);
-			} else if (node.nodeName === "BR") {
-				content += NEWLINE;
-				offset += NEWLINE.length;
-				hasNewline = true;
 			} else if (
 				node.nodeType === Node.ELEMENT_NODE &&
 				(node as Element).hasAttribute("data-content")
@@ -672,12 +674,16 @@ function getContent(
 				content += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
+			} else if (node.nodeName === "BR") {
+				content += NEWLINE;
+				offset += NEWLINE.length;
+				hasNewline = true;
 			}
 
 			nodeInfo.length = offset - nodeInfo.offset;
 		} else {
 			const length = nodeInfo.length;
-			const content1 = oldValue.slice(oldIndex, oldIndex + length);
+			const content1 = oldContent.slice(oldIndex, oldIndex + length);
 			if (content1.length !== length) {
 				throw new Error("String length mismatch");
 			}
@@ -688,17 +694,34 @@ function getContent(
 			hasNewline = content1.endsWith(NEWLINE);
 		}
 
-		// Walking across the tree.
 		node = walker.nextSibling();
-		if (node === null && walker.currentNode !== root) {
-			if (!stack.length) {
-				throw new Error("Stack is empty");
-			}
+		if (node) {
+			descending = true;
+			// getNodeInfo
+			nodeInfo = cache.get(node)!;
+			if (nodeInfo === undefined) {
+				nodeInfo = {offset, length: undefined};
+				cache.set(node, nodeInfo);
+			} else {
+				const oldOffset = oldIndex - oldIndexRelative;
+				if (oldOffset < nodeInfo.offset) {
+					// deletion detected
+					oldIndex += nodeInfo.offset - oldOffset;
+				}
 
-			let offset1: number;
-			({offset: offset1, oldIndexRelative} = stack.pop()!);
-			offset += offset1;
-			node = walker.parentNode();
+				nodeInfo.offset = offset;
+			}
+		} else {
+			descending = false;
+			if (walker.currentNode !== root) {
+				if (!stack.length) {
+					throw new Error("Stack is empty");
+				}
+
+				({oldIndexRelative, nodeInfo} = stack.pop()!);
+				offset = nodeInfo.offset + offset;
+				node = walker.parentNode();
+			}
 		}
 	}
 
