@@ -588,8 +588,8 @@ function getContent(
 	// A boolean which indicates whether content currently ends in a newline.
 	// Because content is a heavily concatenated string and likely inferred by
 	// engines as requiring a “rope-like” data structure, reading from the end of
-	// the string to detect newliens turns out to be a bottleneck for most
-	// engines, so we cache that info in this boolean.
+	// the string to detect newlines is a bottleneck for most engines, so we
+	// store that info in this boolean instead.
 	let hasNewline = false;
 	// The offset of the current node relative to its parent.
 	// Should be equal to the lengths of every single sibling before the current
@@ -605,11 +605,15 @@ function getContent(
 	let oldIndexRelative = 0;
 	// A boolean which indicates whether we’re walking down the tree or back up.
 	let descending = true;
-	// A stack to save oldIndexRelative and nodeInfo as we walk back up the tree.
+	// A stack to save some variables as we walk up and down the tree.
 	const stack: Array<{oldIndexRelative: number; nodeInfo: NodeInfo}> = [];
-
-	// getNodeInfo
-	let nodeInfo = cache.get(root)!;
+	// Info about the cached length of the node’s contents and offset relative to
+	// the node’s parents.
+	// See invalidate() to see how mutation records are used to clear the
+	// nodeInfo cache.
+	// We definitely assign it here because TypeScript will not pick up that
+	// nodeInfo is never undefined.
+	let nodeInfo: NodeInfo = cache.get(root)!;
 	if (nodeInfo === undefined) {
 		nodeInfo = {offset, length: undefined};
 		cache.set(root, nodeInfo);
@@ -671,10 +675,7 @@ function getContent(
 				content += content1;
 				offset += content1.length;
 				hasNewline = content1.endsWith(NEWLINE);
-			} else if (
-				node.nodeType === Node.ELEMENT_NODE &&
-				(node as Element).hasAttribute("data-content")
-			) {
+			} else if ((node as Element).hasAttribute("data-content")) {
 				const content1 = (node as Element).getAttribute("data-content") || "";
 				content += content1;
 				offset += content1.length;
@@ -826,7 +827,7 @@ function nodeOffsetAt(
 	}
 
 	// A lot of the logic here works around the fact that setting the focusNode
-	// of a DOM selection to a BR element breaks the selection.
+	// of a DOM selection to a BR element subtly breaks the selection.
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -847,6 +848,8 @@ function nodeOffsetAt(
 			// TODO: Simplify this
 			const firstChild = walker.firstChild();
 			if (firstChild) {
+				// This line only matters in the case where a newline is introduced
+				// before a block element.
 				offset -= cache.get(firstChild)!.offset;
 				node = firstChild;
 			} else if (offset > 0) {
@@ -862,6 +865,7 @@ function nodeOffsetAt(
 						break;
 					}
 				} else if (isSafari()) {
+					// TODO: Not sure this is working perfectly for widgets.
 					return [node, 1];
 				}
 
