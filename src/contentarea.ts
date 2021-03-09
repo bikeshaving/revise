@@ -153,7 +153,7 @@ export class ContentAreaElement extends HTMLElement {
 		this[$cache].clear();
 		this[$observer].disconnect();
 		// JSDOM-based environments like jest will make the global document null
-		// before calling the disconnectedCallback.
+		// before calling the disconnectedCallback for some reason.
 		if (document) {
 			document.removeEventListener("selectionchange", this[$onselectionchange]);
 		}
@@ -657,6 +657,7 @@ function getContent(
 		}
 
 		if (nodeInfo.length === undefined) {
+			// Reading the current node for content.
 			if (node.nodeType === Node.TEXT_NODE) {
 				const content1 = (node as Text).data;
 				content += content1;
@@ -682,6 +683,7 @@ function getContent(
 
 			nodeInfo.length = offset - nodeInfo.offset;
 		} else {
+			// Reading from oldContent because length hasn’t been invalidated.
 			const length = nodeInfo.length;
 			const content1 = oldContent.slice(oldIndex, oldIndex + length);
 			if (content1.length !== length) {
@@ -694,6 +696,7 @@ function getContent(
 			hasNewline = content1.endsWith(NEWLINE);
 		}
 
+		// Finding the next node.
 		node = walker.nextSibling();
 		if (node) {
 			descending = true;
