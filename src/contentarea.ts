@@ -94,7 +94,7 @@ export class ContentAreaElement extends HTMLElement {
 				if (cursor !== undefined && !isCursorEqual(cursor, this[$cursor])) {
 					// TODO: Dispatch an event here...
 					this[$cursor] = cursor;
-					history.split();
+					history.checkpoint();
 				}
 			}
 		};
@@ -396,8 +396,8 @@ export class ContentAreaElement extends HTMLElement {
 		}
 	}
 
-	splitHistory(): void {
-		this[$history].split();
+	checkpoint(): void {
+		this[$history].checkpoint();
 	}
 }
 
@@ -740,37 +740,6 @@ function getContent(
 	return content;
 }
 
-function nodeOffsetFromChild(
-	node: Node,
-	after: boolean = false,
-): [Node | null, number] {
-	const parentNode = node.parentNode;
-	if (parentNode === null) {
-		throw new Error("Node has no parent");
-	}
-
-	let offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
-	if (after) {
-		offset++;
-	}
-
-	return [parentNode, offset];
-}
-
-function findSuccessorNode(walker: TreeWalker): Node | null {
-	let node: Node | null = walker.currentNode;
-	while (node !== null) {
-		node = walker.nextSibling();
-		if (node === null) {
-			node = walker.parentNode();
-		} else {
-			return node;
-		}
-	}
-
-	return null;
-}
-
 function indexOf(
 	root: Element,
 	cache: NodeInfoCache,
@@ -815,6 +784,37 @@ function indexOf(
 	}
 
 	return index;
+}
+
+function nodeOffsetFromChild(
+	node: Node,
+	after: boolean = false,
+): [Node | null, number] {
+	const parentNode = node.parentNode;
+	if (parentNode === null) {
+		throw new Error("Node has no parent");
+	}
+
+	let offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
+	if (after) {
+		offset++;
+	}
+
+	return [parentNode, offset];
+}
+
+function findSuccessorNode(walker: TreeWalker): Node | null {
+	let node: Node | null = walker.currentNode;
+	while (node !== null) {
+		node = walker.nextSibling();
+		if (node === null) {
+			node = walker.parentNode();
+		} else {
+			return node;
+		}
+	}
+
+	return null;
 }
 
 function nodeOffsetAt(
@@ -946,13 +946,6 @@ function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
 }
 
 function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
-	if (cursor === -1) {
-		// We do not allow the cursor to be -1 in the ContentAreaElement,
-		// preferring to keep the last known cursor instead.
-		// Nevertheless, we return the default selection just in case here.
-		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
-	}
-
 	let selectionStart: number;
 	let selectionEnd: number;
 	let selectionDirection: SelectionDirection = "none";
@@ -961,7 +954,7 @@ function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
 		selectionEnd = Math.max(0, Math.max.apply(null, cursor));
 		selectionDirection = cursor[0] <= cursor[1] ? "forward" : "backward";
 	} else {
-		selectionStart = selectionEnd = cursor;
+		selectionStart = selectionEnd = Math.max(0, cursor);
 	}
 
 	return {selectionStart, selectionEnd, selectionDirection};
@@ -1138,6 +1131,9 @@ function isComplex(patch: Patch): boolean {
 }
 
 // TODO: Should this be in its own module?
+// The thing I worry about is that if we expose this as its own thing, people
+// would probably want this class to be evented, but custom EventTarget
+// subclasses still don’t work in a lot of environments.
 class PatchHistory {
 	currentPatch: Patch | undefined;
 	undoStack: Array<Patch>;
@@ -1147,14 +1143,6 @@ class PatchHistory {
 		this.currentPatch = undefined;
 		this.undoStack = [];
 		this.redoStack = [];
-	}
-
-	split(): void {
-		const patch = this.currentPatch;
-		if (patch) {
-			this.undoStack.push(patch);
-			this.currentPatch = undefined;
-		}
 	}
 
 	push(patch: Patch): void {
@@ -1170,7 +1158,7 @@ class PatchHistory {
 				this.currentPatch = oldPatch.compose(patch);
 				return;
 			} else {
-				this.split();
+				this.checkpoint();
 			}
 		}
 
@@ -1182,7 +1170,7 @@ class PatchHistory {
 	}
 
 	undo(): Patch | undefined {
-		this.split();
+		this.checkpoint();
 		const patch = this.undoStack.pop();
 		if (patch) {
 			this.redoStack.push(patch);
@@ -1195,11 +1183,18 @@ class PatchHistory {
 	}
 
 	redo(): Patch | undefined {
-		this.split();
+		this.checkpoint();
 		const patch = this.redoStack.pop();
 		if (patch) {
 			this.undoStack.push(patch);
 			return patch;
+		}
+	}
+
+	checkpoint(): void {
+		if (this.currentPatch) {
+			this.undoStack.push(this.currentPatch);
+			this.currentPatch = undefined;
 		}
 	}
 }
