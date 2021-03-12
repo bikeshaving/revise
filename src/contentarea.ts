@@ -195,18 +195,6 @@ export class ContentAreaElement extends HTMLElement {
 		return cursor.slice() as [number, number];
 	}
 
-	nodeOffsetAt(index: number): [Node | null, number] {
-		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		return nodeOffsetAt(this, cache, index);
-	}
-
-	indexOf(node: Node | null, offset: number): number {
-		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		return indexOf(this, cache, node, offset);
-	}
-
 	get selectionStart(): number {
 		validate(this, this[$observer].takeRecords());
 		return selectionInfoFromCursor(this[$cursor]).selectionStart;
@@ -305,33 +293,52 @@ export class ContentAreaElement extends HTMLElement {
 		);
 	}
 
+	nodeOffsetAt(index: number): [Node | null, number] {
+		validate(this, this[$observer].takeRecords());
+		const cache = this[$cache];
+		return nodeOffsetAt(this, cache, index);
+	}
+
+	indexOf(node: Node | null, offset: number): number {
+		validate(this, this[$observer].takeRecords());
+		const cache = this[$cache];
+		return indexOf(this, cache, node, offset);
+	}
+
 	repair(callback: Function, expectedValue?: string | undefined): void {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		const value = this[$value];
+		if (typeof expectedValue !== "string") {
+			expectedValue = value;
+		}
+
 		const {
 			selectionStart,
 			selectionEnd,
 			selectionDirection,
 		} = selectionInfoFromCursor(this[$cursor]);
-		if (typeof expectedValue !== "string") {
-			expectedValue = value;
-		}
-
 		callback();
 		validate(this, this[$observer].takeRecords(), {skipSelection: true});
-		setSelectionRange(
-			this,
-			cache,
-			value,
-			selectionStart,
-			selectionEnd,
-			selectionDirection,
-		);
-
 		if (this[$value] !== expectedValue) {
 			throw new Error("Expected value did not match current value");
 		}
+
+		if (value === expectedValue) {
+			setSelectionRange(
+				this,
+				cache,
+				value,
+				selectionStart,
+				selectionEnd,
+				selectionDirection,
+			);
+		}
+	}
+
+	/*** History Methods ***/
+	checkpoint(): void {
+		this[$history].checkpoint();
 	}
 
 	undo(): void {
@@ -394,10 +401,6 @@ export class ContentAreaElement extends HTMLElement {
 				throw new Error("redo was not correctly rendered");
 			}
 		}
-	}
-
-	checkpoint(): void {
-		this[$history].checkpoint();
 	}
 }
 
@@ -1145,6 +1148,13 @@ class PatchHistory {
 		this.redoStack = [];
 	}
 
+	checkpoint(): void {
+		if (this.currentPatch) {
+			this.undoStack.push(this.currentPatch);
+			this.currentPatch = undefined;
+		}
+	}
+
 	push(patch: Patch): void {
 		if (isNoop(patch)) {
 			return;
@@ -1188,13 +1198,6 @@ class PatchHistory {
 		if (patch) {
 			this.undoStack.push(patch);
 			return patch;
-		}
-	}
-
-	checkpoint(): void {
-		if (this.currentPatch) {
-			this.undoStack.push(this.currentPatch);
-			this.currentPatch = undefined;
 		}
 	}
 }
