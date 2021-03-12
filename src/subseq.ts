@@ -1,49 +1,9 @@
-function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
-	if (size < 0) {
-		throw new RangeError("Negative size");
-	} else if (size === 0) {
-		return;
-	} else if (!sizes.length) {
-		if (flag) {
-			sizes.push(0, size);
-		} else {
-			sizes.push(size);
-		}
-	} else {
-		const flag1 = sizes.length % 2 === 0;
-		if (flag === flag1) {
-			sizes[sizes.length - 1] += size;
-		} else {
-			sizes.push(size);
-		}
-	}
-}
-
-function measure(sizes: Array<number>): [number, number, number] {
-	let size = 0,
-		includedSize = 0,
-		excludedSize = 0;
-	for (let i = 0; i < sizes.length; i++) {
-		const s = sizes[i];
-		size += s;
-		if (i % 2 === 0) {
-			excludedSize += s;
-		} else {
-			includedSize += s;
-		}
-	}
-
-	return [size, includedSize, excludedSize];
-}
-
 /**
  * A data structure for representing subsequences. Subsequences are parts of
  * other sequences, created by removing zero or more elements from the original
  * sequence without changing the order of remaining elements.
  */
 export class Subseq {
-	static pushSegment = pushSegment;
-
 	/**
 	 * The sum of the sizes of segments of the subsequence.
 	 */
@@ -312,4 +272,44 @@ export class Subseq {
 
 		return [new Subseq(sizes1), new Subseq(sizes2)];
 	}
+
+	static pushSegment = pushSegment;
+}
+
+function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
+	if (size < 0) {
+		throw new RangeError("Negative size");
+	} else if (size === 0) {
+		return;
+	} else if (!sizes.length) {
+		if (flag) {
+			sizes.push(0, size);
+		} else {
+			sizes.push(size);
+		}
+	} else {
+		const flag1 = sizes.length % 2 === 0;
+		if (flag === flag1) {
+			sizes[sizes.length - 1] += size;
+		} else {
+			sizes.push(size);
+		}
+	}
+}
+
+function measure(sizes: Array<number>): [number, number, number] {
+	let size = 0,
+		includedSize = 0,
+		excludedSize = 0;
+	for (let i = 0; i < sizes.length; i++) {
+		const s = sizes[i];
+		size += s;
+		if (i % 2 === 0) {
+			excludedSize += s;
+		} else {
+			includedSize += s;
+		}
+	}
+
+	return [size, includedSize, excludedSize];
 }

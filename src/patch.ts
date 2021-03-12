@@ -29,154 +29,45 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 export type Cursor = [number, number] | number;
 
 /**
- * Given two subseqs and strings which are represented by the included segments
- * of the subseqs, this function combines the two strings so that they overlap
- * according to the positions of the included segments of subseqs.
- *
- * The subseqs must have the same size, and the included segments of these
- * subseqs may not overlap.
+ * A data structure which represents edits to strings.
  */
-function consolidate(
-	subseq1: Subseq,
-	text1: string,
-	subseq2: Subseq,
-	text2: string,
-): string {
-	let i1 = 0;
-	let i2 = 0;
-	let result = "";
-	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
-		if (flag1 && flag2) {
-			throw new Error("Overlapping subseqs");
-		} else if (flag1) {
-			result += text1.slice(i1, i1 + size);
-			i1 += size;
-		} else if (flag2) {
-			result += text2.slice(i2, i2 + size);
-			i2 += size;
-		}
-	}
-
-	return result;
-}
-
-/**
- * Given two subseqs as well a string which is represented by the included
- * segments of the first subseq, this function returns the result of removing
- * the included segments of the second subseq from the first subseq.
- *
- * The subseqs must have the same size, and the included segments of the second
- * subseq must overlap with the first subseq’s included segments.
- */
-function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
-	let i = 0;
-	let result = "";
-	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
-		if (flag1) {
-			if (!flag2) {
-				result += str.slice(i, i + size);
-			}
-
-			i += size;
-		} else if (flag2) {
-			throw new Error("Non-overlapping subseqs");
-		}
-	}
-
-	return result;
-}
-
-/**
- * @returns the length of the common prefix between two strings.
- */
-function commonPrefixLength(text1: string, text2: string) {
-	const length = Math.min(text1.length, text2.length);
-	for (let i = 0; i < length; i++) {
-		if (text1[i] !== text2[i]) {
-			return i;
-		}
-	}
-	return length;
-}
-
-/**
- * @returns the length of the common suffix between two strings.
- */
-function commonSuffixLength(text1: string, text2: string) {
-	const length1 = text1.length;
-	const length2 = text2.length;
-	const length = Math.min(length1, length2);
-	for (let i = 0; i < length; i++) {
-		if (text1[length1 - i - 1] !== text2[length2 - i - 1]) {
-			return i;
-		}
-	}
-
-	return length;
-}
-
-/**
- * Given two subseqs and two strings which are represented by the included
- * segments of the subseqs, this function finds the overlapping common prefixes
- * of the first and second strings and returns two subseqs which represents
- * these overlapping sequences.
- *
- * The subseqs must have the same size, and may not overlap. These subseqs are
- * typically produced from two interleaved subseqs.
- */
-function overlapping(
-	subseq1: Subseq,
-	text1: string,
-	subseq2: Subseq,
-	text2: string,
-): [Subseq, Subseq] {
-	let i1 = 0;
-	let i2 = 0;
-	let prevLength = 0;
-	let prevFlag1 = false;
-	const sizes1: Array<number> = [];
-	const sizes2: Array<number> = [];
-	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
-		if (flag1 && flag2) {
-			throw new Error("Overlapping subseqs");
-		}
-		if (prevFlag1 && flag2) {
-			const prefix = commonPrefixLength(
-				text1.slice(i1, prevLength),
-				text2.slice(i2, size),
-			);
-			Subseq.pushSegment(sizes1, prefix, true);
-			Subseq.pushSegment(sizes1, prevLength - prefix, false);
-			Subseq.pushSegment(sizes2, prefix, true);
-			Subseq.pushSegment(sizes2, size - prefix, false);
-		} else {
-			Subseq.pushSegment(sizes1, prevLength, false);
-			Subseq.pushSegment(sizes2, size, false);
-		}
-
-		if (prevFlag1) {
-			i1 += prevLength;
-		}
-
-		if (flag2) {
-			i2 += size;
-		}
-
-		prevLength = size;
-		prevFlag1 = flag1;
-	}
-
-	Subseq.pushSegment(sizes1, prevLength, false);
-	return [new Subseq(sizes1), new Subseq(sizes2)];
-}
-
 export class Patch {
+	/**
+	 * An array of strings and numbers representing operations.
+	 *
+	 * String values represents insertions, and two consecutive numbers represent
+	 * deletions. The current index into the string for these operations is
+	 * inferred based on the most recent index.
+	 */
+	parts: Array<string | number>;
+
+	/**
+	 * A string which represents a concatenation of all deletions.
+	 *
+	 * This property is necessary if you want to invert the patch.
+	 */
+	deleted?: string;
+
+	constructor(parts: Array<string | number>, deleted?: string) {
+		this.parts = parts;
+		this.deleted = deleted;
+	}
+
 	static synthesize(
 		insertSeq: Subseq,
 		inserted: string,
 		deleteSeq: Subseq,
 		deleted?: string | undefined,
 	): Patch {
+		if (insertSeq.includedSize !== inserted.length) {
+			throw new Error("insertSeq and inserted string do not match in length");
+		} else if (
+			deleted !== undefined &&
+			deleteSeq.includedSize !== deleted.length
+		) {
+			throw new Error("deleteSeq and deleted string do not match in length");
+		}
+
 		const parts: Array<string | number> = [];
 		let insertOffset = 0;
 		let retainOffset = 0;
@@ -205,11 +96,7 @@ export class Patch {
 			prevInserting = inserting;
 		}
 
-		if (insertOffset !== inserted.length) {
-			throw new Error("Length mismatch");
-		}
-
-		if (!prevInserting && !prevDeleting) {
+		if (!prevDeleting && !prevInserting) {
 			parts.push(retainOffset);
 		}
 
@@ -223,11 +110,11 @@ export class Patch {
 		to: number = from,
 	): Patch {
 		const insertSizes: Array<number> = [];
-		const deleteSizes: Array<number> = [];
 		Subseq.pushSegment(insertSizes, from, false);
 		Subseq.pushSegment(insertSizes, to - from, false);
 		Subseq.pushSegment(insertSizes, inserted.length, true);
 		Subseq.pushSegment(insertSizes, text.length - to, false);
+		const deleteSizes: Array<number> = [];
 		Subseq.pushSegment(deleteSizes, from, false);
 		Subseq.pushSegment(deleteSizes, to - from, true);
 		Subseq.pushSegment(deleteSizes, text.length - to, false);
@@ -262,19 +149,27 @@ export class Patch {
 		);
 	}
 
-	parts: Array<string | number>;
-	deleted?: string;
-	constructor(parts: Array<string | number>, deleted?: string) {
-		this.parts = parts;
-		this.deleted = deleted;
-	}
-
+	/**
+	 * A string which represents a concatenation of all insertions.
+	 */
 	get inserted(): string {
-		return this.factor()[1];
+		let text = "";
+		for (let i = 0; i < this.parts.length; i++) {
+			if (typeof this.parts[i] === "string") {
+				text += this.parts[i];
+			}
+		}
+
+		return text;
 	}
 
-	// This could be a getter but we do not want to incur the cost of retaining
-	// the array of operations in memory.
+	// I wish this could be a getter but we do not want to incur the cost of
+	// retaining the array of operations in memory, and the best way to
+	// communicate this detail is to just make this a method.
+
+	/**
+	 * @returns An array of operations.
+	 */
 	operations(): Array<Operation> {
 		const operations: Array<Operation> = [];
 		let insertOffset = 0;
@@ -426,4 +321,146 @@ export class Patch {
 		insertSeq = insertSeq.shrink(deleteSeq);
 		return Patch.synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
+}
+
+/**
+ * Given two subseqs and strings which are represented by the included segments
+ * of the subseqs, this function combines the two strings so that they overlap
+ * according to the positions of the included segments of subseqs.
+ *
+ * The subseqs must have the same size, and the included segments of these
+ * subseqs may not overlap.
+ */
+function consolidate(
+	subseq1: Subseq,
+	text1: string,
+	subseq2: Subseq,
+	text2: string,
+): string {
+	let i1 = 0;
+	let i2 = 0;
+	let result = "";
+	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
+		if (flag1 && flag2) {
+			throw new Error("Overlapping subseqs");
+		} else if (flag1) {
+			result += text1.slice(i1, i1 + size);
+			i1 += size;
+		} else if (flag2) {
+			result += text2.slice(i2, i2 + size);
+			i2 += size;
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Given two subseqs as well a string which is represented by the included
+ * segments of the first subseq, this function returns the result of removing
+ * the included segments of the second subseq from the first subseq.
+ *
+ * The subseqs must have the same size, and the included segments of the second
+ * subseq must overlap with the first subseq’s included segments.
+ */
+function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
+	let i = 0;
+	let result = "";
+	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
+		if (flag1) {
+			if (!flag2) {
+				result += str.slice(i, i + size);
+			}
+
+			i += size;
+		} else if (flag2) {
+			throw new Error("Non-overlapping subseqs");
+		}
+	}
+
+	return result;
+}
+
+/**
+ * @returns The length of the common prefix between two strings.
+ */
+function commonPrefixLength(text1: string, text2: string) {
+	const length = Math.min(text1.length, text2.length);
+	for (let i = 0; i < length; i++) {
+		if (text1[i] !== text2[i]) {
+			return i;
+		}
+	}
+	return length;
+}
+
+/**
+ * @returns The length of the common suffix between two strings.
+ */
+function commonSuffixLength(text1: string, text2: string) {
+	const length1 = text1.length;
+	const length2 = text2.length;
+	const length = Math.min(length1, length2);
+	for (let i = 0; i < length; i++) {
+		if (text1[length1 - i - 1] !== text2[length2 - i - 1]) {
+			return i;
+		}
+	}
+
+	return length;
+}
+
+/**
+ * Given two subseqs and two strings which are represented by the included
+ * segments of the subseqs, this function finds the overlapping common prefixes
+ * of the first and second strings and returns two subseqs which represents
+ * these overlapping sequences.
+ *
+ * The subseqs must have the same size, and may not overlap. These subseqs are
+ * typically produced from two interleaved subseqs.
+ */
+function overlapping(
+	subseq1: Subseq,
+	text1: string,
+	subseq2: Subseq,
+	text2: string,
+): [Subseq, Subseq] {
+	let i1 = 0;
+	let i2 = 0;
+	let prevLength = 0;
+	let prevFlag1 = false;
+	const sizes1: Array<number> = [];
+	const sizes2: Array<number> = [];
+	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
+		if (flag1 && flag2) {
+			throw new Error("Overlapping subseqs");
+		}
+		if (prevFlag1 && flag2) {
+			const prefix = commonPrefixLength(
+				text1.slice(i1, prevLength),
+				text2.slice(i2, size),
+			);
+			Subseq.pushSegment(sizes1, prefix, true);
+			Subseq.pushSegment(sizes1, prevLength - prefix, false);
+			Subseq.pushSegment(sizes2, prefix, true);
+			Subseq.pushSegment(sizes2, size - prefix, false);
+		} else {
+			Subseq.pushSegment(sizes1, prevLength, false);
+			Subseq.pushSegment(sizes2, size, false);
+		}
+
+		if (prevFlag1) {
+			i1 += prevLength;
+		}
+
+		if (flag2) {
+			i2 += size;
+		}
+
+		prevLength = size;
+		prevFlag1 = flag1;
+	}
+
+	Subseq.pushSegment(sizes1, prevLength, false);
+	return [new Subseq(sizes1), new Subseq(sizes2)];
 }
