@@ -447,6 +447,8 @@ function validate(
 
 		if (!skipHistory) {
 			const hint = getLowerBound(oldCursor, cursor);
+			// TODO: This diff call is expensive. If we create a patch in getContent
+			// instead of a new string, we might be able to save a lot in CPU time.
 			const patch = Patch.diff(oldValue, value, hint);
 			history.push(patch);
 			area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
