@@ -6,5 +6,6 @@ lib
 subseq.js
 patch.js
 contentarea.js
+keyer.js
 *.js.map
 *.d.ts
