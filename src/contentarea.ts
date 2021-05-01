@@ -2,23 +2,23 @@
 import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
-function isMacPlatform(): boolean {
-	return window.navigator && /Mac/.test(window.navigator.platform);
-}
-
-function isSafari(): boolean {
-	return window.navigator && /apple/i.test(window.navigator.vendor || "");
-}
-
-// TODO: add native undo
-export type UndoMode = "none" | "keydown";
-
 export type SelectionDirection = "forward" | "backward" | "none";
 
 interface SelectionInfo {
 	selectionStart: number;
 	selectionEnd: number;
 	selectionDirection: SelectionDirection;
+}
+
+// TODO: add native undo
+export type UndoMode = "none" | "keydown";
+
+function isMacPlatform(): boolean {
+	return window.navigator && /Mac/.test(window.navigator.platform);
+}
+
+function isSafari(): boolean {
+	return window.navigator && /apple/i.test(window.navigator.vendor || "");
 }
 
 export interface ContentEventDetail {
@@ -41,7 +41,8 @@ const css = `
 	white-space: break-spaces;
 	overflow-wrap: break-word;
 	word-break: break-all;
-}`;
+}
+`;
 
 // TODO: Maybe these properties can be grouped on a hidden controller class?
 /*** ContentAreaElement symbol properties ***/
@@ -60,9 +61,6 @@ export class ContentAreaElement extends HTMLElement {
 	[$slot]: HTMLSlotElement;
 	[$observer]: MutationObserver;
 	[$onselectionchange]: (ev: Event) => unknown;
-	static get observedAttributes(): Array<string> {
-		return ["contenteditable"];
-	}
 
 	constructor() {
 		super();
@@ -124,6 +122,10 @@ export class ContentAreaElement extends HTMLElement {
 				}
 			}
 		});
+	}
+
+	static get observedAttributes(): Array<string> {
+		return ["contenteditable"];
 	}
 
 	connectedCallback() {
@@ -261,20 +263,6 @@ export class ContentAreaElement extends HTMLElement {
 		);
 	}
 
-	get undoMode(): UndoMode {
-		let attr = this.getAttribute("undomode");
-		if (!attr) {
-			return "none";
-		}
-
-		attr = attr.toLowerCase();
-		if (attr === "keydown") {
-			return attr;
-		}
-
-		return "none";
-	}
-
 	setSelectionRange(
 		selectionStart: number,
 		selectionEnd: number,
@@ -337,6 +325,20 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	/*** History Methods ***/
+	get undoMode(): UndoMode {
+		let attr = this.getAttribute("undomode");
+		if (!attr) {
+			return "none";
+		}
+
+		attr = attr.toLowerCase();
+		if (attr === "keydown") {
+			return attr;
+		}
+
+		return "none";
+	}
+
 	checkpoint(): void {
 		this[$history].checkpoint();
 	}
@@ -1134,7 +1136,7 @@ function isComplex(patch: Patch): boolean {
 	return false;
 }
 
-// TODO: Should this be in its own module?
+// TODO: Inline this stuff into the class?
 // The thing I worry about is that if we expose this as its own thing, people
 // would probably want this class to be evented, but custom EventTarget
 // subclasses still don’t work in a lot of environments.
