@@ -1,6 +1,5 @@
 import type {Patch} from "./patch";
 
-// TODO: MOVE THIS SOMEWHERE
 export class Keyer {
 	nextKey: number;
 	keys: Array<number>;

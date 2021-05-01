@@ -46,10 +46,10 @@ export class Subseq {
 
 	constructor(sizes: Array<number>) {
 		const [size, includedSize, excludedSize] = measure(sizes);
-		this.sizes = sizes;
 		this.size = size;
 		this.includedSize = includedSize;
 		this.excludedSize = excludedSize;
+		this.sizes = sizes;
 	}
 
 	print(): string {

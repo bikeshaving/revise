@@ -505,7 +505,9 @@ function isBlocklikeElement(node: Node): node is Element {
 }
 
 interface NodeInfo {
+	/** The string offset of this node relative to its parent */
 	offset: number;
+	/** The length of this node’s contents */
 	length: number | undefined;
 }
 
@@ -613,11 +615,8 @@ function getContent(
 	// A stack to save some variables as we walk up and down the tree.
 	const stack: Array<{oldIndexRelative: number; nodeInfo: NodeInfo}> = [];
 	// Info about the cached length of the node’s contents and offset relative to
-	// the node’s parents.
-	// See invalidate() to see how mutation records are used to clear the
-	// nodeInfo cache.
-	// We definitely assign it here because TypeScript will not pick up that
-	// nodeInfo is never undefined.
+	// the node’s parents. See invalidate() to see how mutation records are used
+	// to clear the nodeInfo cache.
 	let nodeInfo: NodeInfo = cache.get(root)!;
 	if (nodeInfo === undefined) {
 		nodeInfo = {offset, length: undefined};
