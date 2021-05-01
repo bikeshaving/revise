@@ -481,7 +481,7 @@ describe("contentarea", () => {
 			expect(area.value).toEqual("Hello\nWorld\n");
 			area.repair(() => {
 				area.lastChild!.remove();
-				area.firstChild!.firstChild!.data = "Hello\nWorld";
+				(area.firstChild!.firstChild as Text).data = "Hello\nWorld";
 			});
 			expect(area.value).toEqual("Hello\nWorld\n");
 			expect(area.innerHTML).toEqual("<div>Hello\nWorld</div>");
@@ -495,7 +495,7 @@ describe("contentarea", () => {
 			expect(() => {
 				area.repair(() => {
 					area.lastChild!.remove();
-					area.firstChild!.firstChild!.data = "Hello\n\nWorld";
+					(area.firstChild!.firstChild as Text).data = "Hello\n\nWorld";
 				});
 			}).toThrow("Expected");
 			expect(area.value).toEqual("Hello\n\nWorld\n");
