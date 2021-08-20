@@ -297,7 +297,7 @@ export class ContentAreaElement extends HTMLElement {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		const value = this[$value];
-		if (typeof expectedValue !== "string") {
+		if (typeof expectedValue === "undefined") {
 			expectedValue = value;
 		}
 
@@ -832,8 +832,8 @@ function nodeOffsetAt(
 		return [null, 0];
 	}
 
-	// A lot of the logic here works around the fact that setting the focusNode
-	// of a DOM selection to a BR element subtly breaks the selection.
+	// A lot of the logic here is to work around the fact that setting the
+	// focusNode of a DOM selection to a BR element breaks everything.
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -992,18 +992,18 @@ function setSelectionRange(
 		selectionStart = selectionEnd;
 	}
 
-	let focus: number;
-	let anchor: number;
+	let focusIndex: number;
+	let anchorIndex: number;
 	if (selectionDirection === "backward") {
-		anchor = selectionEnd;
-		focus = selectionStart;
+		anchorIndex = selectionEnd;
+		focusIndex = selectionStart;
 	} else {
-		anchor = selectionStart;
-		focus = selectionEnd;
+		anchorIndex = selectionStart;
+		focusIndex = selectionEnd;
 	}
 
-	if (focus === anchor) {
-		const [node, offset] = nodeOffsetAt(root, cache, focus);
+	if (focusIndex === anchorIndex) {
+		const [node, offset] = nodeOffsetAt(root, cache, focusIndex);
 		if (
 			selection.focusNode !== node ||
 			selection.focusOffset !== offset ||
@@ -1018,8 +1018,8 @@ function setSelectionRange(
 			selection.collapse(node, offset);
 		}
 	} else {
-		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchor);
-		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focus);
+		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchorIndex);
+		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focusIndex);
 		if (anchorNode === null && focusNode === null) {
 			selection.collapse(null);
 		} else if (anchorNode === null) {

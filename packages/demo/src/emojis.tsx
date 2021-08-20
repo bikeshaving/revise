@@ -65,11 +65,7 @@ function* Editable(this: Context) {
 	for ({} of this) {
 		yield (
 			<content-area undomode="keydown" crank-ref={(el1: Node) => (el = el1)}>
-				<div
-					crank-ref={(el1: Node) => (el = el1)}
-					class="editable"
-					contenteditable="true"
-				>
+				<div class="editable" contenteditable="true">
 					{parse(content, keyer)}
 				</div>
 			</content-area>

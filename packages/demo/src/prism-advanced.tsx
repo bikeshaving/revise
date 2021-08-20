@@ -149,7 +149,7 @@ function debounce(fn: Function, ms = 50): any {
 
 function* Editable(this: Context) {
 	let content = '\n';
-	let el: any;
+	let el: ContentAreaElement;
 	const keyer = new Keyer(content.length);
 	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));
 	this.addEventListener('contentchange', (ev) => {
@@ -172,10 +172,9 @@ function* Editable(this: Context) {
 
 	for ({} of this) {
 		yield (
-			<content-area undomode="keydown" crank-ref={(el1: Node) => (el = el1)}>
+			<content-area undomode="keydown" crank-ref={(el1: ContentAreaElement) => (el = el1)}>
 				<pre
 					class="editable language-typescript"
-					crank-ref={(el1: Node) => (el = el1)}
 					contenteditable="true"
 					spellcheck={false}
 				>
