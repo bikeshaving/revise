@@ -1004,45 +1004,18 @@ function setSelectionRange(
 
 	if (focusIndex === anchorIndex) {
 		const [node, offset] = nodeOffsetAt(root, cache, focusIndex);
-		if (
-			selection.focusNode !== node ||
-			selection.focusOffset !== offset ||
-			// Chrome seems to draw collapsed selections which point to a BR element
-			// incorrectly when there are two adjacent BR elements and one has been
-			// deleted backward, so we force a redraw of the selection.
-			(node &&
-				node.nodeType === Node.ELEMENT_NODE &&
-				node.childNodes[offset] &&
-				node.childNodes[offset].nodeName === "BR")
-		) {
-			selection.collapse(node, offset);
-		}
+		selection.collapse(node, offset);
 	} else {
 		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchorIndex);
 		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focusIndex);
 		if (anchorNode === null && focusNode === null) {
 			selection.collapse(null);
 		} else if (anchorNode === null) {
-			if (
-				selection.focusNode !== focusNode ||
-				selection.focusOffset !== focusOffset
-			) {
-				selection.collapse(focusNode, focusOffset);
-			}
+			selection.collapse(focusNode, focusOffset);
 		} else if (focusNode === null) {
-			if (
-				selection.anchorNode !== anchorNode ||
-				selection.anchorOffset !== anchorOffset
-			) {
-				selection.collapse(anchorNode, anchorOffset);
-			}
-		} else if (
-			selection.focusNode !== focusNode ||
-			selection.focusOffset !== focusOffset ||
-			selection.anchorNode !== anchorNode ||
-			selection.anchorOffset !== anchorOffset
-		) {
-			// TODO: IE support or nah?
+			selection.collapse(anchorNode, anchorOffset);
+		} else {
+			// TODO: This is not a method in IE
 			selection.setBaseAndExtent(
 				anchorNode,
 				anchorOffset,
