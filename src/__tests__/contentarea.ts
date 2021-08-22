@@ -1,5 +1,4 @@
 import {ContentAreaElement} from "../contentarea";
-
 describe("contentarea", () => {
 	let area!: ContentAreaElement;
 	beforeAll(() => {
@@ -495,7 +494,7 @@ describe("contentarea", () => {
 			expect(() => {
 				area.repair(() => {
 					area.lastChild!.remove();
-					(area.firstChild!.firstChild as Text).data = "Hello\n\nWorld";
+					area.firstChild!.textContent = "Hello\n\nWorld";
 				});
 			}).toThrow("Expected");
 			expect(area.value).toEqual("Hello\n\nWorld\n");
