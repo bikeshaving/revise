@@ -427,9 +427,8 @@ describe("contentarea", () => {
 
 		test("data-content", () => {
 			area.innerHTML =
-				'<div><div>Hello <img src="" data-content="😓"/></div></div>';
-			expect(area.value).toEqual("Hello 😓\n");
-			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
+				'<div><div>Hello <img src="" data-content="😓"/></div><div><br /></div><div><br /></div></div>';
+			expect(area.value).toEqual("Hello 😓\n\n\n");
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
 			expect(area.nodeOffsetAt(0)).toEqual([
 				area.firstChild!.firstChild!.childNodes[0],
@@ -469,6 +468,16 @@ describe("contentarea", () => {
 					Math.max(-1, Math.min(i === 7 ? 8 : i, area.value.length)),
 				);
 			}
+		});
+
+		test.skip("data-content edge case", () => {
+			area.innerHTML =
+				'<div><div data-content="a"><br /></div></div><div><div><br /></div>';
+			expect(area.value).toEqual("a\n\n");
+			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
+			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild.firstChild, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([area.firstChild.firstChild, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([area.firstChild.firstChild, 1]);
 		});
 	});
 

@@ -2,17 +2,6 @@
 import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
-export type SelectionDirection = "forward" | "backward" | "none";
-
-interface SelectionInfo {
-	selectionStart: number;
-	selectionEnd: number;
-	selectionDirection: SelectionDirection;
-}
-
-// TODO: add native undo
-export type UndoMode = "none" | "keydown";
-
 function isMacPlatform(): boolean {
 	return window.navigator && /Mac/.test(window.navigator.platform);
 }
@@ -406,19 +395,6 @@ export class ContentAreaElement extends HTMLElement {
 	}
 }
 
-function getLowerBound(...cursors: Array<Cursor>): number {
-	const cursors1: Array<number> = [];
-	for (const cursor of cursors) {
-		if (Array.isArray(cursor)) {
-			cursors1.push(...cursor);
-		} else {
-			cursors1.push(cursor);
-		}
-	}
-
-	return Math.min.apply(null, cursors1);
-}
-
 interface ValidateOptions {
 	skipSelection?: boolean;
 	skipHistory?: boolean;
@@ -436,6 +412,7 @@ function validate(
 		const oldCursor = area[$cursor];
 		const value = (area[$value] = getContent(area, cache, oldValue));
 		let cursor = oldCursor;
+		// TODO: move these functions out.
 		// There appears to be a race condition in Safari where
 		// document.getSelection() returns erroneous information when repair is
 		// called from within a requestAnimationFrame() callback, but the cursor is
@@ -448,7 +425,7 @@ function validate(
 		}
 
 		if (!skipHistory) {
-			const hint = getLowerBound(oldCursor, cursor);
+			const hint = Math.min.apply(null, [oldCursor, cursor].flat());
 			// TODO: This diff call is expensive. If we create a patch in getContent
 			// instead of a new string, we might be able to save a lot in CPU time.
 			const patch = Patch.diff(oldValue, value, hint);
@@ -461,7 +438,8 @@ function validate(
 // TODO: Should we allow custom newlines?
 const NEWLINE = "\n";
 
-// TODO: Allow this list of block-like elements to be overridden with an attribute.
+// TODO: Allow the list of block-like elements to be overridden with an
+// attribute.
 const BLOCKLIKE_ELEMENTS = new Set([
 	"ADDRESS",
 	"ARTICLE",
@@ -500,12 +478,6 @@ const BLOCKLIKE_ELEMENTS = new Set([
 	"UL",
 ]);
 
-function isBlocklikeElement(node: Node): node is Element {
-	return (
-		node.nodeType === Node.ELEMENT_NODE && BLOCKLIKE_ELEMENTS.has(node.nodeName)
-	);
-}
-
 interface NodeInfo {
 	/** The string offset of this node relative to its parent */
 	offset: number;
@@ -514,71 +486,6 @@ interface NodeInfo {
 }
 
 type NodeInfoCache = Map<Node, NodeInfo>;
-
-function clean(root: Node, cache: NodeInfoCache): void {
-	const walker = document.createTreeWalker(
-		root,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-
-	for (let node: Node | null = root; node !== null; node = walker.nextNode()) {
-		cache.delete(node);
-	}
-}
-
-function invalidate(
-	root: Element,
-	cache: NodeInfoCache,
-	records: Array<MutationRecord>,
-): boolean {
-	let invalidated = false;
-	for (let i = 0; i < records.length; i++) {
-		const record = records[i];
-		for (let j = 0; j < record.addedNodes.length; j++) {
-			clean(record.addedNodes[j], cache);
-		}
-
-		for (let j = 0; j < record.removedNodes.length; j++) {
-			clean(record.removedNodes[j], cache);
-		}
-
-		let node = record.target;
-		if (node === root) {
-			invalidated = true;
-			continue;
-		} else if (!root.contains(node)) {
-			clean(node, cache);
-			continue;
-		}
-
-		for (; node !== root; node = node.parentNode!) {
-			if (
-				!cache.has(node) ||
-				(node !== record.target &&
-					node.nodeType === Node.ELEMENT_NODE &&
-					(node as Element).hasAttribute("data-content"))
-			) {
-				break;
-			}
-
-			const nodeInfo = cache.get(node);
-			if (nodeInfo) {
-				nodeInfo.length = undefined;
-			}
-
-			invalidated = true;
-		}
-	}
-
-	if (invalidated) {
-		const nodeInfo = cache.get(root);
-		if (nodeInfo) {
-			nodeInfo.length = undefined;
-		}
-	}
-
-	return invalidated;
-}
 
 function getContent(
 	root: Element,
@@ -746,6 +653,111 @@ function getContent(
 	return content;
 }
 
+function isBlocklikeElement(node: Node): node is Element {
+	return (
+		node.nodeType === Node.ELEMENT_NODE && BLOCKLIKE_ELEMENTS.has(node.nodeName)
+	);
+}
+
+function invalidate(
+	root: Element,
+	cache: NodeInfoCache,
+	records: Array<MutationRecord>,
+): boolean {
+	let invalidated = false;
+	for (let i = 0; i < records.length; i++) {
+		const record = records[i];
+		for (let j = 0; j < record.addedNodes.length; j++) {
+			clear(record.addedNodes[j], cache);
+		}
+
+		for (let j = 0; j < record.removedNodes.length; j++) {
+			clear(record.removedNodes[j], cache);
+		}
+
+		let node = record.target;
+		if (node === root) {
+			invalidated = true;
+			continue;
+		} else if (!root.contains(node)) {
+			clear(node, cache);
+			continue;
+		}
+
+		for (; node !== root; node = node.parentNode!) {
+			if (
+				!cache.has(node) ||
+				(node !== record.target &&
+					node.nodeType === Node.ELEMENT_NODE &&
+					(node as Element).hasAttribute("data-content"))
+			) {
+				break;
+			}
+
+			const nodeInfo = cache.get(node);
+			if (nodeInfo) {
+				nodeInfo.length = undefined;
+			}
+
+			invalidated = true;
+		}
+	}
+
+	if (invalidated) {
+		const nodeInfo = cache.get(root);
+		if (nodeInfo) {
+			nodeInfo.length = undefined;
+		}
+	}
+
+	return invalidated;
+}
+
+/**
+ * For a given parent node and node info cache, clear info for the node and all
+ * child nodes from the cache.
+ */
+function clear(parent: Node, cache: NodeInfoCache): void {
+	const walker = document.createTreeWalker(
+		parent,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+
+	for (
+		let node: Node | null = parent;
+		node !== null;
+		node = walker.nextNode()
+	) {
+		cache.delete(node);
+	}
+}
+
+/***********************/
+/*** Selection Logic ***/
+/***********************/
+
+export type SelectionDirection = "forward" | "backward" | "none";
+
+/**
+ * Properties which mirror the APIs provided by HTMLInputElements.
+ */
+export interface SelectionInfo {
+	selectionStart: number;
+	selectionEnd: number;
+	selectionDirection: SelectionDirection;
+}
+
+// TODO: Move this somewhere?
+function isCursorEqual(cursor1: Cursor, cursor2: Cursor): boolean {
+	cursor1 = typeof cursor1 === "number" ? [cursor1, cursor1] : cursor1;
+	cursor2 = typeof cursor2 === "number" ? [cursor2, cursor2] : cursor2;
+	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
+}
+
+/**
+ * Finds the string index of a node and offset pair provided by a browser API
+ * like window.getSelection() for a given root and cache.
+ */
 function indexOf(
 	root: Element,
 	cache: NodeInfoCache,
@@ -792,37 +804,10 @@ function indexOf(
 	return index;
 }
 
-function nodeOffsetFromChild(
-	node: Node,
-	after: boolean = false,
-): [Node | null, number] {
-	const parentNode = node.parentNode;
-	if (parentNode === null) {
-		throw new Error("Node has no parent");
-	}
-
-	let offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
-	if (after) {
-		offset++;
-	}
-
-	return [parentNode, offset];
-}
-
-function findSuccessorNode(walker: TreeWalker): Node | null {
-	let node: Node | null = walker.currentNode;
-	while (node !== null) {
-		node = walker.nextSibling();
-		if (node === null) {
-			node = walker.parentNode();
-		} else {
-			return node;
-		}
-	}
-
-	return null;
-}
-
+/**
+ * Finds the node and offset pair to use with browser APIs like
+ * selection.collapse() from a given string index.
+ */
 function nodeOffsetAt(
 	root: Element,
 	cache: NodeInfoCache,
@@ -833,11 +818,13 @@ function nodeOffsetAt(
 	}
 
 	// A lot of the logic here is to work around the fact that setting the
-	// focusNode of a DOM selection to a BR element breaks everything.
+	// focusNode/anchorNode of a DOM selection to a BR element usually breaks
+	// everything.
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
+
 	let node: Node | null = root;
 	let offset = index;
 	while (node !== null) {
@@ -911,6 +898,37 @@ function nodeOffsetAt(
 			? (lastNode as Text).data.length
 			: lastNode.childNodes.length;
 	return [lastNode, lastOffset];
+}
+
+function nodeOffsetFromChild(
+	node: Node,
+	after: boolean = false,
+): [Node | null, number] {
+	const parentNode = node.parentNode;
+	if (parentNode === null) {
+		return [null, 0];
+	}
+
+	let offset = Array.from(parentNode.childNodes).indexOf(node as ChildNode);
+	if (after) {
+		offset++;
+	}
+
+	return [parentNode, offset];
+}
+
+function findSuccessorNode(walker: TreeWalker): Node | null {
+	let node: Node | null = walker.currentNode;
+	while (node !== null) {
+		node = walker.nextSibling();
+		if (node === null) {
+			node = walker.parentNode();
+		} else {
+			return node;
+		}
+	}
+
+	return null;
 }
 
 function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
@@ -1026,13 +1044,12 @@ function setSelectionRange(
 	}
 }
 
-/*** History stuff ***/
-// TODO: Move this somewhere?
-function isCursorEqual(cursor1: Cursor, cursor2: Cursor): boolean {
-	cursor1 = typeof cursor1 === "number" ? [cursor1, cursor1] : cursor1;
-	cursor2 = typeof cursor2 === "number" ? [cursor2, cursor2] : cursor2;
-	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
-}
+// TODO: Should this go in a separate module?
+/*********************/
+/*** History logic ***/
+/*********************/
+// TODO: add native undo
+export type UndoMode = "none" | "keydown";
 
 function cursorFromPatch(patch: Patch): Cursor {
 	const operations = patch.operations();
