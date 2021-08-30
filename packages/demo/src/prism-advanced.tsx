@@ -172,7 +172,10 @@ function* Editable(this: Context) {
 
 	for ({} of this) {
 		yield (
-			<content-area undomode="keydown" crank-ref={(el1: ContentAreaElement) => (el = el1)}>
+			<content-area
+				undomode="keydown"
+				crank-ref={(el1: ContentAreaElement) => (el = el1)}
+			>
 				<pre
 					class="editable language-typescript"
 					contenteditable="true"

@@ -471,7 +471,8 @@ describe("contentarea", () => {
 		});
 
 		test("data-content edge case", () => {
-			area.innerHTML = '<div><span data-content="a"><span>The letter a</span></span></div><div><div><br /></div>';
+			area.innerHTML =
+				'<div><span data-content="a"><span>The letter a</span></span></div><div><div><br /></div>';
 			expect(area.value).toEqual("a\n\n");
 			expect(area.nodeOffsetAt(1)).toEqual([area.childNodes[0].firstChild, 1]);
 			for (let i = -1; i < area.value.length + 1; i++) {

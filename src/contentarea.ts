@@ -67,7 +67,9 @@ export class ContentAreaElement extends HTMLElement {
 		slot.contentEditable = this.contentEditable;
 		shadow.appendChild(slot);
 
-		this[$observer] = new MutationObserver((records) => validate(this, records));
+		this[$observer] = new MutationObserver((records) =>
+			validate(this, records),
+		);
 		// Because this listener is added to the document, we have to add and
 		// remove the listener in the connected callback.
 		this[$onselectionchange] = () => {
@@ -790,8 +792,9 @@ function indexOf(
 	if (!cache.get(node!)) {
 		let offset1 = offset > 0 ? 1 : 0;
 		while (node !== root && !cache.get(node!)) {
-			offset = Array.from(node!.parentNode!.childNodes)
-				.indexOf(node as ChildNode) + offset1;
+			offset =
+				Array.from(node!.parentNode!.childNodes).indexOf(node as ChildNode) +
+				offset1;
 			node = node!.parentNode;
 			offset1 = 0;
 		}
