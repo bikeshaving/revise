@@ -30,7 +30,6 @@ const css = `
 	white-space: pre-wrap;
 	white-space: break-spaces;
 	overflow-wrap: break-word;
-	word-break: break-all;
 }
 `;
 
