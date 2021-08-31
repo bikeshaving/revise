@@ -23,8 +23,10 @@ const css = `
 	overflow-wrap: break-word;
 }`;
 
-// TODO: Maybe these properties can be grouped on a hidden controller class?
+/********************************************/
 /*** ContentAreaElement symbol properties ***/
+/********************************************/
+// TODO: Maybe these properties can be grouped on a hidden controller class?
 const $cache = Symbol.for("revise$cache");
 const $value = Symbol.for("revise$value");
 const $cursor = Symbol.for("revise$cursor");
@@ -266,10 +268,10 @@ export class ContentAreaElement extends HTMLElement {
 		return nodeOffsetAt(this, cache, index);
 	}
 
-	indexOf(node: Node | null, offset: number): number {
+	indexAt(node: Node | null, offset: number): number {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
-		return indexOf(this, cache, node, offset);
+		return indexAt(this, cache, node, offset);
 	}
 
 	repair(callback: Function, expectedValue?: string | undefined): void {
@@ -766,7 +768,7 @@ function isCursorEqual(cursor1: Cursor, cursor2: Cursor): boolean {
  * Finds the string index of a node and offset pair provided by a browser API
  * like window.getSelection() for a given root and cache.
  */
-function indexOf(
+function indexAt(
 	root: Element,
 	cache: NodeInfoCache,
 	node: Node | null,
@@ -962,7 +964,7 @@ function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
 		return undefined;
 	}
 
-	const focus = indexOf(
+	const focus = indexAt(
 		root,
 		cache,
 		selection.focusNode,
@@ -972,9 +974,10 @@ function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
 	if (selection.isCollapsed) {
 		anchor = focus;
 	} else {
-		anchor = indexOf(root, cache, selection.anchorNode, selection.anchorOffset);
+		anchor = indexAt(root, cache, selection.anchorNode, selection.anchorOffset);
 	}
 
+	// TODO: simplify
 	if (focus === -1) {
 		if (anchor !== -1) {
 			return anchor;
