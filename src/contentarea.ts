@@ -2,15 +2,6 @@
 import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
-function isMacPlatform(): boolean {
-	return window.navigator && /Mac/.test(window.navigator.platform);
-}
-
-// TODO: This is a bad function.
-function isSafari(): boolean {
-	return window.navigator && /apple/i.test(window.navigator.vendor || "");
-}
-
 export interface ContentEventDetail {
 	patch: Patch;
 }
@@ -30,8 +21,7 @@ const css = `
 	white-space: pre-wrap;
 	white-space: break-spaces;
 	overflow-wrap: break-word;
-}
-`;
+}`;
 
 // TODO: Maybe these properties can be grouped on a hidden controller class?
 /*** ContentAreaElement symbol properties ***/
@@ -895,9 +885,6 @@ function nodeOffsetAt(
 					} else {
 						break;
 					}
-				} else if (isSafari()) {
-					// TODO: Not sure this is working perfectly for widgets.
-					return [node, 1];
 				}
 
 				return nodeOffsetFromChild(node, true);
@@ -1140,6 +1127,10 @@ function isRedoKeyboardEvent(ev: KeyboardEvent): boolean {
 		((ev.shiftKey && ev.key === "z") ||
 			(!ev.shiftKey && ev.key === "y" && !isMacPlatform()))
 	);
+}
+
+function isMacPlatform(): boolean {
+	return window.navigator && /Mac/.test(window.navigator.platform);
 }
 
 // TODO: Should this be a Patch method?
