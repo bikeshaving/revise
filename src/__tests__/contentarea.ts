@@ -231,106 +231,94 @@ describe("contentarea", () => {
 	});
 
 	describe("nodeOffsetAt/indexOf", () => {
+		test("single line", () => {
+			area.innerHTML = "<div><br></div>";
+			expect(area.value).toEqual("\n");
+			const div = area.firstChild!;
+			const br = div.firstChild!;
+			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
+			expect(area.nodeOffsetAt(0)).toEqual([div, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([div, 1]);
+			expect(area.indexOf(div, 0)).toBe(0);
+			expect(area.indexOf(div, 1)).toBe(1);
+			expect(area.indexOf(br, 0)).toBe(0);
+			expect(area.indexOf(br, 1)).toBe(1);
+		});
+
 		test("adjacent divs", () => {
+			// <div>
+			//   <div>hello</div>
+			//   <div>world</div>
+			// </div>
 			area.innerHTML = "<div><div>hello</div><div>world</div></div>";
 			expect(area.value).toEqual("hello\nworld\n");
-			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
+			const root = area.firstChild!;
+			const div1 = root.childNodes[0];
+			const hello = div1.firstChild;
+			const div2 = root.childNodes[1];
+			const world = div2.firstChild;
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([
-				area.firstChild!.childNodes[0].firstChild,
-				0,
-			]);
-			expect(area.nodeOffsetAt(1)).toEqual([
-				area.firstChild!.childNodes[0].firstChild,
-				1,
-			]);
-			expect(area.nodeOffsetAt(2)).toEqual([
-				area.firstChild!.childNodes[0].firstChild,
-				2,
-			]);
-			expect(area.nodeOffsetAt(3)).toEqual([
-				area.firstChild!.childNodes[0].firstChild,
-				3,
-			]);
-			expect(area.nodeOffsetAt(4)).toEqual([
-				area.firstChild!.childNodes[0].firstChild,
-				4,
-			]);
-			expect(area.nodeOffsetAt(5)).toEqual([
-				area.firstChild!.childNodes[0].firstChild,
-				5,
-			]);
-			expect(area.nodeOffsetAt(6)).toEqual([area.firstChild!.childNodes[1], 0]);
-			expect(area.nodeOffsetAt(7)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				1,
-			]);
-			expect(area.nodeOffsetAt(8)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				2,
-			]);
-			expect(area.nodeOffsetAt(9)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				3,
-			]);
-			expect(area.nodeOffsetAt(10)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				4,
-			]);
-			expect(area.nodeOffsetAt(11)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				5,
-			]);
-			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild, 2]);
-			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 2]);
+			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
+			expect(area.nodeOffsetAt(3)).toEqual([hello, 3]);
+			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
+			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
+			// TODO: Why is the node the element and not the text?
+			expect(area.nodeOffsetAt(6)).toEqual([div2, 0]);
+			expect(area.nodeOffsetAt(7)).toEqual([world, 1]);
+			expect(area.nodeOffsetAt(8)).toEqual([world, 2]);
+			expect(area.nodeOffsetAt(9)).toEqual([world, 3]);
+			expect(area.nodeOffsetAt(10)).toEqual([world, 4]);
+			expect(area.nodeOffsetAt(11)).toEqual([world, 5]);
+			expect(area.nodeOffsetAt(12)).toEqual([root, 2]);
+			expect(area.indexOf(root, 0)).toBe(0);
+			expect(area.indexOf(root, 1)).toBe(6);
+			expect(area.indexOf(root, 2)).toBe(12);
+			expect(area.indexOf(div1, 0)).toBe(0);
+			expect(area.indexOf(div1, 1)).toBe(5);
+			expect(area.indexOf(div2, 0)).toBe(6);
+			expect(area.indexOf(div2, 1)).toBe(11);
 
-			for (let i = -3; i < area.value.length + 3; i++) {
-				expect(area.indexOf(...area.nodeOffsetAt(i))).toEqual(
+			for (let i = -1; i < area.value.length + 1; i++) {
+				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
 				);
 			}
 		});
 
 		test("div after text", () => {
+			// <div>
+			//   hello
+			//   <div>world</div>
+			// </div>
 			area.innerHTML = "<div>hello<div>world</div></div>";
+			const root = area.firstChild!;
+			const hello = root.childNodes[0];
+			const div = root.childNodes[1];
+			const world = div.firstChild!;
 			expect(area.value).toEqual("hello\nworld\n");
-			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild!.childNodes[0], 0]);
-			expect(area.nodeOffsetAt(1)).toEqual([area.firstChild!.childNodes[0], 1]);
-			expect(area.nodeOffsetAt(2)).toEqual([area.firstChild!.childNodes[0], 2]);
-			expect(area.nodeOffsetAt(3)).toEqual([area.firstChild!.childNodes[0], 3]);
-			expect(area.nodeOffsetAt(4)).toEqual([area.firstChild!.childNodes[0], 4]);
-			expect(area.nodeOffsetAt(5)).toEqual([area.firstChild!.childNodes[0], 5]);
-			expect(area.nodeOffsetAt(6)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				0,
-			]);
-			expect(area.nodeOffsetAt(7)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				1,
-			]);
-			expect(area.nodeOffsetAt(8)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				2,
-			]);
-			expect(area.nodeOffsetAt(9)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				3,
-			]);
-			expect(area.nodeOffsetAt(10)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				4,
-			]);
-			expect(area.nodeOffsetAt(11)).toEqual([
-				area.firstChild!.childNodes[1].firstChild,
-				5,
-			]);
-			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild, 2]);
-			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 2]);
-			expect(area.nodeOffsetAt(14)).toEqual([area.firstChild, 2]);
+			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
+			expect(area.nodeOffsetAt(3)).toEqual([hello, 3]);
+			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
+			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
+			expect(area.nodeOffsetAt(6)).toEqual([world, 0]);
+			expect(area.nodeOffsetAt(7)).toEqual([world, 1]);
+			expect(area.nodeOffsetAt(8)).toEqual([world, 2]);
+			expect(area.nodeOffsetAt(9)).toEqual([world, 3]);
+			expect(area.nodeOffsetAt(10)).toEqual([world, 4]);
+			expect(area.nodeOffsetAt(11)).toEqual([world, 5]);
+			expect(area.nodeOffsetAt(12)).toEqual([root, 2]);
+			expect(area.indexOf(root, 0)).toBe(0);
+			expect(area.indexOf(root, 1)).toBe(6);
+			expect(area.indexOf(root, 2)).toBe(12);
+			expect(area.indexOf(div, 0)).toBe(6);
+			expect(area.indexOf(div, 1)).toBe(11);
 
-			for (let i = -3; i < area.value.length + 3; i++) {
+			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
 				);
@@ -338,143 +326,166 @@ describe("contentarea", () => {
 		});
 
 		test("double br", () => {
+			// <div>
+			//   hello<br>
+			//   <br>
+			//   world
+			// </div>
 			area.innerHTML = "<div>hello<br><br>world</div>";
 			expect(area.value).toEqual("hello\n\nworld\n");
-			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
+			const div = area.firstChild!;
+			const hello = div.childNodes[0];
+			const br1 = div.childNodes[1];
+			const br2 = div.childNodes[2];
+			const world = div.childNodes[3];
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild!.childNodes[0], 0]);
-			expect(area.nodeOffsetAt(1)).toEqual([area.firstChild!.childNodes[0], 1]);
-			expect(area.nodeOffsetAt(2)).toEqual([area.firstChild!.childNodes[0], 2]);
-			expect(area.nodeOffsetAt(3)).toEqual([area.firstChild!.childNodes[0], 3]);
-			expect(area.nodeOffsetAt(4)).toEqual([area.firstChild!.childNodes[0], 4]);
-			expect(area.nodeOffsetAt(5)).toEqual([area.firstChild!.childNodes[0], 5]);
-			expect(area.nodeOffsetAt(6)).toEqual([area.firstChild!, 2]);
-			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.childNodes[3], 0]);
-			expect(area.nodeOffsetAt(8)).toEqual([area.firstChild!.childNodes[3], 1]);
-			expect(area.nodeOffsetAt(9)).toEqual([area.firstChild!.childNodes[3], 2]);
-			expect(area.nodeOffsetAt(10)).toEqual([
-				area.firstChild!.childNodes[3],
-				3,
-			]);
-			expect(area.nodeOffsetAt(11)).toEqual([
-				area.firstChild!.childNodes[3],
-				4,
-			]);
-			expect(area.nodeOffsetAt(12)).toEqual([
-				area.firstChild!.childNodes[3],
-				5,
-			]);
-			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 4]);
-			expect(area.nodeOffsetAt(14)).toEqual([area.firstChild, 4]);
-			expect(area.nodeOffsetAt(15)).toEqual([area.firstChild, 4]);
-			for (let i = -3; i < area.value.length + 3; i++) {
+			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
+			expect(area.nodeOffsetAt(3)).toEqual([hello, 3]);
+			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
+			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
+			expect(area.nodeOffsetAt(6)).toEqual([div, 2]);
+			expect(area.nodeOffsetAt(7)).toEqual([world, 0]);
+			expect(area.nodeOffsetAt(8)).toEqual([world, 1]);
+			expect(area.nodeOffsetAt(9)).toEqual([world, 2]);
+			expect(area.nodeOffsetAt(10)).toEqual([world, 3]);
+			expect(area.nodeOffsetAt(11)).toEqual([world, 4]);
+			expect(area.nodeOffsetAt(12)).toEqual([world, 5]);
+			expect(area.nodeOffsetAt(13)).toEqual([div, 4]);
+			expect(area.indexOf(div, 0)).toBe(0);
+			expect(area.indexOf(div, 1)).toBe(5);
+			expect(area.indexOf(div, 2)).toBe(6);
+			expect(area.indexOf(div, 3)).toBe(7);
+			expect(area.indexOf(br1, 0)).toBe(5);
+			expect(area.indexOf(br1, 1)).toBe(6);
+			expect(area.indexOf(br2, 0)).toBe(6);
+			expect(area.indexOf(br2, 1)).toBe(7);
+
+			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
 				);
 			}
 		});
 
-		test("text and br alternating", () => {
+		test("text with br after", () => {
+			// <div>
+			//   hello<br>
+			//   world<br>
+			// </div>
 			area.innerHTML = "<div>hello<br>world<br></div>";
 			expect(area.value).toEqual("hello\nworld\n");
-			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
+			const div = area.firstChild;
+			const hello = div.childNodes[0];
+			const br1 = div.childNodes[1];
+			const world = div.childNodes[2];
+			const br2 = div.childNodes[3];
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild!.childNodes[0], 0]);
-			expect(area.nodeOffsetAt(1)).toEqual([area.firstChild!.childNodes[0], 1]);
-			expect(area.nodeOffsetAt(2)).toEqual([area.firstChild!.childNodes[0], 2]);
-			expect(area.nodeOffsetAt(3)).toEqual([area.firstChild!.childNodes[0], 3]);
-			expect(area.nodeOffsetAt(4)).toEqual([area.firstChild!.childNodes[0], 4]);
-			expect(area.nodeOffsetAt(5)).toEqual([area.firstChild!.childNodes[0], 5]);
-			expect(area.nodeOffsetAt(6)).toEqual([area.firstChild!.childNodes[2], 0]);
-			expect(area.nodeOffsetAt(7)).toEqual([area.firstChild!.childNodes[2], 1]);
-			expect(area.nodeOffsetAt(8)).toEqual([area.firstChild!.childNodes[2], 2]);
-			expect(area.nodeOffsetAt(9)).toEqual([area.firstChild!.childNodes[2], 3]);
-			expect(area.nodeOffsetAt(10)).toEqual([
-				area.firstChild!.childNodes[2],
-				4,
-			]);
-			expect(area.nodeOffsetAt(11)).toEqual([
-				area.firstChild!.childNodes[2],
-				5,
-			]);
-			expect(area.nodeOffsetAt(12)).toEqual([area.firstChild, 4]);
-			expect(area.nodeOffsetAt(13)).toEqual([area.firstChild, 4]);
-			expect(area.nodeOffsetAt(14)).toEqual([area.firstChild, 4]);
-			expect(area.nodeOffsetAt(15)).toEqual([area.firstChild, 4]);
-			for (let i = -3; i < area.value.length + 3; i++) {
+			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
+			expect(area.nodeOffsetAt(3)).toEqual([hello, 3]);
+			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
+			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
+			expect(area.nodeOffsetAt(6)).toEqual([world, 0]);
+			expect(area.nodeOffsetAt(7)).toEqual([world, 1]);
+			expect(area.nodeOffsetAt(8)).toEqual([world, 2]);
+			expect(area.nodeOffsetAt(9)).toEqual([world, 3]);
+			expect(area.nodeOffsetAt(10)).toEqual([world, 4]);
+			expect(area.nodeOffsetAt(11)).toEqual([world, 5]);
+			expect(area.nodeOffsetAt(13)).toEqual([div, 4]);
+			expect(area.indexOf(div, 0)).toBe(0);
+			expect(area.indexOf(div, 1)).toBe(5);
+			expect(area.indexOf(div, 2)).toBe(6);
+			expect(area.indexOf(div, 3)).toBe(11);
+			expect(area.indexOf(div, 4)).toBe(12);
+			expect(area.indexOf(br1, 0)).toBe(5);
+			expect(area.indexOf(br1, 1)).toBe(6);
+			expect(area.indexOf(br2, 0)).toBe(11);
+			expect(area.indexOf(br2, 1)).toBe(12);
+			expect(area.indexOf(hello, 0)).toBe(0);
+			expect(area.indexOf(hello, 1)).toBe(1);
+			expect(area.indexOf(hello, 2)).toBe(2);
+			expect(area.indexOf(hello, 3)).toBe(3);
+			expect(area.indexOf(hello, 4)).toBe(4);
+			expect(area.indexOf(hello, 5)).toBe(5);
+			expect(area.indexOf(world, 0)).toBe(6);
+			expect(area.indexOf(world, 1)).toBe(7);
+			expect(area.indexOf(world, 2)).toBe(8);
+			expect(area.indexOf(world, 3)).toBe(9);
+			expect(area.indexOf(world, 4)).toBe(10);
+			expect(area.indexOf(world, 5)).toBe(11);
+			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(i, area.value.length)),
+					Math.max(-1, Math.min(area.value.length, i)),
 				);
 			}
-		});
-
-		test("single br", () => {
-			area.innerHTML = "<div><br></div>";
-			expect(area.value).toEqual("\n");
-			expect(area.nodeOffsetAt(-2)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([area.firstChild, 0]);
-			expect(area.nodeOffsetAt(1)).toEqual([area.firstChild, 1]);
-			for (let i = -3; i < area.value.length + 3; i++) {
-				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(i, area.value.length)),
-				);
-			}
-
-			// TODO: fix this edge case
-			expect(area.indexOf(area.firstChild!.firstChild, 0)).toEqual(0);
 		});
 
 		test("data-content", () => {
+			//<div>
+			//  <div>Hello <img></div>
+			//  <div><br></div>
+			//  <div><br></div>
+			//</div>
 			area.innerHTML =
-				'<div><div>Hello <img src="" data-content="😓"/></div><div><br /></div><div><br /></div></div>';
-			expect(area.value).toEqual("Hello 😓\n\n\n");
+				'<div><div>Hello <img src="" data-content="i"></div><div><br></div><div><br></div></div>';
+			expect(area.value).toEqual("Hello i\n\n\n");
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
-			expect(area.nodeOffsetAt(0)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				0,
-			]);
-			expect(area.nodeOffsetAt(1)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				1,
-			]);
-			expect(area.nodeOffsetAt(2)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				2,
-			]);
-			expect(area.nodeOffsetAt(3)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				3,
-			]);
-			expect(area.nodeOffsetAt(4)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				4,
-			]);
-			expect(area.nodeOffsetAt(5)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				5,
-			]);
-			expect(area.nodeOffsetAt(6)).toEqual([
-				area.firstChild!.firstChild!.childNodes[0],
-				6,
-			]);
-			expect(area.nodeOffsetAt(7)).toEqual([
-				area.firstChild!.firstChild!.childNodes[1],
-				1,
-			]);
+			const root = area.firstChild!;
+			const line1 = root.childNodes[0];
+			const hello = line1.childNodes[0];
+			const img = line1.childNodes[1];
+			const line2 = root.childNodes[1];
+			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
+			expect(area.nodeOffsetAt(3)).toEqual([hello, 3]);
+			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
+			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
+			expect(area.nodeOffsetAt(6)).toEqual([hello, 6]);
+			expect(area.nodeOffsetAt(7)).toEqual([line1, 2]);
+			expect(area.nodeOffsetAt(8)).toEqual([line2, 0]);
+			expect(area.nodeOffsetAt(9)).toEqual([line2, 0]);
+			expect(area.nodeOffsetAt(10)).toEqual([root, 3]);
+			expect(area.indexOf(img, 0)).toBe(6);
+			expect(area.indexOf(img, 1)).toBe(7);
+			expect(area.indexOf(line1, 1)).toBe(6);
+			expect(area.indexOf(line1, 2)).toBe(7);
+			expect(area.indexOf(line2, 2)).toBe(7);
+
 			for (let i = -3; i < area.value.length + 3; i++) {
 				// any index which is “inside the img” will be set to the end
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(i === 7 ? 8 : i, area.value.length)),
+					Math.max(-1, Math.min(area.value.length, i === 7 ? 9 : i)),
 				);
 			}
 		});
 
-		test("data-content edge case", () => {
+		test("data-content with different children", () => {
+			// <div>
+			//   <span><span>Double a</span></span>
+			// </div>
+			// <div><br></div>
 			area.innerHTML =
-				'<div><span data-content="a"><span>The letter a</span></span></div><div><div><br /></div>';
-			expect(area.value).toEqual("a\n\n");
-			expect(area.nodeOffsetAt(1)).toEqual([area.childNodes[0].firstChild, 1]);
+				'<div><span data-content="aa"><span>Double a</span></span></div><div><br></div>';
+			expect(area.value).toBe("aa\n\n");
+			const div1 = area.childNodes[0];
+			const dataContentSpan = div1.firstChild!;
+			const altContentSpan = dataContentSpan.firstChild!;
+			const text = altContentSpan.firstChild;
+			const div2 = area.childNodes[1];
+			expect(area.nodeOffsetAt(0)).toEqual([dataContentSpan, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([dataContentSpan, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([dataContentSpan, 1]);
+			expect(area.nodeOffsetAt(3)).toEqual([div2, 0]);
+			expect(area.nodeOffsetAt(4)).toEqual([div2, 1]);
+			expect(area.nodeOffsetAt(4)).toEqual([div2, 1]);
+			expect(area.indexOf(text, 0)).toBe(0);
+			expect(area.indexOf(text, 1)).toBe(2);
+			expect(area.indexOf(text, 2)).toBe(2);
+
 			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexOf(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(i, area.value.length)),
