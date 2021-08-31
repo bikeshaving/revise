@@ -313,7 +313,8 @@ describe("contentarea", () => {
 			expect(area.nodeOffsetAt(11)).toEqual([world, 5]);
 			expect(area.nodeOffsetAt(12)).toEqual([root, 2]);
 			expect(area.indexAt(root, 0)).toBe(0);
-			expect(area.indexAt(root, 1)).toBe(6);
+			// mildly surprising, but reflects the behavior of the selection.collapse()
+			expect(area.indexAt(root, 1)).toBe(5);
 			expect(area.indexAt(root, 2)).toBe(12);
 			expect(area.indexAt(div, 0)).toBe(6);
 			expect(area.indexAt(div, 1)).toBe(11);
@@ -357,6 +358,7 @@ describe("contentarea", () => {
 			expect(area.indexAt(div, 1)).toBe(5);
 			expect(area.indexAt(div, 2)).toBe(6);
 			expect(area.indexAt(div, 3)).toBe(7);
+			expect(area.indexAt(div, 4)).toBe(12);
 			expect(area.indexAt(br1, 0)).toBe(5);
 			expect(area.indexAt(br1, 1)).toBe(6);
 			expect(area.indexAt(br2, 0)).toBe(6);
@@ -364,7 +366,7 @@ describe("contentarea", () => {
 
 			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexAt(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(i, area.value.length)),
+					Math.max(-1, Math.min(i, area.value.length - 1)),
 				);
 			}
 		});
@@ -376,7 +378,7 @@ describe("contentarea", () => {
 			// </div>
 			area.innerHTML = "<div>hello<br>world<br></div>";
 			expect(area.value).toEqual("hello\nworld\n");
-			const div = area.firstChild;
+			const div = area.firstChild!;
 			const hello = div.childNodes[0];
 			const br1 = div.childNodes[1];
 			const world = div.childNodes[2];
@@ -430,14 +432,15 @@ describe("contentarea", () => {
 			//  <div><br></div>
 			//</div>
 			area.innerHTML =
-				'<div><div>Hello <img src="" data-content="i"></div><div><br></div><div><br></div></div>';
-			expect(area.value).toEqual("Hello i\n\n\n");
+				'<div><div>Hello <img src="" data-content="🌎"></div><div><br></div><div><br></div></div>';
+			expect(area.value).toEqual("Hello 🌎\n\n\n");
 			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
 			const root = area.firstChild!;
-			const line1 = root.childNodes[0];
-			const hello = line1.childNodes[0];
-			const img = line1.childNodes[1];
-			const line2 = root.childNodes[1];
+			const div1 = root.childNodes[0];
+			const hello = div1.childNodes[0];
+			const img = div1.childNodes[1];
+			const div2 = root.childNodes[1];
+			const div3 = root.childNodes[2];
 			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
 			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
 			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
@@ -445,20 +448,35 @@ describe("contentarea", () => {
 			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
 			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
 			expect(area.nodeOffsetAt(6)).toEqual([hello, 6]);
-			expect(area.nodeOffsetAt(7)).toEqual([line1, 2]);
-			expect(area.nodeOffsetAt(8)).toEqual([line2, 0]);
-			expect(area.nodeOffsetAt(9)).toEqual([line2, 0]);
-			expect(area.nodeOffsetAt(10)).toEqual([root, 3]);
-			expect(area.indexAt(img, 0)).toBe(6);
-			expect(area.indexAt(img, 1)).toBe(7);
-			expect(area.indexAt(line1, 1)).toBe(6);
-			expect(area.indexAt(line1, 2)).toBe(7);
-			expect(area.indexAt(line2, 2)).toBe(7);
+			expect(area.nodeOffsetAt(7)).toEqual([div1, 2]);
+			expect(area.nodeOffsetAt(8)).toEqual([div1, 2]);
+			expect(area.nodeOffsetAt(9)).toEqual([div2, 0]);
+			expect(area.nodeOffsetAt(10)).toEqual([div2, 0]);
+			expect(area.nodeOffsetAt(11)).toEqual([root, 3]);
 
-			for (let i = -3; i < area.value.length + 3; i++) {
-				// any index which is “inside the img” will be set to the end
+			expect(area.indexAt(div1, 0)).toBe(0);
+			expect(area.indexAt(div1, 1)).toBe(6);
+			expect(area.indexAt(div1, 2)).toBe(8);
+			expect(area.indexAt(hello, 0)).toBe(0);
+			expect(area.indexAt(hello, 1)).toBe(1);
+			expect(area.indexAt(hello, 2)).toBe(2);
+			expect(area.indexAt(hello, 3)).toBe(3);
+			expect(area.indexAt(hello, 4)).toBe(4);
+			expect(area.indexAt(hello, 5)).toBe(5);
+			expect(area.indexAt(img, 0)).toBe(6);
+			expect(area.indexAt(img, 1)).toBe(8);
+			expect(area.indexAt(div2, 0)).toBe(9);
+			expect(area.indexAt(div2, 1)).toBe(10);
+			expect(area.indexAt(div3, 0)).toBe(10);
+			expect(area.indexAt(div3, 1)).toBe(11);
+
+			for (let i = -1; i < area.value.length + 3; i++) {
+				// When i === 7, we are indexing the second byte of the 🌎, according
+				// to utf-16 code units, so the nodeOffset returned is the parent div
+				// of the img, with an offset equal to the number of child nodes for
+				// this parent div.
 				expect(area.indexAt(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(area.value.length, i === 7 ? 9 : i)),
+					Math.max(-1, Math.min(area.value.length, i === 7 ? 8 : i)),
 				);
 			}
 		});
@@ -469,7 +487,7 @@ describe("contentarea", () => {
 			// </div>
 			// <div><br></div>
 			area.innerHTML =
-				'<div><span data-content="aa"><span>Double a</span></span></div><div><br></div>';
+				'<div><span data-content="aa"><span>double a</span></span></div><div><br></div>';
 			expect(area.value).toBe("aa\n\n");
 			const div1 = area.childNodes[0];
 			const dataContentSpan = div1.firstChild!;
@@ -488,7 +506,7 @@ describe("contentarea", () => {
 
 			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexAt(...area.nodeOffsetAt(i))).toBe(
-					Math.max(-1, Math.min(i, area.value.length)),
+					Math.max(-1, Math.min(area.value.length, i === 1 ? 2 : i)),
 				);
 			}
 		});

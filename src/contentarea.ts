@@ -478,7 +478,7 @@ const BLOCKLIKE_ELEMENTS = new Set([
 ]);
 
 interface NodeInfo {
-	/** The string offset of this node relative to its parent */
+	/** The string offset of this node relative to its parent. */
 	offset: number;
 	/**
 	 * The string length of this node’s contents.
@@ -486,6 +486,14 @@ interface NodeInfo {
 	 * mutation.
 	 */
 	length: number | undefined;
+	/**
+	 * Whether the current element is responsible for the newline after it.
+	 * A div with only inline elements will append a newline, but a div with a
+	 * <br> element after it will not. A div enclosing a div is also not
+	 * responsible for the newline after it. This property is checked when
+	 * determining the index of a node offset pair.
+	 */
+	appendsNewline: boolean;
 }
 
 type NodeInfoCache = Map<Node, NodeInfo>;
@@ -533,22 +541,22 @@ function getContent(
 	// of nodes cached from previous renders as a way to detect deletions.
 	let oldIndexRelative = 0;
 	// A stack to save some variables as we walk up and down the tree.
-	const stack: Array<{oldIndexRelative: number; nodeInfo: NodeInfo}> = [];
+	const stack: Array<{oldIndexRelative: number; info: NodeInfo}> = [];
 	// Info about the cached length of the node’s contents and offset relative to
 	// the node’s parents. See invalidate() to see how mutation records are used
 	// to clear the nodeInfo cache.
 	// A boolean which indicates whether we’re walking down the tree or back up.
 	let descending = true;
-	let nodeInfo: NodeInfo = cache.get(root)!;
-	if (nodeInfo === undefined) {
-		nodeInfo = {offset, length: undefined};
-		cache.set(root, nodeInfo);
+	let info: NodeInfo = cache.get(root)!;
+	if (info === undefined) {
+		info = {offset, length: undefined, appendsNewline: false};
+		cache.set(root, info);
 	}
 
 	for (let node: Node | null = root; node !== null; ) {
 		// Walking down the tree. We break out of this loop when there are no more
 		// child nodes to descend into.
-		while (descending && nodeInfo.length === undefined) {
+		while (descending && info.length === undefined) {
 			if (
 				node.nodeType === Node.TEXT_NODE ||
 				(node.nodeType === Node.ELEMENT_NODE &&
@@ -572,7 +580,7 @@ function getContent(
 				break;
 			}
 
-			stack.push({oldIndexRelative, nodeInfo});
+			stack.push({oldIndexRelative, info});
 			oldIndexRelative = oldIndex;
 			if (newlineBefore) {
 				offset = NEWLINE.length;
@@ -582,23 +590,24 @@ function getContent(
 
 			node = firstChild;
 			// getNodeInfo()
-			nodeInfo = cache.get(node)!;
-			if (nodeInfo === undefined) {
-				nodeInfo = {offset, length: undefined};
-				cache.set(node, nodeInfo);
+			info = cache.get(node)!;
+			if (info === undefined) {
+				info = {offset, length: undefined, appendsNewline: false};
+				cache.set(node, info);
 			} else {
 				const oldOffset = oldIndex - oldIndexRelative;
-				if (oldOffset < nodeInfo.offset) {
+				if (oldOffset < info.offset) {
 					// deletion detected
-					oldIndex += nodeInfo.offset - oldOffset;
+					oldIndex += info.offset - oldOffset;
 				}
 
-				nodeInfo.offset = offset;
+				info.offset = offset;
 			}
 		}
 
-		if (nodeInfo.length === undefined) {
+		if (info.length === undefined) {
 			// Reading the current node for content.
+			let appendsNewline = false;
 			if (node.nodeType === Node.TEXT_NODE) {
 				const content1 = (node as Text).data;
 				content += content1;
@@ -613,16 +622,18 @@ function getContent(
 				content += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
+				appendsNewline = true;
 			} else if (node.nodeName === "BR") {
 				content += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
 			}
 
-			nodeInfo.length = offset - nodeInfo.offset;
+			info.length = offset - info.offset;
+			info.appendsNewline = appendsNewline;
 		} else {
 			// Reading from oldContent because length hasn’t been invalidated.
-			const length = nodeInfo.length;
+			const length = info.length;
 			const content1 = oldContent.slice(oldIndex, oldIndex + length);
 			if (content1.length !== length) {
 				throw new Error("String length mismatch");
@@ -639,18 +650,18 @@ function getContent(
 		if (node) {
 			descending = true;
 			// getNodeInfo()
-			nodeInfo = cache.get(node)!;
-			if (nodeInfo === undefined) {
-				nodeInfo = {offset, length: undefined};
-				cache.set(node, nodeInfo);
+			info = cache.get(node)!;
+			if (info === undefined) {
+				info = {offset, length: undefined, appendsNewline: false};
+				cache.set(node, info);
 			} else {
 				const oldOffset = oldIndex - oldIndexRelative;
-				if (oldOffset < nodeInfo.offset) {
+				if (oldOffset < info.offset) {
 					// deletion detected
-					oldIndex += nodeInfo.offset - oldOffset;
+					oldIndex += info.offset - oldOffset;
 				}
 
-				nodeInfo.offset = offset;
+				info.offset = offset;
 			}
 		} else {
 			descending = false;
@@ -659,8 +670,8 @@ function getContent(
 					throw new Error("Stack is empty");
 				}
 
-				({oldIndexRelative, nodeInfo} = stack.pop()!);
-				offset = nodeInfo.offset + offset;
+				({oldIndexRelative, info} = stack.pop()!);
+				offset = info.offset + offset;
 				node = walker.parentNode();
 			}
 		}
@@ -780,35 +791,44 @@ function indexAt(
 	node: Node | null,
 	offset: number,
 ): number {
-	if (!root.contains(node)) {
+	if (node == null || !root.contains(node)) {
 		return -1;
 	}
 
 	// If the node isn’t found in the cache, it’s likely a child of a node which
 	// sets a data-content property, so we work upwards until we find.
-	if (!cache.get(node!)) {
+	if (!cache.get(node)) {
 		let offset1 = offset > 0 ? 1 : 0;
-		while (node !== root && !cache.get(node!)) {
+		while (node !== root && !cache.get(node)) {
 			offset =
 				Array.from(node!.parentNode!.childNodes).indexOf(node as ChildNode) +
 				offset1;
-			node = node!.parentNode;
-			offset1 = 0;
+			node = node.parentNode!;
+			offset1 = offset > 0 ? node.childNodes.length : 0;
 		}
-	}
-
-	if (node === null) {
-		return -1;
 	}
 
 	let index = offset;
 	if (node.nodeType === Node.ELEMENT_NODE) {
 		if (offset >= node.childNodes.length) {
 			if (offset > 0) {
-				index = cache.get(node)!.length!;
+				const info = cache.get(node);
+				// because we’ve validated, info.length should be defined.
+				if (!info || info.length == null) {
+					throw new Error("Unvalidated node");
+				}
+
+				index = info.length;
+				if (info.appendsNewline) {
+					index -= NEWLINE.length;
+				}
 			}
 		} else {
-			node = node.childNodes[offset];
+			const focused = node.childNodes[offset];
+			if (cache.get(focused)) {
+				node = focused;
+			}
+
 			index = 0;
 		}
 	}
@@ -825,14 +845,24 @@ function indexAt(
 			const parentNode = walker.parentNode();
 			if (parentNode) {
 				const info = cache.get(node);
-				const offset = info ? info.offset : 0;
-				index += offset;
+				if (!info || info.length == null) {
+					// @ts-ignore
+					console.log(node.outerHTML);
+					throw new Error("Unvalidated node");
+				}
+
+				index += info.offset;
 			}
 
 			node = parentNode;
 		} else {
 			node = previousSibling;
-			index += cache.get(node)!.length!;
+			const info = cache.get(node);
+			if (!info || info.length == null) {
+				throw new Error("Unvalidated node");
+			}
+
+			index += info.length;
 		}
 	}
 
@@ -867,7 +897,7 @@ function nodeOffsetAt(
 		if (info == null) {
 			return nodeOffsetFromChild(node, offset > 0);
 		} else if (info.length == null) {
-			throw new Error("nodeOffsetAt called without validating nodes");
+			throw new Error("Unvalidated node");
 		} else if (offset <= info.length) {
 			if (node.nodeType === Node.TEXT_NODE) {
 				return [node, offset];
