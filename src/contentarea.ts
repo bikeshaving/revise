@@ -104,6 +104,9 @@ export class ContentAreaElement extends HTMLElement {
 		});
 	}
 
+	/******************************/
+	/*** Custom Element methods ***/
+	/******************************/
 	static get observedAttributes(): Array<string> {
 		return ["contenteditable"];
 	}
@@ -141,11 +144,7 @@ export class ContentAreaElement extends HTMLElement {
 		}
 	}
 
-	attributeChangedCallback(
-		name: string,
-		//oldValue: string,
-		//newValue: string,
-	) {
+	attributeChangedCallback(name: string) {
 		switch (name) {
 			case "contenteditable": {
 				const slot = this[$slot];
@@ -161,11 +160,48 @@ export class ContentAreaElement extends HTMLElement {
 		}
 	}
 
+	/***********************/
+	/*** Content methods ***/
+	/***********************/
 	get value(): string {
 		validate(this, this[$observer].takeRecords());
 		return this[$value];
 	}
 
+	repair(callback: Function, expectedValue?: string | undefined): void {
+		validate(this, this[$observer].takeRecords());
+		const cache = this[$cache];
+		const value = this[$value];
+		if (typeof expectedValue === "undefined") {
+			expectedValue = value;
+		}
+
+		const {
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		} = selectionInfoFromCursor(this[$cursor]);
+		callback();
+		validate(this, this[$observer].takeRecords(), {skipSelection: true});
+		if (this[$value] !== expectedValue) {
+			throw new Error("Expected value did not match current value");
+		}
+
+		if (value === expectedValue) {
+			setSelectionRange(
+				this,
+				cache,
+				value,
+				selectionStart,
+				selectionEnd,
+				selectionDirection,
+			);
+		}
+	}
+
+	/*************************/
+	/*** Selection Methods ***/
+	/*************************/
 	get cursor(): Cursor {
 		validate(this, this[$observer].takeRecords());
 		const cursor = this[$cursor];
@@ -177,7 +213,6 @@ export class ContentAreaElement extends HTMLElement {
 		return cursor.slice() as [number, number];
 	}
 
-	// TODO: Implement all this stuff in terms of cursors
 	get selectionStart(): number {
 		validate(this, this[$observer].takeRecords());
 		return selectionInfoFromCursor(this[$cursor]).selectionStart;
@@ -274,38 +309,9 @@ export class ContentAreaElement extends HTMLElement {
 		return indexAt(this, cache, node, offset);
 	}
 
-	repair(callback: Function, expectedValue?: string | undefined): void {
-		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		const value = this[$value];
-		if (typeof expectedValue === "undefined") {
-			expectedValue = value;
-		}
-
-		const {
-			selectionStart,
-			selectionEnd,
-			selectionDirection,
-		} = selectionInfoFromCursor(this[$cursor]);
-		callback();
-		validate(this, this[$observer].takeRecords(), {skipSelection: true});
-		if (this[$value] !== expectedValue) {
-			throw new Error("Expected value did not match current value");
-		}
-
-		if (value === expectedValue) {
-			setSelectionRange(
-				this,
-				cache,
-				value,
-				selectionStart,
-				selectionEnd,
-				selectionDirection,
-			);
-		}
-	}
-
+	/***********************/
 	/*** History Methods ***/
+	/***********************/
 	get undoMode(): UndoMode {
 		let attr = this.getAttribute("undomode");
 		if (!attr) {
