@@ -26,7 +26,7 @@ const css = `
 /********************************************/
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
-// TODO: Maybe these properties can be grouped on a hidden controller class?
+// TODO: Maybe these properties can be grouped on a hidden class?
 const $cache = Symbol.for("revise$cache");
 const $value = Symbol.for("revise$value");
 const $cursor = Symbol.for("revise$cursor");
