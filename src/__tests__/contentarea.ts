@@ -190,6 +190,34 @@ describe("contentarea", () => {
 			expect(area.value).toEqual("12\n");
 		});
 
+		test("add div between text and div", () => {
+			area.innerHTML = "<div>12<div>56</div></div>";
+			expect(area.value).toEqual("12\n56\n");
+			(area.firstChild!.lastChild as Element).insertAdjacentHTML(
+				"beforebegin",
+				"<div>34</div>",
+			);
+			expect(area.value).toEqual("12\n34\n56\n");
+		});
+
+		test("change text of two adjacent divs", () => {
+			area.innerHTML = "<div>12</div><div>34</div>";
+			expect(area.value).toEqual("12\n34\n");
+			area.firstChild!.textContent = "abcd";
+			expect(area.value).toEqual("abcd\n34\n");
+			area.lastChild!.textContent = "efgh";
+			expect(area.value).toEqual("abcd\nefgh\n");
+		});
+
+		test("change text before div", () => {
+			area.innerHTML = "12<div>34</div>";
+			expect(area.value).toEqual("12\n34\n");
+			area.firstChild!.textContent = "abcd";
+			expect(area.value).toEqual("abcd\n34\n");
+			area.firstChild!.textContent = "12";
+			expect(area.value).toEqual("12\n34\n");
+		});
+
 		test("delete br at the start of a div after text", () => {
 			area.innerHTML = "<div>12<div><br>34</div></div>";
 			expect(area.value).toEqual("12\n\n34\n");
