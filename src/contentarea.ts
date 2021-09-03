@@ -478,7 +478,7 @@ const BLOCKLIKE_ELEMENTS = new Set([
 ]);
 
 interface NodeInfo {
-	/** The string offset of this node relative to its parent. */
+	/** The start of the contents of this node relative to its parent. */
 	offset: number;
 	/**
 	 * The string length of this node’s contents.
@@ -486,13 +486,9 @@ interface NodeInfo {
 	 * mutation.
 	 */
 	length: number | undefined;
-	/**
-	 * Whether the current element is responsible for the newline after it.
-	 * A div with only inline elements will append a newline, but a div with a
-	 * <br> element after it will not. A div enclosing a div is also not
-	 * responsible for the newline after it. This property is checked when
-	 * determining the index of a node offset pair.
-	 */
+	/** Whether the current node is responsible for the newline before it. */
+	prependsNewline: boolean;
+	/** Whether the current node is responsible for the newline after it. */
 	appendsNewline: boolean;
 }
 
@@ -505,7 +501,7 @@ type NodeInfoCache = Map<Node, NodeInfo>;
  * future reads.
  * @param root - The root element (usually a content-area element)
  * @param cache - The nodeInfo cache associated with the root
- * @param oldContent - The previous content rendered.
+ * @param oldContent - The previous content of the root.
  */
 function getContent(
 	root: Element,
@@ -517,62 +513,68 @@ function getContent(
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	// The return value
-	// TODO: It might be faster to construct a patch rather than concatenating a
-	// giant string.
+	// TODO: It might be faster to construct and return a patch rather than
+	// concatenating a giant string.
 	let content = "";
 	// A boolean which indicates whether content currently ends in a newline.
 	// Because the content variable is a heavily concatenated string and likely
 	// inferred by most engines as requiring a “rope-like” data structure for
-	// performance, reading from the end of the string to detect newlines is a
-	// bottleneck for most engines. Therefore, we store that info in this boolean
-	// instead.
+	// performance, reading from the end of the string to detect newlines can be
+	// a bottleneck. Therefore, we store that info in this boolean instead.
 	let hasNewline = false;
 	// The offset of the current node relative to its parent.
-	// Should be equal to the lengths of every single sibling before the current
-	// node, +1 if the parent node introduces a newline before it.
+	// Should be equal to the lengths of every sibling before the current node.
 	let offset = 0;
-	// The current index into oldContent.
-	// If there are nodes which have cached offset and length information, we
-	// read the old string rather than the DOM directly.
+	// The current index into oldContent. We use this to copy unchanged text over
+	// and track deletions.
+	// If there are nodes which have cached offset and length information, we get
+	// their contents from oldContent string using oldIndex rather than reading
+	// it from the DOM.
 	let oldIndex = 0;
-	// The current index into oldContent of the first sibling of the current node.
-	// We compare the difference of this and the current oldIndex to the offsets
-	// of nodes cached from previous renders as a way to detect deletions.
-	let oldIndexRelative = 0;
-	// A stack to save some variables as we walk up and down the tree.
-	const stack: Array<{oldIndexRelative: number; info: NodeInfo}> = [];
-	// Info about the cached length of the node’s contents and offset relative to
-	// the node’s parents. See invalidate() to see how mutation records are used
-	// to clear the nodeInfo cache.
-	// A boolean which indicates whether we’re walking down the tree or back up.
-	let descending = true;
+	// The current index into oldContent of the current node’s parent.
+	// We can get the expected offset of a node by finding the difference between
+	// oldIndex and relativeOldIndex (oldIndex - relativeOldIndex) and compare it
+	// to the cached info.offset as a way to detect deletions.
+	let relativeOldIndex = 0;
 	let info: NodeInfo = cache.get(root)!;
 	if (info === undefined) {
-		info = {offset, length: undefined, appendsNewline: false};
+		info = {
+			offset,
+			length: undefined,
+			prependsNewline: false,
+			appendsNewline: false,
+		};
 		cache.set(root, info);
 	}
 
-	for (let node: Node | null = root; node !== null; ) {
-		// Walking down the tree. We break out of this loop when there are no more
-		// child nodes to descend into.
+	// A stack to save some variables as we walk up and down the tree.
+	const stack: Array<{relativeOldIndex: number; info: NodeInfo}> = [];
+	for (let node: Node | null = root, descending = true; node !== null; ) {
+		// A loop to descend into the DOM tree.
 		while (descending && info.length === undefined) {
 			if (
 				node.nodeType === Node.TEXT_NODE ||
-				(node.nodeType === Node.ELEMENT_NODE &&
-					(node as Element).hasAttribute("data-content"))
+				// We treat elements with data-content attributes as opaque.
+				(node as Element).hasAttribute("data-content")
 			) {
 				break;
 			}
 
-			// We check that offset is non-zero so that the first element of a parent
-			// does not introduce a newline before it.
-			const newlineBefore = offset && !hasNewline && isBlocklikeElement(node);
-			if (newlineBefore) {
+			// If the current node is a block-like element, and the previous
+			// node/elements did not end with a newline, then the current element
+			// would introduce a linebreak before its contents.
+			// We check that the offset is non-zero so that the first child of a
+			// parent does not introduce a newline before it.
+			const prependsNewline =
+				!!offset && !hasNewline && isBlocklikeElement(node);
+			if (prependsNewline) {
 				content += NEWLINE;
 				hasNewline = true;
+				offset += NEWLINE.length;
+				info.offset += NEWLINE.length;
 			}
 
+			info.prependsNewline = prependsNewline;
 			const firstChild = walker.firstChild();
 			if (firstChild) {
 				descending = true;
@@ -580,33 +582,32 @@ function getContent(
 				break;
 			}
 
-			stack.push({oldIndexRelative, info});
-			oldIndexRelative = oldIndex;
-			if (newlineBefore) {
-				offset = NEWLINE.length;
-			} else {
-				offset = 0;
-			}
-
+			stack.push({relativeOldIndex, info});
+			relativeOldIndex = oldIndex;
+			offset = 0;
 			node = firstChild;
 			// getNodeInfo()
 			info = cache.get(node)!;
 			if (info === undefined) {
-				info = {offset, length: undefined, appendsNewline: false};
+				info = {
+					offset: offset,
+					length: undefined,
+					prependsNewline: false,
+					appendsNewline: false,
+				};
 				cache.set(node, info);
 			} else {
-				const oldOffset = oldIndex - oldIndexRelative;
-				if (oldOffset < info.offset) {
+				if (info.offset > 0) {
 					// deletion detected
-					oldIndex += info.offset - oldOffset;
+					oldIndex += info.offset;
 				}
 
 				info.offset = offset;
 			}
 		}
 
-		if (info.length === undefined) {
-			// Reading the current node for content.
+		if (typeof info.length === "undefined") {
+			// The node hasn’t been seen before.
 			let appendsNewline = false;
 			if (node.nodeType === Node.TEXT_NODE) {
 				const content1 = (node as Text).data;
@@ -632,17 +633,28 @@ function getContent(
 			info.length = offset - info.offset;
 			info.appendsNewline = appendsNewline;
 		} else {
+			// The node has been seen before.
 			// Reading from oldContent because length hasn’t been invalidated.
 			const length = info.length;
-			const content1 = oldContent.slice(oldIndex, oldIndex + length);
-			if (content1.length !== length) {
+			if (oldIndex + info.length > oldContent.length) {
 				throw new Error("String length mismatch");
 			}
 
-			content += content1;
+			const prependsNewline =
+				!!offset && !hasNewline && isBlocklikeElement(node);
+			if (prependsNewline) {
+				content += NEWLINE;
+				hasNewline = true;
+				offset += NEWLINE.length;
+				info.offset += NEWLINE.length;
+			}
+
+			info.prependsNewline = prependsNewline;
+			const oldContent1 = oldContent.slice(oldIndex, oldIndex + length);
+			content += oldContent1;
 			offset += length;
 			oldIndex += length;
-			hasNewline = content1.endsWith(NEWLINE);
+			hasNewline = oldContent1.endsWith(NEWLINE);
 		}
 
 		// Finding the next node.
@@ -652,13 +664,21 @@ function getContent(
 			// getNodeInfo()
 			info = cache.get(node)!;
 			if (info === undefined) {
-				info = {offset, length: undefined, appendsNewline: false};
+				info = {
+					offset: offset,
+					length: undefined,
+					prependsNewline: false,
+					appendsNewline: false,
+				};
 				cache.set(node, info);
 			} else {
-				const oldOffset = oldIndex - oldIndexRelative;
-				if (oldOffset < info.offset) {
+				const oldOffset = oldIndex - relativeOldIndex;
+				if (info.offset > oldOffset) {
 					// deletion detected
 					oldIndex += info.offset - oldOffset;
+				} else if (info.offset < oldOffset) {
+					// This should never happen
+					throw new Error("Invalid state");
 				}
 
 				info.offset = offset;
@@ -670,7 +690,7 @@ function getContent(
 					throw new Error("Stack is empty");
 				}
 
-				({oldIndexRelative, info} = stack.pop()!);
+				({relativeOldIndex, info} = stack.pop()!);
 				offset = info.offset + offset;
 				node = walker.parentNode();
 			}
@@ -798,6 +818,7 @@ function indexAt(
 	// If the node isn’t found in the cache, it’s likely a child of a node which
 	// sets a data-content property, so we work upwards until we find.
 	if (!cache.get(node)) {
+		// TODO: this can’t be right for text nodes, right?
 		let offset1 = offset > 0 ? 1 : 0;
 		while (node !== root && !cache.get(node)) {
 			offset =
@@ -846,8 +867,6 @@ function indexAt(
 			if (parentNode) {
 				const info = cache.get(node);
 				if (!info || info.length == null) {
-					// @ts-ignore
-					console.log(node.outerHTML);
 					throw new Error("Unvalidated node");
 				}
 
@@ -882,9 +901,8 @@ function nodeOffsetAt(
 		return [null, 0];
 	}
 
-	// A lot of the logic here is to work around the fact that setting the
-	// focusNode/anchorNode of a DOM selection to a BR element usually breaks
-	// everything.
+	// A lot of the logic here is to work around the fact that collapsing a
+	// selection to a br element breaks everything.
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -903,13 +921,13 @@ function nodeOffsetAt(
 				return [node, offset];
 			}
 
+			if (info.prependsNewline) {
+				offset -= NEWLINE.length;
+			}
+
 			// TODO: Simplify this
 			const firstChild = walker.firstChild();
 			if (firstChild) {
-				const firstChildInfo = cache.get(firstChild);
-				// This line only matters in the case where a newline is introduced
-				// before a block element.
-				offset -= firstChildInfo ? firstChildInfo.offset : 0;
 				node = firstChild;
 			} else if (offset > 0) {
 				if (node.nodeName === "BR") {
@@ -1168,6 +1186,7 @@ function isRedoKeyboardEvent(ev: KeyboardEvent): boolean {
 	);
 }
 
+// TODO: Figure out how to avoid this.
 function isMacPlatform(): boolean {
 	return window.navigator && /Mac/.test(window.navigator.platform);
 }

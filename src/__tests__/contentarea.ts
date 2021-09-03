@@ -216,6 +216,8 @@ describe("contentarea", () => {
 			expect(area.value).toEqual("abcd\n34\n");
 			area.firstChild!.textContent = "12";
 			expect(area.value).toEqual("12\n34\n");
+			area.firstChild!.textContent = "abcd";
+			expect(area.value).toEqual("abcd\n34\n");
 		});
 
 		test("delete br at the start of a div after text", () => {
