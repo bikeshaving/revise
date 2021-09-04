@@ -877,92 +877,90 @@ function nodeOffsetAt(
 	cache: NodeInfoCache,
 	index: number,
 ): [Node | null, number] {
-	const rootInfo = cache.get(root)!;
-	if (index < 0) {
-		return [null, 0];
-	} else if (index === 0) {
-		return [root, 0];
-	} else if (index >= rootInfo.length!) {
-		return [root, root.childNodes.length];
+	const [node, offset] = findNodeOffset(root, cache, index);
+	if (node && node.nodeName === "BR") {
+		// Different browsers can have trouble when calling `selection.collapse()`
+		// with a BR element, so we try to avoid returning them from this function.
+		return nodeOffsetFromChild(node);
 	}
 
-	// A lot of the logic here is to work around the fact that collapsing a
-	// selection to a br element breaks everything.
+	return [node, offset];
+}
+
+function findNodeOffset(
+	root: Element,
+	cache: NodeInfoCache,
+	index: number,
+): [Node | null, number] {
+	if (index < 0) {
+		return [null, 0];
+	}
+
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	let node: Node | null = root;
-	while (node !== null) {
+	for (let node: Node | null = root; node !== null; ) {
 		const info = cache.get(node);
 		if (info == null) {
 			return nodeOffsetFromChild(node, index > 0);
-		} else if (info.length == null) {
-			throw new Error("Unvalidated node");
-		} else if (index <= info.length) {
+		} else if (info.prependsNewline) {
+			index -= NEWLINE.length;
+		}
+
+		if (index === 0) {
+			return [node, 0];
+		} else if (index < 0) {
+			// A newline has been prepended before this node
+			const previousSibling = walker.previousSibling();
+			if (!previousSibling) {
+				throw new Error("Invalid state");
+			}
+
+			return [previousSibling, getNodeLength(previousSibling)];
+		} else if (
+			index === info.length! &&
+			(node.nodeType === Node.TEXT_NODE ||
+				(node as Element).hasAttribute("data-content"))
+		) {
 			if (node.nodeType === Node.TEXT_NODE) {
-				return [node, index];
-			}
-
-			if (info.prependsNewline) {
-				index -= NEWLINE.length;
-			}
-
-			// TODO: Simplify this
-			const firstChild = walker.firstChild();
-			if (firstChild) {
-				node = firstChild;
-			} else if (index > 0) {
-				if (node.nodeName === "BR") {
-					const successor = findSuccessorNode(walker);
-					if (successor) {
-						if (successor.nodeName === "BR") {
-							return nodeOffsetFromChild(successor);
-						}
-
-						return [successor, 0];
-					} else {
-						break;
-					}
-				}
-
+				return [node, (node as Text).data.length];
+			} else {
 				return nodeOffsetFromChild(node, true);
-			} else if (node.nodeName === "BR") {
-				return nodeOffsetFromChild(node);
-			} else {
-				return [node, 0];
 			}
+		} else if (index >= info.length!) {
+			index -= info.length!;
+			node = walker.nextSibling();
 		} else {
-			index -= info.length;
-			const nextSibling = walker.nextSibling();
-			if (nextSibling) {
-				node = nextSibling;
-			} else {
-				const successor = findSuccessorNode(walker);
-				if (successor) {
-					if (successor.nodeName === "BR") {
-						return nodeOffsetFromChild(successor);
-					}
+			if (
+				node.nodeType === Node.ELEMENT_NODE &&
+				(node as Element).hasAttribute("data-content")
+			) {
+				return nodeOffsetFromChild(node, true);
+			}
 
-					return [successor, 0];
-				} else {
-					break;
-				}
+			const firstChild = walker.firstChild();
+			if (firstChild === null) {
+				const offset =
+					node.nodeType === Node.TEXT_NODE ? index : index > 0 ? 1 : 0;
+				return [node, offset];
+			} else {
+				node = firstChild;
 			}
 		}
 	}
 
-	const lastNode = root.lastChild;
-	if (lastNode === null) {
-		return [root, 0];
+	const node = walker.currentNode;
+	return [node, getNodeLength(node)];
+}
+
+function getNodeLength(node: Node) {
+	if (node.nodeType === Node.TEXT_NODE) {
+		return (node as Text).data.length;
 	}
 
-	const lastOffset =
-		lastNode.nodeType === Node.TEXT_NODE
-			? (lastNode as Text).data.length
-			: lastNode.childNodes.length;
-	return [lastNode, lastOffset];
+	return node.childNodes.length;
 }
 
 function nodeOffsetFromChild(
@@ -980,20 +978,6 @@ function nodeOffsetFromChild(
 	}
 
 	return [parentNode, offset];
-}
-
-function findSuccessorNode(walker: TreeWalker): Node | null {
-	let node: Node | null = walker.currentNode;
-	while (node !== null) {
-		node = walker.nextSibling();
-		if (node === null) {
-			node = walker.parentNode();
-		} else {
-			return node;
-		}
-	}
-
-	return null;
 }
 
 function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
