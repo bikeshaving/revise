@@ -478,14 +478,12 @@ const BLOCKLIKE_ELEMENTS = new Set([
 ]);
 
 interface NodeInfo {
-	/** The start of the contents of this node relative to its parent. */
+	/** The start of this node’s contents relative to the start of the parent. */
 	offset: number;
-	/**
-	 * The string length of this node’s contents.
-	 * It can be undefined when a node’s children is invalidated by a DOM
-	 * mutation.
-	 */
+	// TODO: Use a separate property for invalidated nodes.
+	/** The length of this node’s contents. */
 	length: number | undefined;
+	// TODO: Turn these boolean properties into flags
 	/** Whether the current node is responsible for the newline before it. */
 	prependsNewline: boolean;
 	/** Whether the current node is responsible for the newline after it. */
@@ -516,25 +514,25 @@ function getContent(
 	// TODO: It might be faster to construct and return a patch rather than
 	// concatenating a giant string.
 	let content = "";
-	// A boolean which indicates whether content currently ends in a newline.
 	// Because the content variable is a heavily concatenated string and likely
 	// inferred by most engines as requiring a “rope-like” data structure for
 	// performance, reading from the end of the string to detect newlines can be
 	// a bottleneck. Therefore, we store that info in this boolean instead.
+	/** A boolean which indicates whether content currently ends in a newline. */
 	let hasNewline = false;
-	// The offset of the current node relative to its parent.
-	// Should be equal to the lengths of every sibling before the current node.
+	/** The start of the current node relative to its parent. */
 	let offset = 0;
 	// The current index into oldContent. We use this to copy unchanged text over
 	// and track deletions.
-	// If there are nodes which have cached offset and length information, we get
-	// their contents from oldContent string using oldIndex rather than reading
-	// it from the DOM.
+	// If there are nodes which have cached start and length information, we get
+	// their contents from oldContent string using oldIndex so we don’t have to
+	// read it from the DOM.
 	let oldIndex = 0;
-	// The current index into oldContent of the current node’s parent.
-	// We can get the expected offset of a node by finding the difference between
-	// oldIndex and relativeOldIndex (oldIndex - relativeOldIndex) and compare it
-	// to the cached info.offset as a way to detect deletions.
+	// The current index into oldContent of the current node’s parent. We can get
+	// the expected start of a node if none of the nodes before it were deleted
+	// by finding the difference between oldIndex and relativeOldIndex. We can
+	// compare this difference to the cached start information to detect
+	// deletions.
 	let relativeOldIndex = 0;
 	let info: NodeInfo = cache.get(root)!;
 	if (info === undefined) {
@@ -586,11 +584,11 @@ function getContent(
 			relativeOldIndex = oldIndex;
 			offset = 0;
 			node = firstChild;
-			// getNodeInfo()
+			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
 				info = {
-					offset: offset,
+					offset,
 					length: undefined,
 					prependsNewline: false,
 					appendsNewline: false,
@@ -661,11 +659,11 @@ function getContent(
 		node = walker.nextSibling();
 		if (node) {
 			descending = true;
-			// getNodeInfo()
+			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
 				info = {
-					offset: offset,
+					offset,
 					length: undefined,
 					prependsNewline: false,
 					appendsNewline: false,
@@ -714,6 +712,8 @@ function invalidate(
 	let invalidated = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
+		// We make sure all added and removed nodes are cleared from the cache just
+		// in case of any MutationObserver weirdness.
 		for (let j = 0; j < record.addedNodes.length; j++) {
 			clear(record.addedNodes[j], cache);
 		}
@@ -815,74 +815,54 @@ function indexAt(
 		return -1;
 	}
 
-	// If the node isn’t found in the cache, it’s likely a child of a node which
-	// sets a data-content property, so we work upwards until we find.
-	if (!cache.get(node)) {
-		// TODO: this can’t be right for text nodes, right?
-		let offset1 = offset > 0 ? 1 : 0;
-		while (node !== root && !cache.get(node)) {
-			offset =
-				Array.from(node!.parentNode!.childNodes).indexOf(node as ChildNode) +
-				offset1;
+	if (!cache.has(node)) {
+		// If the node is not found in the cache but is contained in the root,
+		// then it is probably the child of an element with a data-content
+		// attribute.
+		// TODO: Maybe a non-zero offset should put the index at the end of
+		// the data-content node.
+		offset = 0;
+		while (!cache.has(node)) {
 			node = node.parentNode!;
-			offset1 = offset > 0 ? node.childNodes.length : 0;
 		}
 	}
 
-	let index = offset;
-	if (node.nodeType === Node.ELEMENT_NODE) {
-		if (offset >= node.childNodes.length) {
-			if (offset > 0) {
-				const info = cache.get(node);
-				// because we’ve validated, info.length should be defined.
-				if (!info || info.length == null) {
-					throw new Error("Unvalidated node");
-				}
-
-				index = info.length;
-				if (info.appendsNewline) {
-					index -= NEWLINE.length;
-				}
-			}
-		} else {
-			const focused = node.childNodes[offset];
-			if (cache.get(focused)) {
-				node = focused;
-			}
-
+	let index: number;
+	if (node.nodeType === Node.TEXT_NODE) {
+		const info = cache.get(node)!;
+		index = offset + info.offset;
+		node = node.parentNode!;
+	} else {
+		if (offset <= 0) {
 			index = 0;
+		} else if (offset >= node.childNodes.length) {
+			const info = cache.get(node)!;
+			index = info.length!;
+			if (info.appendsNewline) {
+				index -= NEWLINE.length;
+			}
+		} else {
+			let child: Node | null = node.childNodes[offset];
+			while (child !== null && !cache.has(child)) {
+				child = child.previousSibling;
+			}
+
+			if (child === null) {
+				index = 0;
+			} else {
+				node = child;
+				const info = cache.get(node)!;
+				// If the offset references an element which prepends a newline
+				// ("hello<div>world</div>"), we have to start from -1 because the
+				// element’s info.offset will not account for the newline.
+				index = info.prependsNewline ? -1 : 0;
+			}
 		}
 	}
 
-	const walker = document.createTreeWalker(
-		root,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-
-	walker.currentNode = node;
-	while (node !== null && node !== root) {
-		const previousSibling = walker.previousSibling();
-		if (previousSibling === null) {
-			const parentNode = walker.parentNode();
-			if (parentNode) {
-				const info = cache.get(node);
-				if (!info || info.length == null) {
-					throw new Error("Unvalidated node");
-				}
-
-				index += info.offset;
-			}
-
-			node = parentNode;
-		} else {
-			node = previousSibling;
-			const info = cache.get(node);
-			if (!info || info.length == null) {
-				throw new Error("Unvalidated node");
-			}
-
-			index += info.length;
-		}
+	for (; node !== root; node = node.parentNode!) {
+		const info = cache.get(node)!;
+		index += info.offset;
 	}
 
 	return index;
@@ -897,8 +877,13 @@ function nodeOffsetAt(
 	cache: NodeInfoCache,
 	index: number,
 ): [Node | null, number] {
+	const rootInfo = cache.get(root)!;
 	if (index < 0) {
 		return [null, 0];
+	} else if (index === 0) {
+		return [root, 0];
+	} else if (index >= rootInfo.length!) {
+		return [root, root.childNodes.length];
 	}
 
 	// A lot of the logic here is to work around the fact that collapsing a
@@ -909,27 +894,26 @@ function nodeOffsetAt(
 	);
 
 	let node: Node | null = root;
-	let offset = index;
 	while (node !== null) {
 		const info = cache.get(node);
 		if (info == null) {
-			return nodeOffsetFromChild(node, offset > 0);
+			return nodeOffsetFromChild(node, index > 0);
 		} else if (info.length == null) {
 			throw new Error("Unvalidated node");
-		} else if (offset <= info.length) {
+		} else if (index <= info.length) {
 			if (node.nodeType === Node.TEXT_NODE) {
-				return [node, offset];
+				return [node, index];
 			}
 
 			if (info.prependsNewline) {
-				offset -= NEWLINE.length;
+				index -= NEWLINE.length;
 			}
 
 			// TODO: Simplify this
 			const firstChild = walker.firstChild();
 			if (firstChild) {
 				node = firstChild;
-			} else if (offset > 0) {
+			} else if (index > 0) {
 				if (node.nodeName === "BR") {
 					const successor = findSuccessorNode(walker);
 					if (successor) {
@@ -950,7 +934,7 @@ function nodeOffsetAt(
 				return [node, 0];
 			}
 		} else {
-			offset -= info.length;
+			index -= info.length;
 			const nextSibling = walker.nextSibling();
 			if (nextSibling) {
 				node = nextSibling;
