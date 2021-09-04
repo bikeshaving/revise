@@ -908,10 +908,8 @@ function findNodeOffset(
 			index -= NEWLINE.length;
 		}
 
-		if (index === 0) {
-			return [node, 0];
-		} else if (index < 0) {
-			// A newline has been prepended before this node
+		if (index < 0) {
+			// This branch should only run when an element prepends an newline
 			const previousSibling = walker.previousSibling();
 			if (!previousSibling) {
 				throw new Error("Invalid state");
