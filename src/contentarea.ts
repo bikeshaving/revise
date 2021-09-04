@@ -1082,7 +1082,7 @@ function setSelectionRange(
 		} else if (focusNode === null) {
 			selection.collapse(anchorNode, anchorOffset);
 		} else {
-			// TODO: This is not a method in IE
+			// TODO: This is not a method in IE. Do we care???
 			selection.setBaseAndExtent(
 				anchorNode,
 				anchorOffset,
