@@ -478,17 +478,24 @@ const BLOCKLIKE_ELEMENTS = new Set([
 ]);
 
 interface NodeInfo {
+	/** flags */
+	flags: number;
 	/** The start of this node’s contents relative to the start of the parent. */
 	offset: number;
 	// TODO: Use a separate property for invalidated nodes.
 	/** The length of this node’s contents. */
-	length: number | undefined;
-	// TODO: Turn these boolean properties into flags
-	/** Whether the current node is responsible for the newline before it. */
-	prependsNewline: boolean;
-	/** Whether the current node is responsible for the newline after it. */
-	appendsNewline: boolean;
+	length: number;
 }
+
+/**********************/
+/*** NodeInfo flags ***/
+/**********************/
+/** Whether the node or its children have been mutated */
+const IS_VALID = 1 << 0;
+/** Whether the node is responsible for the newline before it. */
+const PREPENDS_NEWLINE = 1 << 1;
+/** Whether the node is responsible for the newline after it. */
+const APPENDS_NEWLINE = 1 << 2;
 
 type NodeInfoCache = Map<Node, NodeInfo>;
 
@@ -536,12 +543,7 @@ function getContent(
 	let relativeOldIndex = 0;
 	let info: NodeInfo = cache.get(root)!;
 	if (info === undefined) {
-		info = {
-			offset,
-			length: undefined,
-			prependsNewline: false,
-			appendsNewline: false,
-		};
+		info = {flags: 0, offset, length: 0};
 		cache.set(root, info);
 	}
 
@@ -549,7 +551,7 @@ function getContent(
 	const stack: Array<{relativeOldIndex: number; info: NodeInfo}> = [];
 	for (let node: Node | null = root, descending = true; node !== null; ) {
 		// A loop to descend into the DOM tree.
-		while (descending && info.length === undefined) {
+		while (descending && !(info.flags & IS_VALID)) {
 			if (
 				node.nodeType === Node.TEXT_NODE ||
 				// We treat elements with data-content attributes as opaque.
@@ -570,9 +572,11 @@ function getContent(
 				hasNewline = true;
 				offset += NEWLINE.length;
 				info.offset += NEWLINE.length;
+				info.flags |= PREPENDS_NEWLINE;
+			} else {
+				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
-			info.prependsNewline = prependsNewline;
 			const firstChild = walker.firstChild();
 			if (firstChild) {
 				descending = true;
@@ -587,12 +591,7 @@ function getContent(
 			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
-				info = {
-					offset,
-					length: undefined,
-					prependsNewline: false,
-					appendsNewline: false,
-				};
+				info = {flags: 0, offset, length: 0};
 				cache.set(node, info);
 			} else {
 				if (info.offset > 0) {
@@ -604,7 +603,32 @@ function getContent(
 			}
 		}
 
-		if (typeof info.length === "undefined") {
+		if (info.flags & IS_VALID) {
+			// The node has been seen before.
+			// Reading from oldContent because length hasn’t been invalidated.
+			const length = info.length;
+			if (oldIndex + info.length > oldContent.length) {
+				throw new Error("String length mismatch");
+			}
+
+			const prependsNewline =
+				!!offset && !hasNewline && isBlocklikeElement(node);
+			if (prependsNewline) {
+				content += NEWLINE;
+				hasNewline = true;
+				offset += NEWLINE.length;
+				info.offset += NEWLINE.length;
+				info.flags |= PREPENDS_NEWLINE;
+			} else {
+				info.flags &= ~PREPENDS_NEWLINE;
+			}
+
+			const oldContent1 = oldContent.slice(oldIndex, oldIndex + length);
+			content += oldContent1;
+			offset += length;
+			oldIndex += length;
+			hasNewline = oldContent1.endsWith(NEWLINE);
+		} else {
 			// The node hasn’t been seen before.
 			let appendsNewline = false;
 			if (node.nodeType === Node.TEXT_NODE) {
@@ -629,30 +653,10 @@ function getContent(
 			}
 
 			info.length = offset - info.offset;
-			info.appendsNewline = appendsNewline;
-		} else {
-			// The node has been seen before.
-			// Reading from oldContent because length hasn’t been invalidated.
-			const length = info.length;
-			if (oldIndex + info.length > oldContent.length) {
-				throw new Error("String length mismatch");
-			}
-
-			const prependsNewline =
-				!!offset && !hasNewline && isBlocklikeElement(node);
-			if (prependsNewline) {
-				content += NEWLINE;
-				hasNewline = true;
-				offset += NEWLINE.length;
-				info.offset += NEWLINE.length;
-			}
-
-			info.prependsNewline = prependsNewline;
-			const oldContent1 = oldContent.slice(oldIndex, oldIndex + length);
-			content += oldContent1;
-			offset += length;
-			oldIndex += length;
-			hasNewline = oldContent1.endsWith(NEWLINE);
+			info.flags |= IS_VALID;
+			info.flags = appendsNewline
+				? info.flags | APPENDS_NEWLINE
+				: info.flags & ~APPENDS_NEWLINE;
 		}
 
 		// Finding the next node.
@@ -662,12 +666,7 @@ function getContent(
 			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
-				info = {
-					offset,
-					length: undefined,
-					prependsNewline: false,
-					appendsNewline: false,
-				};
+				info = {flags: 0, offset, length: 0};
 				cache.set(node, info);
 			} else {
 				const oldOffset = oldIndex - relativeOldIndex;
@@ -741,9 +740,9 @@ function invalidate(
 				break;
 			}
 
-			const nodeInfo = cache.get(node);
-			if (nodeInfo) {
-				nodeInfo.length = undefined;
+			const info = cache.get(node);
+			if (info) {
+				info.flags &= ~IS_VALID;
 			}
 
 			invalidated = true;
@@ -751,9 +750,9 @@ function invalidate(
 	}
 
 	if (invalidated) {
-		const nodeInfo = cache.get(root);
-		if (nodeInfo) {
-			nodeInfo.length = undefined;
+		const info = cache.get(root);
+		if (info) {
+			info.flags &= ~IS_VALID;
 		}
 	}
 
@@ -837,8 +836,8 @@ function indexAt(
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
 			const info = cache.get(node)!;
-			index = info.length!;
-			if (info.appendsNewline) {
+			index = info.length;
+			if (info.flags & APPENDS_NEWLINE) {
 				index -= NEWLINE.length;
 			}
 		} else {
@@ -855,7 +854,7 @@ function indexAt(
 				// If the offset references an element which prepends a newline
 				// ("hello<div>world</div>"), we have to start from -1 because the
 				// element’s info.offset will not account for the newline.
-				index = info.prependsNewline ? -1 : 0;
+				index = info.flags & PREPENDS_NEWLINE ? -1 : 0;
 			}
 		}
 	}
@@ -905,7 +904,7 @@ function findNodeOffset(
 		const info = cache.get(node);
 		if (info == null) {
 			return nodeOffsetFromChild(node, index > 0);
-		} else if (info.prependsNewline) {
+		} else if (info.flags & PREPENDS_NEWLINE) {
 			index -= NEWLINE.length;
 		}
 
@@ -920,7 +919,7 @@ function findNodeOffset(
 
 			return [previousSibling, getNodeLength(previousSibling)];
 		} else if (
-			index === info.length! &&
+			index === info.length &&
 			(node.nodeType === Node.TEXT_NODE ||
 				(node as Element).hasAttribute("data-content"))
 		) {
@@ -929,8 +928,8 @@ function findNodeOffset(
 			} else {
 				return nodeOffsetFromChild(node, true);
 			}
-		} else if (index >= info.length!) {
-			index -= info.length!;
+		} else if (index >= info.length) {
+			index -= info.length;
 			node = walker.nextSibling();
 		} else {
 			if (
