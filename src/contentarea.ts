@@ -297,16 +297,16 @@ export class ContentAreaElement extends HTMLElement {
 		);
 	}
 
-	nodeOffsetAt(index: number): [Node | null, number] {
-		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		return nodeOffsetAt(this, cache, index);
-	}
-
 	indexAt(node: Node | null, offset: number): number {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		return indexAt(this, cache, node, offset);
+	}
+
+	nodeOffsetAt(index: number): [Node | null, number] {
+		validate(this, this[$observer].takeRecords());
+		const cache = this[$cache];
+		return nodeOffsetAt(this, cache, index);
 	}
 
 	/***********************/
