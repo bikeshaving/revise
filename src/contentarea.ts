@@ -934,7 +934,7 @@ function findNodeOffset(
 				node.nodeType === Node.ELEMENT_NODE &&
 				(node as Element).hasAttribute("data-content")
 			) {
-				return nodeOffsetFromChild(node, true);
+				return nodeOffsetFromChild(node, index > 0);
 			}
 
 			const firstChild = walker.firstChild();
