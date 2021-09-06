@@ -14,6 +14,28 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
+interface NodeInfo {
+	/** flags */
+	flags: number;
+	/** The start of this node’s contents relative to the start of the parent. */
+	offset: number;
+	// TODO: Use a separate property for invalidated nodes.
+	/** The length of this node’s contents. */
+	length: number;
+}
+
+/**********************/
+/*** NodeInfo flags ***/
+/**********************/
+/** Whether the node or its children have been mutated */
+const IS_VALID = 1 << 0;
+/** Whether the node is responsible for the newline before it. */
+const PREPENDS_NEWLINE = 1 << 1;
+/** Whether the node is responsible for the newline after it. */
+const APPENDS_NEWLINE = 1 << 2;
+
+type NodeInfoCache = Map<Node, NodeInfo>;
+
 /********************************************/
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
@@ -38,13 +60,17 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$cache]: NodeInfoCache;
 	[$observer]: MutationObserver;
 	[$slot]: HTMLSlotElement;
-	[$selectionRange]: SelectionRange | undefined;
+	[$selectionRange]: SelectionRange;
 	[$onselectionchange]: (ev: Event) => unknown;
 	constructor() {
 		super();
 		this[$value] = "";
 		this[$cache] = new Map();
-		this[$selectionRange] = undefined;
+		this[$selectionRange] = {
+			selectionStart: 0,
+			selectionEnd: 0,
+			selectionDirection: "none",
+		};
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
@@ -59,7 +85,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		);
 
 		this[$onselectionchange] = () => {
-			this[$selectionRange] = undefined;
+			this[$selectionRange] = getSelectionRange(this, this[$cache]);
 		};
 	}
 
@@ -156,24 +182,14 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionStart(): number {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		let selection = this[$selectionRange];
-		if (!selection) {
-			selection = this[$selectionRange] = getSelectionRange(this, cache);
-		}
-
-		return selection.selectionStart;
+		return this[$selectionRange].selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
-		let selection = this[$selectionRange];
-		if (!selection) {
-			selection = this[$selectionRange] = getSelectionRange(this, cache);
-		}
-
-		const {selectionEnd, selectionDirection} = selection;
+		const selectionRange = this[$selectionRange];
+		const {selectionEnd, selectionDirection} = selectionRange;
 		const value = this[$value];
 		setSelectionRange(
 			this,
@@ -187,24 +203,14 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionEnd(): number {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		let selection = this[$selectionRange];
-		if (!selection) {
-			selection = this[$selectionRange] = getSelectionRange(this, cache);
-		}
-
-		return selection.selectionEnd;
+		return this[$selectionRange].selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
-		let selection = this[$selectionRange];
-		if (!selection) {
-			selection = this[$selectionRange] = getSelectionRange(this, cache);
-		}
-
-		const {selectionStart, selectionDirection} = selection;
+		const selectionRange = this[$selectionRange];
+		const {selectionStart, selectionDirection} = selectionRange;
 		const value = this[$value];
 		setSelectionRange(
 			this,
@@ -218,24 +224,14 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionDirection(): SelectionDirection {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		let selection = this[$selectionRange];
-		if (!selection) {
-			selection = this[$selectionRange] = getSelectionRange(this, cache);
-		}
-
-		return selection.selectionDirection;
+		return this[$selectionRange].selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
-		let selection = this[$selectionRange];
-		if (!selection) {
-			selection = this[$selectionRange] = getSelectionRange(this, cache);
-		}
-
-		const {selectionStart, selectionEnd} = selection;
+		const selectionRange = this[$selectionRange];
+		const {selectionStart, selectionEnd} = selectionRange;
 		const value = this[$value];
 		setSelectionRange(
 			this,
@@ -275,24 +271,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
 		return nodeOffsetAt(this, cache, index);
-	}
-}
-
-function validate(
-	area: ContentAreaElement,
-	records: Array<MutationRecord>,
-): void {
-	const cache = area[$cache];
-	if (invalidate(area, cache, records)) {
-		const oldValue = area[$value];
-		const value = (area[$value] = getContent(area, cache, oldValue));
-		const oldSelection = area[$selectionRange];
-		area[$selectionRange] = undefined;
-		const hint = oldSelection ? oldSelection.selectionStart : 0;
-		// TODO: This diff call is expensive. If we create a patch in getContent
-		// instead of a new string, we might be able to save a lot in CPU time.
-		const patch = Patch.diff(oldValue, value, hint);
-		area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
 	}
 }
 
@@ -339,27 +317,29 @@ const BLOCKLIKE_ELEMENTS = new Set([
 	"UL",
 ]);
 
-interface NodeInfo {
-	/** flags */
-	flags: number;
-	/** The start of this node’s contents relative to the start of the parent. */
-	offset: number;
-	// TODO: Use a separate property for invalidated nodes.
-	/** The length of this node’s contents. */
-	length: number;
+function validate(
+	root: ContentAreaElement,
+	records: Array<MutationRecord>,
+): boolean {
+	const cache = root[$cache];
+	if (invalidate(root, cache, records)) {
+		const oldValue = root[$value];
+		const oldSelectionRange = root[$selectionRange];
+		const value = (root[$value] = getContent(root, cache, oldValue));
+		const selectionRange = (root[$selectionRange] = getSelectionRange(root, cache));
+		const hint = Math.min(
+			oldSelectionRange.selectionStart,
+			selectionRange.selectionStart,
+		);
+		// TODO: This call is expensive. If we have getContent return a patch
+		// instead of a string, we might be able to save a lot in CPU time.
+		const patch = Patch.diff(oldValue, value, hint);
+		root.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
+		return true;
+	}
+
+	return false;
 }
-
-/**********************/
-/*** NodeInfo flags ***/
-/**********************/
-/** Whether the node or its children have been mutated */
-const IS_VALID = 1 << 0;
-/** Whether the node is responsible for the newline before it. */
-const PREPENDS_NEWLINE = 1 << 1;
-/** Whether the node is responsible for the newline after it. */
-const APPENDS_NEWLINE = 1 << 2;
-
-type NodeInfoCache = Map<Node, NodeInfo>;
 
 // This is the single most complicated function in the library!!!
 /**
