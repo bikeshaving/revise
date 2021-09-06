@@ -3,6 +3,7 @@ import {Patch} from "./patch";
 
 export interface ContentEventDetail {
 	patch: Patch;
+	// TODO: add information about changed ranges
 }
 
 export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
@@ -14,19 +15,6 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
-interface NodeInfo {
-	/** flags */
-	flags: number;
-	/** The start of this node’s contents relative to the start of the parent. */
-	offset: number;
-	// TODO: Use a separate property for invalidated nodes.
-	/** The length of this node’s contents. */
-	length: number;
-}
-
-/**********************/
-/*** NodeInfo flags ***/
-/**********************/
 /** Whether the node or its children have been mutated */
 const IS_VALID = 1 << 0;
 /** Whether the node is responsible for the newline before it. */
@@ -34,12 +22,20 @@ const PREPENDS_NEWLINE = 1 << 1;
 /** Whether the node is responsible for the newline after it. */
 const APPENDS_NEWLINE = 1 << 2;
 
+interface NodeInfo {
+	/** A bitmask (see flags above) */
+	flags: number;
+	/** The start of this node’s contents relative to the start of the parent. */
+	offset: number;
+	/** The length of this node’s contents. */
+	length: number;
+}
+
 type NodeInfoCache = Map<Node, NodeInfo>;
 
 /********************************************/
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
-// TODO: Maybe these properties can be grouped on a hidden class?
 const $slot = Symbol.for("revise$slot");
 const $cache = Symbol.for("revise$cache");
 const $observer = Symbol.for("revise$observer");
@@ -62,6 +58,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$slot]: HTMLSlotElement;
 	[$selectionRange]: SelectionRange;
 	[$onselectionchange]: (ev: Event) => unknown;
+
 	constructor() {
 		super();
 		this[$value] = "";
@@ -97,8 +94,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	connectedCallback() {
-		// TODO: Figure out a way to call validate here instead
-		this[$value] = getContent(this, this[$cache], this[$value]);
+		console.log(validate(this, []));
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
@@ -146,38 +142,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	get value(): string {
 		validate(this, this[$observer].takeRecords());
 		return this[$value];
-	}
-
-	// TODO: Delete this method. It can be implemented in userspace.
-	repair(callback: Function, expectedValue?: string | undefined): void {
-		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		const value = this[$value];
-		if (typeof expectedValue === "undefined") {
-			expectedValue = value;
-		}
-
-		const {
-			selectionStart,
-			selectionEnd,
-			selectionDirection,
-		} = getSelectionRange(this, this[$cache]);
-		callback();
-		validate(this, this[$observer].takeRecords());
-		if (this[$value] !== expectedValue) {
-			throw new Error("Expected value did not match current value");
-		}
-
-		if (value === expectedValue) {
-			setSelectionRange(
-				this,
-				cache,
-				value,
-				selectionStart,
-				selectionEnd,
-				selectionDirection,
-			);
-		}
 	}
 
 	get selectionStart(): number {
@@ -274,7 +238,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 }
 
-// TODO: Should we allow custom newlines?
+// TODO: custom newlines?
 const NEWLINE = "\n";
 
 // TODO: Allow the list of block-like elements to be overridden with an
@@ -419,17 +383,16 @@ function getContent(
 				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
-			const firstChild = walker.firstChild();
-			if (firstChild) {
+			if (node = walker.firstChild()) {
 				descending = true;
 			} else {
+				node = walker.currentNode;
 				break;
 			}
 
 			stack.push({relativeOldIndex, info});
 			relativeOldIndex = oldIndex;
 			offset = 0;
-			node = firstChild;
 			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
@@ -501,9 +464,7 @@ function getContent(
 				: info.flags & ~APPENDS_NEWLINE;
 		}
 
-		// Finding the next node.
-		node = walker.nextSibling();
-		if (node) {
+		if (node = walker.nextSibling()) {
 			descending = true;
 			// getNodeInfo
 			info = cache.get(node)!;
@@ -596,6 +557,8 @@ function invalidate(
 		if (info) {
 			info.flags &= ~IS_VALID;
 		}
+	} else if (!cache.get(root)) {
+		return true;
 	}
 
 	return invalidated;
@@ -840,7 +803,6 @@ function getSelectionRange(
 	};
 }
 
-// TODO: Make the internals work based on cursors.
 function setSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
