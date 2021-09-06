@@ -117,8 +117,11 @@ function printLines(
 		const length = line.reduce((l, t) => l + t.length, 0);
 		cursor += length + 1;
 		return (
-			<div style="font-family: monospace;" crank-key={key} data-key={key}>
-				{line.length ? <code>{printTokens(line)}</code> : <br />}
+			<div style="font-family: monospace" crank-key={key}>
+				<code>
+					<span>{printTokens(line)}</span>
+				</code>
+				<br />
 			</div>
 		);
 	});
@@ -151,11 +154,11 @@ function* Editable(this: Context) {
 	let content = '\n';
 	let el: ContentAreaElement;
 	const keyer = new Keyer(content.length);
-	const debouncedRefresh = debounce(() => el.repair(() => this.refresh()));
+	const debouncedRepair = debounce(() => el.repair(() => this.refresh()));
 	this.addEventListener('contentchange', (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.push(ev.detail.patch);
-		debouncedRefresh();
+		debouncedRepair();
 	});
 
 	this.addEventListener('contentundo', (ev) => {
@@ -170,6 +173,16 @@ function* Editable(this: Context) {
 		this.refresh();
 	});
 
+	let composing = false;
+	this.addEventListener('compositionstart', () => {
+		composing = true;
+	});
+
+	this.addEventListener('compositionend', () => {
+		composing = false;
+		debouncedRepair();
+	});
+
 	for ({} of this) {
 		yield (
 			<content-area
@@ -179,7 +192,8 @@ function* Editable(this: Context) {
 				<pre
 					class="editable language-typescript"
 					contenteditable="true"
-					spellcheck={false}
+					crank-static={composing}
+					spellcheck="false"
 				>
 					{parse(content, keyer)}
 				</pre>

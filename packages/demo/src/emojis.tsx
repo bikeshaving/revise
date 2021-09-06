@@ -45,27 +45,23 @@ function* Editable(this: Context) {
 
 		content = content1;
 		keyer.push(ev.detail.patch);
-		// For some reason, pasting rendered emojis causes some odd effects on
-		// Safari when done synchronously.
-		requestAnimationFrame(() => el.repair(() => this.refresh()));
+		el.repair(() => this.refresh());
 	});
 
-	this.addEventListener('contentundo', (ev) => {
-		content = (ev.target as ContentAreaElement).value;
-		keyer.push(ev.detail.patch);
-		this.refresh();
+	let composing = false;
+	this.addEventListener('compositionstart', () => {
+		composing = true;
 	});
 
-	this.addEventListener('contentredo', (ev) => {
-		content = (ev.target as ContentAreaElement).value;
-		keyer.push(ev.detail.patch);
-		this.refresh();
+	this.addEventListener('compositionend', () => {
+		composing = false;
+		el.repair(() => this.refresh());
 	});
 
 	for ({} of this) {
 		yield (
-			<content-area undomode="keydown" crank-ref={(el1: Node) => (el = el1)}>
-				<div class="editable" contenteditable="true">
+			<content-area crank-ref={(el1: Node) => (el = el1)}>
+				<div crank-static={composing} class="editable" contenteditable="true">
 					{parse(content, keyer)}
 				</div>
 			</content-area>

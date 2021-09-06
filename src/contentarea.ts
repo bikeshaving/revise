@@ -1,5 +1,4 @@
 /// <reference lib="dom" />
-import type {Cursor} from "./patch";
 import {Patch} from "./patch";
 
 export interface ContentEventDetail {
@@ -15,6 +14,17 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
+/********************************************/
+/*** ContentAreaElement symbol properties ***/
+/********************************************/
+// TODO: Maybe these properties can be grouped on a hidden class?
+const $slot = Symbol.for("revise$slot");
+const $cache = Symbol.for("revise$cache");
+const $observer = Symbol.for("revise$observer");
+const $value = Symbol.for("revise$value");
+const $selectionRange = Symbol.for("revise$selectionRange");
+const $onselectionchange = Symbol.for("revise$onselectionchange");
+
 const css = `
 :host {
 	display: contents;
@@ -23,32 +33,18 @@ const css = `
 	overflow-wrap: break-word;
 }`;
 
-/********************************************/
-/*** ContentAreaElement symbol properties ***/
-/********************************************/
-// TODO: Maybe these properties can be grouped on a hidden class?
-const $cache = Symbol.for("revise$cache");
-const $value = Symbol.for("revise$value");
-const $cursor = Symbol.for("revise$cursor");
-const $slot = Symbol.for("revise$slot");
-const $observer = Symbol.for("revise$observer");
-const $history = Symbol.for("revise$history");
-const $onselectionchange = Symbol.for("revise$onselectionchange");
-export class ContentAreaElement extends HTMLElement {
-	[$cache]: NodeInfoCache;
+export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$value]: string;
-	[$cursor]: Cursor;
-	[$history]: PatchHistory;
-	[$slot]: HTMLSlotElement;
+	[$cache]: NodeInfoCache;
 	[$observer]: MutationObserver;
+	[$slot]: HTMLSlotElement;
+	[$selectionRange]: SelectionRange | undefined;
 	[$onselectionchange]: (ev: Event) => unknown;
-
 	constructor() {
 		super();
-		this[$cache] = new Map();
 		this[$value] = "";
-		this[$cursor] = 0;
-		const history = (this[$history] = new PatchHistory());
+		this[$cache] = new Map();
+		this[$selectionRange] = undefined;
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
@@ -61,47 +57,10 @@ export class ContentAreaElement extends HTMLElement {
 		this[$observer] = new MutationObserver((records) =>
 			validate(this, records),
 		);
-		// Because this listener is added to the document, we have to add and
-		// remove the listener in the connected callback.
+
 		this[$onselectionchange] = () => {
-			const records = this[$observer].takeRecords();
-			if (records.length) {
-				validate(this, records);
-			} else {
-				const cursor = getCursor(this, this[$cache]);
-				if (cursor !== undefined && !isCursorEqual(cursor, this[$cursor])) {
-					// TODO: Dispatch an event here...
-					this[$cursor] = cursor;
-					history.checkpoint();
-				}
-			}
+			this[$selectionRange] = undefined;
 		};
-
-		this.addEventListener("focusin", () => {
-			const {
-				selectionStart,
-				selectionEnd,
-				selectionDirection,
-			} = selectionInfoFromCursor(this[$cursor]);
-			this.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
-		});
-
-		this.addEventListener("input", () => {
-			// TODO: Should we consider passing input event information to this function?
-			validate(this, this[$observer].takeRecords());
-		});
-
-		this.addEventListener("keydown", (ev) => {
-			if (this.undoMode === "keydown") {
-				if (isUndoKeyboardEvent(ev)) {
-					ev.preventDefault();
-					this.undo();
-				} else if (isRedoKeyboardEvent(ev)) {
-					ev.preventDefault();
-					this.redo();
-				}
-			}
-		});
 	}
 
 	/******************************/
@@ -114,11 +73,6 @@ export class ContentAreaElement extends HTMLElement {
 	connectedCallback() {
 		// TODO: Figure out a way to call validate here instead
 		this[$value] = getContent(this, this[$cache], this[$value]);
-		const cursor = getCursor(this, this[$cache]);
-		if (cursor !== undefined) {
-			this[$cursor] = cursor;
-		}
-
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
@@ -137,7 +91,7 @@ export class ContentAreaElement extends HTMLElement {
 	disconnectedCallback() {
 		this[$cache].clear();
 		this[$observer].disconnect();
-		// JSDOM-based environments like jest will make the global document null
+		// JSDOM-based environments like Jest will make the global document null
 		// before calling the disconnectedCallback for some reason.
 		if (document) {
 			document.removeEventListener("selectionchange", this[$onselectionchange]);
@@ -168,6 +122,7 @@ export class ContentAreaElement extends HTMLElement {
 		return this[$value];
 	}
 
+	// TODO: Delete this method. It can be implemented in userspace.
 	repair(callback: Function, expectedValue?: string | undefined): void {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
@@ -180,9 +135,9 @@ export class ContentAreaElement extends HTMLElement {
 			selectionStart,
 			selectionEnd,
 			selectionDirection,
-		} = selectionInfoFromCursor(this[$cursor]);
+		} = getSelectionRange(this, this[$cache]);
 		callback();
-		validate(this, this[$observer].takeRecords(), {skipSelection: true});
+		validate(this, this[$observer].takeRecords());
 		if (this[$value] !== expectedValue) {
 			throw new Error("Expected value did not match current value");
 		}
@@ -199,32 +154,27 @@ export class ContentAreaElement extends HTMLElement {
 		}
 	}
 
-	/*************************/
-	/*** Selection Methods ***/
-	/*************************/
-	get cursor(): Cursor {
-		validate(this, this[$observer].takeRecords());
-		const cursor = this[$cursor];
-		if (typeof cursor === "number") {
-			return cursor;
-		}
-
-		// defensive copy array cursors
-		return cursor.slice() as [number, number];
-	}
-
 	get selectionStart(): number {
 		validate(this, this[$observer].takeRecords());
-		return selectionInfoFromCursor(this[$cursor]).selectionStart;
+		const cache = this[$cache];
+		let selection = this[$selectionRange];
+		if (!selection) {
+			selection = this[$selectionRange] = getSelectionRange(this, cache);
+		}
+
+		return selection.selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
 		validate(this, this[$observer].takeRecords());
-		const value = this[$value];
 		const cache = this[$cache];
-		const {selectionEnd, selectionDirection} = selectionInfoFromCursor(
-			this[$cursor],
-		);
+		let selection = this[$selectionRange];
+		if (!selection) {
+			selection = this[$selectionRange] = getSelectionRange(this, cache);
+		}
+
+		const {selectionEnd, selectionDirection} = selection;
+		const value = this[$value];
 		setSelectionRange(
 			this,
 			cache,
@@ -237,16 +187,25 @@ export class ContentAreaElement extends HTMLElement {
 
 	get selectionEnd(): number {
 		validate(this, this[$observer].takeRecords());
-		return selectionInfoFromCursor(this[$cursor]).selectionEnd;
+		const cache = this[$cache];
+		let selection = this[$selectionRange];
+		if (!selection) {
+			selection = this[$selectionRange] = getSelectionRange(this, cache);
+		}
+
+		return selection.selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
 		validate(this, this[$observer].takeRecords());
-		const value = this[$value];
 		const cache = this[$cache];
-		const {selectionStart, selectionDirection} = selectionInfoFromCursor(
-			this[$cursor],
-		);
+		let selection = this[$selectionRange];
+		if (!selection) {
+			selection = this[$selectionRange] = getSelectionRange(this, cache);
+		}
+
+		const {selectionStart, selectionDirection} = selection;
+		const value = this[$value];
 		setSelectionRange(
 			this,
 			cache,
@@ -259,16 +218,25 @@ export class ContentAreaElement extends HTMLElement {
 
 	get selectionDirection(): SelectionDirection {
 		validate(this, this[$observer].takeRecords());
-		return selectionInfoFromCursor(this[$cursor]).selectionDirection;
+		const cache = this[$cache];
+		let selection = this[$selectionRange];
+		if (!selection) {
+			selection = this[$selectionRange] = getSelectionRange(this, cache);
+		}
+
+		return selection.selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
 		validate(this, this[$observer].takeRecords());
 		const cache = this[$cache];
+		let selection = this[$selectionRange];
+		if (!selection) {
+			selection = this[$selectionRange] = getSelectionRange(this, cache);
+		}
+
+		const {selectionStart, selectionEnd} = selection;
 		const value = this[$value];
-		const {selectionStart, selectionEnd} = selectionInfoFromCursor(
-			this[$cursor],
-		);
 		setSelectionRange(
 			this,
 			cache,
@@ -308,129 +276,23 @@ export class ContentAreaElement extends HTMLElement {
 		const cache = this[$cache];
 		return nodeOffsetAt(this, cache, index);
 	}
-
-	/***********************/
-	/*** History Methods ***/
-	/***********************/
-	get undoMode(): UndoMode {
-		let attr = this.getAttribute("undomode");
-		if (!attr) {
-			return "none";
-		}
-
-		attr = attr.toLowerCase();
-		if (attr === "keydown") {
-			return attr;
-		}
-
-		return "none";
-	}
-
-	checkpoint(): void {
-		this[$history].checkpoint();
-	}
-
-	undo(): void {
-		validate(this, this[$observer].takeRecords());
-		const value = this[$value];
-		const patch = this[$history].undo();
-		if (patch) {
-			const historyValue = patch.apply(value);
-			this[$value] = historyValue;
-			this.dispatchEvent(new ContentEvent("contentundo", {detail: {patch}}));
-			this[$value] = value;
-			validate(this, this[$observer].takeRecords(), {skipHistory: true});
-			if (this[$value] === historyValue) {
-				const cursor = cursorFromPatch(patch);
-				const {
-					selectionStart,
-					selectionEnd,
-					selectionDirection,
-				} = selectionInfoFromCursor(cursor);
-				setSelectionRange(
-					this,
-					this[$cache],
-					historyValue,
-					selectionStart,
-					selectionEnd,
-					selectionDirection,
-				);
-			} else {
-				throw new Error("undo was not correctly rendered");
-			}
-		}
-	}
-
-	redo(): void {
-		validate(this, this[$observer].takeRecords());
-		const value = this[$value];
-		const patch = this[$history].redo();
-		if (patch) {
-			const historyValue = patch.apply(value);
-			this[$value] = historyValue;
-			this.dispatchEvent(new ContentEvent("contentredo", {detail: {patch}}));
-			this[$value] = value;
-			validate(this, this[$observer].takeRecords(), {skipHistory: true});
-			if (this[$value] === historyValue) {
-				const cursor = cursorFromPatch(patch);
-				const {
-					selectionStart,
-					selectionEnd,
-					selectionDirection,
-				} = selectionInfoFromCursor(cursor);
-				setSelectionRange(
-					this,
-					this[$cache],
-					historyValue,
-					selectionStart,
-					selectionEnd,
-					selectionDirection,
-				);
-			} else {
-				throw new Error("redo was not correctly rendered");
-			}
-		}
-	}
-}
-
-// TODO: Smelly
-interface ValidateOptions {
-	skipSelection?: boolean;
-	skipHistory?: boolean;
 }
 
 function validate(
 	area: ContentAreaElement,
 	records: Array<MutationRecord>,
-	{skipSelection, skipHistory}: ValidateOptions = {},
 ): void {
 	const cache = area[$cache];
 	if (invalidate(area, cache, records)) {
-		const history = area[$history];
 		const oldValue = area[$value];
-		const oldCursor = area[$cursor];
 		const value = (area[$value] = getContent(area, cache, oldValue));
-		let cursor = oldCursor;
-		// TODO: move this code out of here
-		// There appears to be a race condition in Safari where
-		// document.getSelection() returns erroneous information when repair is
-		// called from within a requestAnimationFrame() callback, but the cursor is
-		// usually correct, so we just skip finding the new cursor information.
-		if (!skipSelection) {
-			const cursor1 = getCursor(area, cache);
-			if (cursor1 !== undefined) {
-				area[$cursor] = cursor = cursor1;
-			}
-		}
-
-		if (!skipHistory) {
-			const hint = Math.min.apply(null, [oldCursor, cursor].flat());
-			// TODO: This diff call is expensive. If we create a patch in getContent
-			// instead of a new string, we might be able to save a lot in CPU time.
-			const patch = Patch.diff(oldValue, value, hint);
-			history.push(patch);
-			area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
-		}
+		const oldSelection = area[$selectionRange];
+		area[$selectionRange] = undefined;
+		const hint = oldSelection ? oldSelection.selectionStart : 0;
+		// TODO: This diff call is expensive. If we create a patch in getContent
+		// instead of a new string, we might be able to save a lot in CPU time.
+		const patch = Patch.diff(oldValue, value, hint);
+		area.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
 	}
 }
 
@@ -781,23 +643,16 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 /***********************/
 /*** Selection Logic ***/
 /***********************/
-
 export type SelectionDirection = "forward" | "backward" | "none";
 
 /**
- * Properties which mirror the APIs provided by HTMLInputElements.
+ * Properties which mirror the API provided by HTMLInputElement and
+ * HTMLTextAreaElement.
  */
-export interface SelectionInfo {
+export interface SelectionRange {
 	selectionStart: number;
 	selectionEnd: number;
 	selectionDirection: SelectionDirection;
-}
-
-// TODO: Move this somewhere?
-function isCursorEqual(cursor1: Cursor, cursor2: Cursor): boolean {
-	cursor1 = typeof cursor1 === "number" ? [cursor1, cursor1] : cursor1;
-	cursor2 = typeof cursor2 === "number" ? [cursor2, cursor2] : cursor2;
-	return cursor1[0] === cursor2[0] && cursor1[1] === cursor2[1];
 }
 
 /**
@@ -977,58 +832,32 @@ function nodeOffsetFromChild(
 	return [parentNode, offset];
 }
 
-function getCursor(root: Element, cache: NodeInfoCache): Cursor | undefined {
+function getSelectionRange(
+	root: Element,
+	cache: NodeInfoCache,
+): SelectionRange {
 	const selection = document.getSelection();
 	if (selection == null) {
-		return undefined;
+		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
 	}
 
-	const focus = indexAt(
-		root,
-		cache,
-		selection.focusNode,
-		selection.focusOffset,
-	);
-	let anchor: number;
-	if (selection.isCollapsed) {
-		anchor = focus;
-	} else {
-		anchor = indexAt(root, cache, selection.anchorNode, selection.anchorOffset);
-	}
-
-	// TODO: simplify
-	if (focus === -1) {
-		if (anchor !== -1) {
-			return anchor;
-		}
-
-		return;
-	} else if (anchor === -1) {
-		if (focus !== -1) {
-			return focus;
-		}
-
-		return;
-	} else if (focus === anchor) {
-		return focus;
-	}
-
-	return [anchor, focus];
-}
-
-function selectionInfoFromCursor(cursor: Cursor): SelectionInfo {
-	let selectionStart: number;
-	let selectionEnd: number;
-	let selectionDirection: SelectionDirection = "none";
-	if (Array.isArray(cursor)) {
-		selectionStart = Math.max(0, Math.min.apply(null, cursor));
-		selectionEnd = Math.max(0, Math.max.apply(null, cursor));
-		selectionDirection = cursor[0] <= cursor[1] ? "forward" : "backward";
-	} else {
-		selectionStart = selectionEnd = Math.max(0, cursor);
-	}
-
-	return {selectionStart, selectionEnd, selectionDirection};
+	const {
+		focusNode,
+		focusOffset,
+		anchorNode,
+		anchorOffset,
+		isCollapsed,
+	} = selection;
+	const focus = indexAt(root, cache, focusNode, focusOffset);
+	const anchor = isCollapsed
+		? focus
+		: indexAt(root, cache, anchorNode, anchorOffset);
+	return {
+		selectionStart: Math.min(focus, anchor),
+		selectionEnd: Math.max(focus, anchor),
+		selectionDirection:
+			focus === anchor ? "none" : focus < anchor ? "backward" : "forward",
+	};
 }
 
 // TODO: Make the internals work based on cursors.
@@ -1046,13 +875,13 @@ function setSelectionRange(
 	}
 
 	// We bound selection range to the length of value minus the trailing newline
-	// because attempting to select after the first newline when there is only
-	// one can cause the editable root to lose focus.
+	// because attempting to the final newline can cause the editable element to
+	// lose focus.
 	const length = value.replace(/(\r|\n|\r\n)$/, "").length;
 	selectionStart = selectionStart || 0;
 	selectionEnd = selectionEnd || 0;
-	selectionStart = Math.max(0, Math.min(selectionStart, length));
-	selectionEnd = Math.max(0, Math.min(selectionEnd, length));
+	selectionStart = Math.max(0, Math.min(length, selectionStart));
+	selectionEnd = Math.max(0, Math.min(length, selectionEnd));
 	if (selectionEnd < selectionStart) {
 		selectionStart = selectionEnd;
 	}
@@ -1087,162 +916,6 @@ function setSelectionRange(
 				focusNode,
 				focusOffset,
 			);
-		}
-	}
-}
-
-// TODO: Should this go in a separate module?
-/*********************/
-/*** History logic ***/
-/*********************/
-// TODO: add native undo
-export type UndoMode = "none" | "keydown";
-
-function cursorFromPatch(patch: Patch): Cursor {
-	const operations = patch.operations();
-	let index = 0;
-	let start: number | undefined;
-	let end: number | undefined;
-	for (const op of operations) {
-		switch (op.type) {
-			case "delete": {
-				if (start === undefined) {
-					start = index;
-				}
-
-				break;
-			}
-
-			case "insert": {
-				if (start === undefined) {
-					start = index;
-				}
-
-				index += op.value.length;
-				end = index;
-				break;
-			}
-
-			case "retain": {
-				index += op.end - op.start;
-				break;
-			}
-		}
-	}
-
-	if (start !== undefined && end !== undefined) {
-		return [start, end];
-	} else if (start !== undefined) {
-		return start;
-	}
-
-	return 0;
-}
-
-function isUndoKeyboardEvent(ev: KeyboardEvent): boolean {
-	return (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && ev.key === "z";
-}
-
-function isRedoKeyboardEvent(ev: KeyboardEvent): boolean {
-	return (
-		(ev.metaKey || ev.ctrlKey) &&
-		((ev.shiftKey && ev.key === "z") ||
-			(!ev.shiftKey && ev.key === "y" && !isMacPlatform()))
-	);
-}
-
-// TODO: Figure out how to avoid this.
-function isMacPlatform(): boolean {
-	return window.navigator && /Mac/.test(window.navigator.platform);
-}
-
-// TODO: Should this be a Patch method?
-function isNoop(patch: Patch): boolean {
-	// TODO: Think about if the second part of this condition is actually necessary
-	return patch.parts.length === 1 && typeof patch.parts[0] === "number";
-}
-
-// TODO: Should this be a Patch method?
-function isComplex(patch: Patch): boolean {
-	const operations = patch.operations();
-	let count = 0;
-	for (const op of operations) {
-		if (op.type !== "retain") {
-			count++;
-			if (count > 1) {
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-// TODO: Inline this stuff into the class?
-// The thing I worry about is that if we expose this as its own thing, people
-// would probably want this class to be evented, but custom EventTarget
-// subclasses still don’t work in a lot of environments.
-class PatchHistory {
-	currentPatch: Patch | undefined;
-	undoStack: Array<Patch>;
-	redoStack: Array<Patch>;
-
-	constructor() {
-		this.currentPatch = undefined;
-		this.undoStack = [];
-		this.redoStack = [];
-	}
-
-	checkpoint(): void {
-		if (this.currentPatch) {
-			this.undoStack.push(this.currentPatch);
-			this.currentPatch = undefined;
-		}
-	}
-
-	push(patch: Patch): void {
-		if (isNoop(patch)) {
-			return;
-		} else if (this.redoStack.length) {
-			this.redoStack.length = 0;
-		}
-
-		if (this.currentPatch) {
-			const oldPatch = this.currentPatch;
-			if (!isComplex(oldPatch) && !isComplex(patch)) {
-				this.currentPatch = oldPatch.compose(patch);
-				return;
-			} else {
-				this.checkpoint();
-			}
-		}
-
-		this.currentPatch = patch;
-	}
-
-	canUndo(): boolean {
-		return !!(this.currentPatch || this.undoStack.length);
-	}
-
-	undo(): Patch | undefined {
-		this.checkpoint();
-		const patch = this.undoStack.pop();
-		if (patch) {
-			this.redoStack.push(patch);
-			return patch.invert();
-		}
-	}
-
-	canRedo(): boolean {
-		return !!this.redoStack.length;
-	}
-
-	redo(): Patch | undefined {
-		this.checkpoint();
-		const patch = this.redoStack.pop();
-		if (patch) {
-			this.undoStack.push(patch);
-			return patch;
 		}
 	}
 }

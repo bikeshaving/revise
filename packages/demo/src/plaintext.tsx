@@ -1,10 +1,21 @@
 import type {Child, Context} from '@bikeshaving/crank/crank.js';
 import {createElement} from '@bikeshaving/crank/crank.js';
+import {Fragment} from '@bikeshaving/crank/crank.js';
 import {renderer} from '@bikeshaving/crank/dom.js';
 import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
 import type {ContentEvent} from '@bikeshaving/revise/contentarea.js';
 import {Keyer} from '@bikeshaving/revise/keyer.js';
 import './index.css';
+
+const colors = [
+	'#FF0000',
+	'#FFA500',
+	'#FFDC00',
+	'#008000',
+	'#0000FF',
+	'#4B0082',
+	'#800080',
+];
 
 // TODO: Pass in old lines?
 function parse(content: string, keyer: Keyer): Array<Child> {
@@ -19,32 +30,15 @@ function parse(content: string, keyer: Keyer): Array<Child> {
 	return lines.map((line) => {
 		const key = keyer.keyOf(cursor);
 		cursor += line.length + 1;
-		// THIS IS THE MOST WELL BEHAVED WAY TO DIVIDE LINES
-		return <div crank-key={key}>{line || <br />}</div>;
-
-		//return (
-		//	<div crank-key={key}>{line || "\n"}</div>
-		//);
-
-		//return (
-		//	<div crank-key={key}>{line}<br /></div>
-		//);
-
-		//return <Fragment crank-key={key}>{line}<br /></Fragment>;
-
-		//return (
-		//	<Fragment crank-key={key}>
-		//		{!!line && <span>{line}</span>}
-		//		<br />
-		//	</Fragment>
-		//);
-
-		//return (
-		//	<Fragment crank-key={key}>
-		//		{!!line && Array.from(line).map((char) => <span>{char}</span>)}
-		//		<br />
-		//	</Fragment>
-		//);
+		return (
+			<Fragment crank-key={key}>
+				{!!line &&
+					Array.from(line).map((char, i) => (
+						<span style={{color: colors[i % colors.length]}}>{char}</span>
+					))}
+				<br />
+			</Fragment>
+		);
 	});
 }
 
@@ -55,7 +49,8 @@ function* Editable(this: Context) {
 	this.addEventListener('contentchange', (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		keyer.push(ev.detail.patch);
-		el.repair(() => this.refresh());
+		this.refresh();
+		//el.repair(() => this.refresh());
 	});
 
 	this.addEventListener('contentundo', (ev) => {
@@ -70,17 +65,68 @@ function* Editable(this: Context) {
 		this.refresh();
 	});
 
+	let html = '';
+	let area: any;
+	let cursor: any = -1;
+
+	document.addEventListener('selectionchange', () => {
+		const selection = window.getSelection();
+		if (!selection) {
+			cursor = -1;
+		} else if (selection.isCollapsed) {
+			cursor = area.indexAt(selection.focusNode, selection.focusOffset);
+		} else {
+			cursor = [
+				area.indexAt(selection.anchorNode, selection.anchorOffset),
+				area.indexAt(selection.focusNode, selection.focusOffset),
+			];
+		}
+		this.refresh();
+	});
+
+	this.flush(() => {
+		content = area.value;
+		this.refresh();
+	});
+
 	for ({} of this) {
+		this.schedule(([area1]) => {
+			area = area1;
+			const html1 = area.firstChild!.innerHTML;
+			if (html !== html1) {
+				html = html1;
+				this.refresh();
+			}
+		});
 		yield (
-			<content-area undomode="keydown" crank-ref={(el1: Node) => (el = el1)}>
-				<div
-					crank-ref={(el1: Node) => (el = el1)}
-					class="editable"
-					contenteditable="true"
-				>
-					{parse(content, keyer)}
+			<Fragment>
+				<content-area crank-ref={(el1: Node) => (el = el1)}>
+					<div contenteditable="true" crank-static>
+						<div>Hello</div>
+						<div>World</div>
+					</div>
+				</content-area>
+				<br />
+				<br />
+				<br />
+				<br />
+				<div>
+					<div>
+						HTML:
+						<pre>{html}</pre>
+					</div>
+					<hr />
+					<div>
+						Content:
+						<pre>{content}</pre>
+					</div>
+					<hr />
+					<div>
+						Cursor:
+						<pre>{JSON.stringify(cursor)}</pre>
+					</div>
 				</div>
-			</content-area>
+			</Fragment>
 		);
 	}
 }
@@ -98,8 +144,6 @@ declare global {
 	module Crank {
 		interface EventMap {
 			contentchange: ContentEvent;
-			contentundo: ContentEvent;
-			contentredo: ContentEvent;
 		}
 	}
 }

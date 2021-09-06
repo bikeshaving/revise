@@ -21,14 +21,6 @@ export interface InsertOperation {
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
 /**
- * An abstract type which represents positions and ranges in a string or
- * sequence.
- *
- * TODO: Does this belong in this file?
- */
-export type Cursor = [number, number] | number;
-
-/**
  * A data structure which represents edits to strings.
  */
 export class Patch {
