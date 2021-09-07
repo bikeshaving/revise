@@ -125,17 +125,26 @@ export class Subseq {
 				flag2 = !flag2;
 			}
 
-			if (size1 === size2) {
-				result.push([size1, flag1, flag2]);
-				size1 = size2 = 0;
-			} else if (size1 < size2) {
-				result.push([size1, flag1, flag2]);
+			if (size1 < size2) {
+				if (size1) {
+					result.push([size1, flag1, flag2]);
+				}
+
 				size2 = size2 - size1;
 				size1 = 0;
-			} else {
-				result.push([size2, flag1, flag2]);
+			} else if (size1 > size2) {
+				if (size2) {
+					result.push([size2, flag1, flag2]);
+				}
+
 				size1 = size1 - size2;
 				size2 = 0;
+			} else {
+				if (size1) {
+					result.push([size1, flag1, flag2]);
+				}
+
+				size1 = size2 = 0;
 			}
 		}
 

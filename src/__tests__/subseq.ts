@@ -71,6 +71,38 @@ describe("Subseq", () => {
 		});
 	});
 
+	describe("expand and align", () => {
+		test("simple", () => {
+			const s = new Subseq([4, 3]);
+			const t = new Subseq([2, 2, 5]);
+			const expanded = new Subseq([6, 3]);
+			const union = new Subseq([2, 2, 2, 3]);
+			expect(s.expand(t)).toEqual(expanded);
+			expect(s.expand(t).union(t)).toEqual(union);
+
+			expect(s.expand(t).align(t)).toEqual([
+				[2, false, false],
+				[2, false, true],
+				[2, false, false],
+				[3, true, false],
+			]);
+		});
+
+		test("append", () => {
+			const s = new Subseq([0, 6, 5]);
+			const t = new Subseq([11, 4]);
+			const expanded = new Subseq([0, 6, 9]);
+			const union = new Subseq([0, 6, 5, 4]);
+			expect(s.expand(t)).toEqual(expanded);
+			expect(s.expand(t).union(t)).toEqual(union);
+			expect(s.expand(t).align(t)).toEqual([
+				[6, true, false],
+				[5, false, false],
+				[4, false, true],
+			]);
+		});
+	});
+
 	describe("interleave", () => {
 		test("error when mismatched 1", () => {
 			const s = new Subseq([5, 1]);
