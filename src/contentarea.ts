@@ -94,7 +94,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	connectedCallback() {
-		console.log(validate(this, []));
+		validate(this, []);
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
@@ -290,7 +290,10 @@ function validate(
 		const oldValue = root[$value];
 		const oldSelectionRange = root[$selectionRange];
 		const value = (root[$value] = getContent(root, cache, oldValue));
-		const selectionRange = (root[$selectionRange] = getSelectionRange(root, cache));
+		const selectionRange = (root[$selectionRange] = getSelectionRange(
+			root,
+			cache,
+		));
 		const hint = Math.min(
 			oldSelectionRange.selectionStart,
 			selectionRange.selectionStart,
@@ -383,7 +386,7 @@ function getContent(
 				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
-			if (node = walker.firstChild()) {
+			if ((node = walker.firstChild())) {
 				descending = true;
 			} else {
 				node = walker.currentNode;
@@ -464,7 +467,7 @@ function getContent(
 				: info.flags & ~APPENDS_NEWLINE;
 		}
 
-		if (node = walker.nextSibling()) {
+		if ((node = walker.nextSibling())) {
 			descending = true;
 			// getNodeInfo
 			info = cache.get(node)!;
