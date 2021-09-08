@@ -58,6 +58,32 @@ describe("Subseq", () => {
 		});
 	});
 
+	describe("expand", () => {
+		test("empty", () => {
+			const s = new Subseq([8]);
+			const t = new Subseq([4, 2, 4, 2]);
+			expect(s.expand(t)).toEqual(new Subseq([12]));
+		});
+
+		test("start", () => {
+			const s = new Subseq([0, 8]);
+			const t = new Subseq([0, 4, 8]);
+			expect(s.expand(t)).toEqual(new Subseq([4, 8]));
+		});
+
+		test("middle", () => {
+			const s = new Subseq([2, 4, 2]);
+			const t = new Subseq([2, 4, 6]);
+			expect(s.expand(t)).toEqual(new Subseq([6, 4, 2]));
+		});
+
+		test("end", () => {
+			const s = new Subseq([2, 4, 2]);
+			const t = new Subseq([6, 4, 2]);
+			expect(s.expand(t)).toEqual(new Subseq([2, 4, 6]));
+		});
+	});
+
 	describe("expand and shrink", () => {
 		const s = new Subseq([4, 4, 6, 5, 3]);
 		const t = new Subseq([10, 5, 8, 4, 4]);
