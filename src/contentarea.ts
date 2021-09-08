@@ -82,6 +82,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		);
 
 		this[$onselectionchange] = () => {
+			validate(this, this[$observer].takeRecords());
 			this[$selectionRange] = getSelectionRange(this, this[$cache]);
 		};
 	}
@@ -794,10 +795,10 @@ function getSelectionRange(
 		anchorOffset,
 		isCollapsed,
 	} = selection;
-	const focus = indexAt(root, cache, focusNode, focusOffset);
+	const focus = Math.max(0, indexAt(root, cache, focusNode, focusOffset));
 	const anchor = isCollapsed
 		? focus
-		: indexAt(root, cache, anchorNode, anchorOffset);
+		: Math.max(0, indexAt(root, cache, anchorNode, anchorOffset));
 	return {
 		selectionStart: Math.min(focus, anchor),
 		selectionEnd: Math.max(focus, anchor),
