@@ -10,6 +10,7 @@ export interface DeleteOperation {
 	type: "delete";
 	start: number;
 	end: number;
+	value: string | undefined;
 }
 
 export interface InsertOperation {
@@ -24,21 +25,15 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
  * A data structure which represents edits to strings.
  */
 export class Patch {
-	/**
-	 * An array of strings and numbers representing operations.
-	 *
-	 * String values represents insertions, and two consecutive numbers represent
-	 * deletions. The current index into the string for these operations is
-	 * inferred based on the most recent index.
-	 */
+	/** An array of strings and numbers representing operations. */
 	parts: Array<string | number>;
 
 	/**
 	 * A string which represents a concatenation of all deletions.
 	 *
-	 * This property is necessary if you want to invert the patch.
+	 * This property must be provided if you want to invert the patch.
 	 */
-	deleted?: string;
+	deleted: string | undefined;
 
 	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
@@ -58,38 +53,32 @@ export class Patch {
 			deleteSeq.includedSize !== deleted.length
 		) {
 			throw new Error("deleteSeq and deleted string do not match in length");
+		} else if (deleteSeq.size !== insertSeq.excludedSize) {
+			throw new Error("deleteSeq and insertSeq do not match in length");
 		}
 
 		const parts: Array<string | number> = [];
-		let insertOffset = 0;
-		let retainOffset = 0;
-		let prevDeleting = false;
-		let prevInserting = false;
-		for (const [size, deleting, inserting] of deleteSeq
+		let insertIndex = 0;
+		let retainIndex = 0;
+		let needsLength = true;
+		for (const [length, deleting, inserting] of deleteSeq
 			.expand(insertSeq)
 			.align(insertSeq)) {
 			if (inserting) {
-				if (retainOffset > 0 && !prevDeleting) {
-					parts.push(retainOffset);
-				}
-
-				const text = inserted.slice(insertOffset, insertOffset + size);
-				parts.push(text);
-				insertOffset += size;
+				parts.push(inserted.slice(insertIndex, insertIndex + length));
+				insertIndex += length;
 			} else {
-				if (deleting) {
-					parts.push(retainOffset, retainOffset + size);
+				if (!deleting) {
+					parts.push(retainIndex, retainIndex + length);
 				}
 
-				retainOffset += size;
+				retainIndex += length;
+				needsLength = deleting;
 			}
-
-			prevDeleting = deleting;
-			prevInserting = inserting;
 		}
 
-		if (!prevDeleting && !prevInserting) {
-			parts.push(retainOffset);
+		if (needsLength) {
+			parts.push(retainIndex);
 		}
 
 		return new Patch(parts, deleted);
@@ -103,6 +92,7 @@ export class Patch {
 	): Patch {
 		const insertSizes: Array<number> = [];
 		Subseq.pushSegment(insertSizes, from, false);
+		// TODO: reorder
 		Subseq.pushSegment(insertSizes, to - from, false);
 		Subseq.pushSegment(insertSizes, inserted.length, true);
 		Subseq.pushSegment(insertSizes, text.length - to, false);
@@ -155,58 +145,48 @@ export class Patch {
 		return text;
 	}
 
-	// I wish this could be a getter but we do not want to incur the cost of
-	// retaining the array of operations in memory, and the best way to
-	// communicate this detail is to just make this a method.
-
-	/**
-	 * @returns An array of operations.
-	 */
-	operations(): Array<Operation> {
+	get operations(): Array<Operation> {
 		const operations: Array<Operation> = [];
-		let insertOffset = 0;
-		let retainOffset = 0;
-		let retaining = true;
+		let retaining = false;
+		let index = 0;
+		let deleteStart = 0;
 		for (let i = 0; i < this.parts.length; i++) {
 			const part = this.parts[i];
 			if (typeof part === "number") {
-				if (retaining) {
-					if (part < retainOffset) {
-						throw new TypeError("Malformed patch");
-					} else if (part > retainOffset) {
-						operations.push({type: "retain", start: retainOffset, end: part});
-						insertOffset = part;
-						retainOffset = part;
+				if (part < index) {
+					throw new TypeError("Malformed patch");
+				} else if (part > index) {
+					if (retaining) {
+						operations.push({type: "retain", start: index, end: part});
+					} else {
+						const value = typeof this.deleted === "undefined" ? undefined : this.deleted.slice(deleteStart, part);
+						operations.push({
+							type: "delete", start: index, end: part, value
+						});
+						deleteStart = part;
 					}
-
-					retaining = false;
-				} else {
-					if (part <= retainOffset) {
-						throw new TypeError("Malformed patch");
-					}
-
-					operations.push({type: "delete", start: retainOffset, end: part});
-					insertOffset = retainOffset;
-					retainOffset = part;
-					retaining = true;
 				}
-			} else if (typeof part === "string") {
-				operations.push({type: "insert", start: insertOffset, value: part});
-				insertOffset = retainOffset;
-				retaining = true;
+
+				index = part;
+				retaining = !retaining;
 			} else {
-				throw new TypeError("Malformed patch");
+				operations.push({type: "insert", start: index, value: part});
 			}
 		}
+
+		Object.defineProperty(this, "operations", {
+			value: operations,
+			writable: false,
+			configurable: false,
+		});
 
 		return operations;
 	}
 
 	apply(text: string): string {
 		let text1 = "";
-		const operations = this.operations();
-		for (let i = 0; i < operations.length; i++) {
-			const op = operations[i];
+		for (let i = 0; i < this.operations.length; i++) {
+			const op = this.operations[i];
 			switch (op.type) {
 				case "retain":
 					text1 += text.slice(op.start, op.end);
@@ -224,18 +204,21 @@ export class Patch {
 		const insertSizes: Array<number> = [];
 		const deleteSizes: Array<number> = [];
 		let inserted = "";
-		const operations = this.operations();
-		for (let i = 0; i < operations.length; i++) {
-			const op = operations[i];
+		for (let i = 0; i < this.operations.length; i++) {
+			const op = this.operations[i];
 			switch (op.type) {
-				case "retain":
-					Subseq.pushSegment(insertSizes, op.end - op.start, false);
-					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
+				case "retain": {
+					const length = op.end - op.start;
+					Subseq.pushSegment(insertSizes, length, false);
+					Subseq.pushSegment(deleteSizes, length, false);
 					break;
-				case "delete":
-					Subseq.pushSegment(insertSizes, op.end - op.start, false);
-					Subseq.pushSegment(deleteSizes, op.end - op.start, true);
+				}
+				case "delete": {
+					const length = op.end - op.start;
+					Subseq.pushSegment(insertSizes, length, false);
+					Subseq.pushSegment(deleteSizes, length, true);
 					break;
+				}
 				case "insert":
 					Subseq.pushSegment(insertSizes, op.value.length, true);
 					inserted += op.value;
@@ -248,6 +231,72 @@ export class Patch {
 		const insertSeq = new Subseq(insertSizes);
 		const deleteSeq = new Subseq(deleteSizes);
 		return [insertSeq, inserted, deleteSeq, this.deleted];
+	}
+
+	normalize(): Patch {
+		if (typeof this.deleted === "undefined") {
+			throw new Error("Missing deleted property");
+		}
+
+		const insertSizes: Array<number> = [];
+		const deleteSizes: Array<number> = [];
+		let inserted = "";
+		let deleted = "";
+		let prevInserted: string | undefined;
+		for (let i = 0; i < this.operations.length; i++) {
+			const op = this.operations[i];
+			switch (op.type) {
+				case "insert":
+					prevInserted = op.value;
+					break;
+				case "retain":
+					if (prevInserted !== undefined) {
+						Subseq.pushSegment(insertSizes, prevInserted.length, true);
+						inserted += prevInserted;
+						prevInserted = undefined;
+					}
+
+					Subseq.pushSegment(insertSizes, op.end - op.start, false);
+					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
+					break;
+				case "delete": {
+					const length = op.end - op.start;
+					let prefix = 0;
+					if (prevInserted !== undefined) {
+						prefix = commonPrefixLength(prevInserted, op.value!);
+						Subseq.pushSegment(insertSizes, prefix, false);
+						Subseq.pushSegment(
+							insertSizes,
+							prevInserted.length - prefix,
+							true,
+						);
+						inserted += prevInserted.slice(prefix);
+						prevInserted = undefined;
+					}
+
+					deleted += op.value!.slice(prefix);
+					Subseq.pushSegment(deleteSizes, prefix, false);
+					Subseq.pushSegment(
+						deleteSizes,
+						length - prefix,
+						true,
+					);
+					Subseq.pushSegment(insertSizes, length - prefix, false);
+					break;
+				}
+				default:
+					throw new TypeError("Invalid operation type");
+			}
+		}
+
+		if (prevInserted !== undefined) {
+			Subseq.pushSegment(insertSizes, prevInserted.length, true);
+			inserted += prevInserted;
+		}
+
+		const insertSeq = new Subseq(insertSizes);
+		const deleteSeq = new Subseq(deleteSizes);
+		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted);
 	}
 
 	/**
@@ -275,24 +324,6 @@ export class Patch {
 			}
 		}
 
-		// Find deletions which have been re-inserted and remove them.
-		if (deleted1 != null) {
-			const [deleteOverlap, insertOverlap] = overlapping(
-				deleteSeq1,
-				deleted1,
-				insertSeq2,
-				inserted2,
-			);
-			if (deleteOverlap.includedSize) {
-				deleted1 = erase(deleteSeq1, deleted1, deleteOverlap);
-				inserted2 = erase(insertSeq2, inserted2, insertOverlap);
-				deleteSeq1 = deleteSeq1.difference(deleteOverlap).shrink(insertOverlap);
-				insertSeq1 = insertSeq1.shrink(insertOverlap);
-				deleteSeq2 = deleteSeq2.shrink(insertOverlap);
-				insertSeq2 = insertSeq2.shrink(insertOverlap);
-			}
-		}
-
 		const insertSeq = insertSeq1.union(insertSeq2);
 		const inserted = consolidate(insertSeq1, inserted1, insertSeq2, inserted2);
 		const deleteSeq = deleteSeq1.union(deleteSeq2).shrink(insertSeq);
@@ -300,7 +331,7 @@ export class Patch {
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
-		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted);
+		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
 	invert(): Patch {
@@ -400,59 +431,4 @@ function commonSuffixLength(text1: string, text2: string) {
 	}
 
 	return length;
-}
-
-/**
- * Given two subseqs and two strings which are represented by the included
- * segments of the subseqs, this function finds the overlapping common prefixes
- * of the first and second strings and returns two subseqs which represents
- * these overlapping sequences.
- *
- * The subseqs must have the same size, and may not overlap. These subseqs are
- * typically produced from two interleaved subseqs.
- */
-function overlapping(
-	subseq1: Subseq,
-	text1: string,
-	subseq2: Subseq,
-	text2: string,
-): [Subseq, Subseq] {
-	let i1 = 0;
-	let i2 = 0;
-	let prevLength = 0;
-	let prevFlag1 = false;
-	const sizes1: Array<number> = [];
-	const sizes2: Array<number> = [];
-	for (const [size, flag1, flag2] of subseq1.align(subseq2)) {
-		if (flag1 && flag2) {
-			throw new Error("Overlapping subseqs");
-		}
-		if (prevFlag1 && flag2) {
-			const prefix = commonPrefixLength(
-				text1.slice(i1, prevLength),
-				text2.slice(i2, size),
-			);
-			Subseq.pushSegment(sizes1, prefix, true);
-			Subseq.pushSegment(sizes1, prevLength - prefix, false);
-			Subseq.pushSegment(sizes2, prefix, true);
-			Subseq.pushSegment(sizes2, size - prefix, false);
-		} else {
-			Subseq.pushSegment(sizes1, prevLength, false);
-			Subseq.pushSegment(sizes2, size, false);
-		}
-
-		if (prevFlag1) {
-			i1 += prevLength;
-		}
-
-		if (flag2) {
-			i2 += size;
-		}
-
-		prevLength = size;
-		prevFlag1 = flag1;
-	}
-
-	Subseq.pushSegment(sizes1, prevLength, false);
-	return [new Subseq(sizes1), new Subseq(sizes2)];
 }

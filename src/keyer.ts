@@ -19,9 +19,8 @@ export class Keyer {
 	}
 
 	push(patch: Patch): void {
-		const operations = patch.operations();
-		for (let i = operations.length - 1; i >= 0; i--) {
-			const op = operations[i];
+		for (let i = patch.operations.length - 1; i >= 0; i--) {
+			const op = patch.operations[i];
 			// TODO: Is this correct?
 			switch (op.type) {
 				case "delete":
