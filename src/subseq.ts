@@ -1,7 +1,7 @@
 /**
- * A data structure for representing subsequences. Subsequences are parts of
- * other sequences, created by removing zero or more elements from the original
- * sequence without changing the order of remaining elements.
+ * A data structure for representing “subsequences.” Subsequences are created
+ * by removing zero or more elements from a given sequence while preserving the
+ * order of remaining elements.
  */
 export class Subseq {
 	/**
@@ -52,6 +52,9 @@ export class Subseq {
 		this.sizes = sizes;
 	}
 
+	/**
+	 * A utility method to debug subseqs.
+	 */
 	print(): string {
 		let result = "";
 		for (let i = 0; i < this.sizes.length; i++) {

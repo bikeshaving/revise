@@ -25,7 +25,9 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
  * A data structure which represents edits to strings.
  */
 export class Patch {
-	/** An array of strings and numbers representing operations. */
+	/**
+	 * An array of strings and numbers representing operations.
+	 */
 	parts: Array<string | number>;
 
 	/**
@@ -92,9 +94,8 @@ export class Patch {
 	): Patch {
 		const insertSizes: Array<number> = [];
 		Subseq.pushSegment(insertSizes, from, false);
-		// TODO: reorder
-		Subseq.pushSegment(insertSizes, to - from, false);
 		Subseq.pushSegment(insertSizes, inserted.length, true);
+		Subseq.pushSegment(insertSizes, to - from, false);
 		Subseq.pushSegment(insertSizes, text.length - to, false);
 		const deleteSizes: Array<number> = [];
 		Subseq.pushSegment(deleteSizes, from, false);
@@ -159,9 +160,15 @@ export class Patch {
 					if (retaining) {
 						operations.push({type: "retain", start: index, end: part});
 					} else {
-						const value = typeof this.deleted === "undefined" ? undefined : this.deleted.slice(deleteStart, part);
+						const value =
+							typeof this.deleted === "undefined"
+								? undefined
+								: this.deleted.slice(deleteStart, part);
 						operations.push({
-							type: "delete", start: index, end: part, value
+							type: "delete",
+							start: index,
+							end: part,
+							value,
 						});
 						deleteStart = part;
 					}
@@ -265,22 +272,14 @@ export class Patch {
 					if (prevInserted !== undefined) {
 						prefix = commonPrefixLength(prevInserted, op.value!);
 						Subseq.pushSegment(insertSizes, prefix, false);
-						Subseq.pushSegment(
-							insertSizes,
-							prevInserted.length - prefix,
-							true,
-						);
+						Subseq.pushSegment(insertSizes, prevInserted.length - prefix, true);
 						inserted += prevInserted.slice(prefix);
 						prevInserted = undefined;
 					}
 
 					deleted += op.value!.slice(prefix);
 					Subseq.pushSegment(deleteSizes, prefix, false);
-					Subseq.pushSegment(
-						deleteSizes,
-						length - prefix,
-						true,
-					);
+					Subseq.pushSegment(deleteSizes, length - prefix, true);
 					Subseq.pushSegment(insertSizes, length - prefix, false);
 					break;
 				}
@@ -331,7 +330,12 @@ export class Patch {
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
-		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
+		return Patch.synthesize(
+			insertSeq,
+			inserted,
+			deleteSeq,
+			deleted,
+		).normalize();
 	}
 
 	invert(): Patch {
