@@ -40,7 +40,7 @@ const $slot = Symbol.for("revise$slot");
 const $cache = Symbol.for("revise$cache");
 const $observer = Symbol.for("revise$observer");
 const $value = Symbol.for("revise$value");
-const $selectionRange = Symbol.for("revise$selectionRange");
+const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
 const css = `
@@ -56,18 +56,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$cache]: NodeInfoCache;
 	[$observer]: MutationObserver;
 	[$slot]: HTMLSlotElement;
-	[$selectionRange]: SelectionRange;
-	[$onselectionchange]: (ev: Event) => unknown;
-
+	[$selectionStart]: number;
+	[$onselectionchange]: () => void;
 	constructor() {
 		super();
 		this[$value] = "";
 		this[$cache] = new Map();
-		this[$selectionRange] = {
-			selectionStart: 0,
-			selectionEnd: 0,
-			selectionDirection: "none",
-		};
 		const shadow = this.attachShadow({mode: "closed"});
 		const style = document.createElement("style");
 		style.textContent = css;
@@ -81,9 +75,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			validate(this, records),
 		);
 
+		this[$selectionStart] = 0;
 		this[$onselectionchange] = () => {
 			validate(this, this[$observer].takeRecords());
-			this[$selectionRange] = getSelectionRange(this, this[$cache]);
+			this[$selectionStart] = getSelectionRange(
+				this,
+				this[$cache],
+			).selectionStart;
 		};
 	}
 
@@ -147,63 +145,54 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionStart(): number {
 		validate(this, this[$observer].takeRecords());
-		return this[$selectionRange].selectionStart;
+		return getSelectionRange(this, this[$cache]).selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		const selectionRange = this[$selectionRange];
-		const {selectionEnd, selectionDirection} = selectionRange;
-		const value = this[$value];
+		const selectionRange = getSelectionRange(this, this[$cache]);
 		setSelectionRange(
 			this,
-			cache,
-			value,
+			this[$cache],
+			this[$value],
 			selectionStart,
-			selectionEnd,
-			selectionDirection,
+			selectionRange.selectionEnd,
+			selectionRange.selectionDirection,
 		);
 	}
 
 	get selectionEnd(): number {
 		validate(this, this[$observer].takeRecords());
-		return this[$selectionRange].selectionEnd;
+		return getSelectionRange(this, this[$cache]).selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		const selectionRange = this[$selectionRange];
-		const {selectionStart, selectionDirection} = selectionRange;
-		const value = this[$value];
+		const selectionRange = getSelectionRange(this, this[$cache]);
 		setSelectionRange(
 			this,
-			cache,
-			value,
-			selectionStart,
+			this[$cache],
+			this[$value],
+			selectionRange.selectionStart,
 			selectionEnd,
-			selectionDirection,
+			selectionRange.selectionDirection,
 		);
 	}
 
 	get selectionDirection(): SelectionDirection {
 		validate(this, this[$observer].takeRecords());
-		return this[$selectionRange].selectionDirection;
+		return getSelectionRange(this, this[$cache]).selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		const selectionRange = this[$selectionRange];
-		const {selectionStart, selectionEnd} = selectionRange;
-		const value = this[$value];
+		const selectionRange = getSelectionRange(this, this[$cache]);
 		setSelectionRange(
 			this,
-			cache,
-			value,
-			selectionStart,
-			selectionEnd,
+			this[$cache],
+			this[$value],
+			selectionRange.selectionStart,
+			selectionRange.selectionEnd,
 			selectionDirection,
 		);
 	}
@@ -214,12 +203,10 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		selectionDirection: SelectionDirection = "none",
 	): void {
 		validate(this, this[$observer].takeRecords());
-		const cache = this[$cache];
-		const value = this[$value];
 		setSelectionRange(
 			this,
-			cache,
-			value,
+			this[$cache],
+			this[$value],
 			selectionStart,
 			selectionEnd,
 			selectionDirection,
@@ -289,16 +276,9 @@ function validate(
 	const cache = root[$cache];
 	if (invalidate(root, cache, records)) {
 		const oldValue = root[$value];
-		const oldSelectionRange = root[$selectionRange];
+		const oldSelectionStart = root[$selectionStart];
 		const value = (root[$value] = getContent(root, cache, oldValue));
-		const selectionRange = (root[$selectionRange] = getSelectionRange(
-			root,
-			cache,
-		));
-		const hint = Math.min(
-			oldSelectionRange.selectionStart,
-			selectionRange.selectionStart,
-		);
+		const hint = Math.min(oldSelectionStart, root.selectionStart);
 		// TODO: This call is expensive. If we have getContent return a patch
 		// instead of a string, we might be able to save a lot in CPU time.
 		const patch = Patch.diff(oldValue, value, hint);

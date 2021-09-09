@@ -280,7 +280,7 @@ describe("contentarea", () => {
 			expect(area.value).toEqual("Hello\n\tWorld\n");
 		});
 
-		test("textContnet", () => {
+		test("textContent", () => {
 			area.innerHTML = "<div>Hello</div>";
 			expect(area.value).toEqual("Hello\n");
 			area.insertAdjacentHTML("beforeend", "<div>World</div>");
