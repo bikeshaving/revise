@@ -4,12 +4,12 @@ export class Keyer {
 	nextKey: number;
 	keys: Array<number>;
 
-	constructor(length: number = 0) {
+	constructor() {
 		this.nextKey = 0;
-		this.keys = new Array(length);
+		this.keys = [];
 	}
 
-	keyOf(i: number): number {
+	keyAt(i: number): number {
 		// TODO: maybe we can use `in`
 		if (typeof this.keys[i] === "undefined") {
 			this.keys[i] = this.nextKey++;
