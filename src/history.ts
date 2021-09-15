@@ -39,7 +39,7 @@ export class EditHistory {
 		}
 	}
 
-	push(edit: Edit): void {
+	append(edit: Edit): void {
 		if (isNoop(edit)) {
 			return;
 		} else if (this.redoStack.length) {
