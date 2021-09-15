@@ -3,9 +3,10 @@ coverage
 lib
 .next
 *.log
-subseq.js
-patch.js
-contentarea.js
-keyer.js
 *.js.map
 *.d.ts
+
+contentarea.js
+edit.js
+keyer.js
+subseq.js

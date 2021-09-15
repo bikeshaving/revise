@@ -24,7 +24,7 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 /**
  * A data structure which represents edits to strings.
  */
-export class Patch {
+export class Edit {
 	/**
 	 * An array of strings and numbers representing operations.
 	 */
@@ -33,7 +33,7 @@ export class Patch {
 	/**
 	 * A string which represents a concatenation of all deletions.
 	 *
-	 * This property must be provided if you want to invert the patch.
+	 * This property must be provided if you want to invert the edit.
 	 */
 	deleted: string | undefined;
 
@@ -47,7 +47,7 @@ export class Patch {
 		inserted: string,
 		deleteSeq: Subseq,
 		deleted?: string | undefined,
-	): Patch {
+	): Edit {
 		if (insertSeq.includedSize !== inserted.length) {
 			throw new Error("insertSeq and inserted string do not match in length");
 		} else if (
@@ -83,7 +83,7 @@ export class Patch {
 			parts.push(retainIndex);
 		}
 
-		return new Patch(parts, deleted);
+		return new Edit(parts, deleted);
 	}
 
 	static build(
@@ -91,7 +91,7 @@ export class Patch {
 		inserted: string,
 		from: number,
 		to: number = from,
-	): Patch {
+	): Edit {
 		const insertSizes: Array<number> = [];
 		Subseq.pushSegment(insertSizes, from, false);
 		Subseq.pushSegment(insertSizes, inserted.length, true);
@@ -102,7 +102,7 @@ export class Patch {
 		Subseq.pushSegment(deleteSizes, to - from, true);
 		Subseq.pushSegment(deleteSizes, text.length - to, false);
 		const deleted = text.slice(from, to);
-		return Patch.synthesize(
+		return Edit.synthesize(
 			new Subseq(insertSizes),
 			inserted,
 			new Subseq(deleteSizes),
@@ -110,7 +110,7 @@ export class Patch {
 		);
 	}
 
-	static diff(text1: string, text2: string, hint?: number): Patch {
+	static diff(text1: string, text2: string, hint?: number): Edit {
 		let prefix = commonPrefixLength(text1, text2);
 		let suffix = commonSuffixLength(text1, text2);
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {
@@ -124,7 +124,7 @@ export class Patch {
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
-		return Patch.build(
+		return Edit.build(
 			text1,
 			text2.slice(prefix, text2.length - suffix),
 			prefix,
@@ -155,7 +155,7 @@ export class Patch {
 			const part = this.parts[i];
 			if (typeof part === "number") {
 				if (part < index) {
-					throw new TypeError("Malformed patch");
+					throw new TypeError("Malformed edit");
 				} else if (part > index) {
 					if (retaining) {
 						operations.push({type: "retain", start: index, end: part});
@@ -240,7 +240,7 @@ export class Patch {
 		return [insertSeq, inserted, deleteSeq, this.deleted];
 	}
 
-	normalize(): Patch {
+	normalize(): Edit {
 		if (typeof this.deleted === "undefined") {
 			throw new Error("Missing deleted property");
 		}
@@ -295,13 +295,13 @@ export class Patch {
 
 		const insertSeq = new Subseq(insertSizes);
 		const deleteSeq = new Subseq(deleteSizes);
-		return Patch.synthesize(insertSeq, inserted, deleteSeq, deleted);
+		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
 	}
 
 	/**
-	 * Composes two consecutive patches.
+	 * Composes two consecutive edits.
 	 */
-	compose(that: Patch): Patch {
+	compose(that: Edit): Edit {
 		let [insertSeq1, inserted1, deleteSeq1, deleted1] = this.factor();
 		let [insertSeq2, inserted2, deleteSeq2, deleted2] = that.factor();
 		// Expand all subseqs so that they share the same coordinate space.
@@ -330,7 +330,7 @@ export class Patch {
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
-		return Patch.synthesize(
+		return Edit.synthesize(
 			insertSeq,
 			inserted,
 			deleteSeq,
@@ -338,7 +338,7 @@ export class Patch {
 		).normalize();
 	}
 
-	invert(): Patch {
+	invert(): Edit {
 		if (typeof this.deleted === "undefined") {
 			throw new Error("Missing deleted property");
 		}
@@ -346,7 +346,7 @@ export class Patch {
 		let [insertSeq, inserted, deleteSeq, deleted] = this.factor();
 		deleteSeq = deleteSeq.expand(insertSeq);
 		insertSeq = insertSeq.shrink(deleteSeq);
-		return Patch.synthesize(deleteSeq, deleted!, insertSeq, inserted);
+		return Edit.synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
 }
 

@@ -1,4 +1,4 @@
-import type {Patch} from "./patch";
+import type {Edit} from "./edit";
 
 export class Keyer {
 	nextKey: number;
@@ -18,9 +18,9 @@ export class Keyer {
 		return this.keys[i];
 	}
 
-	push(patch: Patch): void {
-		for (let i = patch.operations.length - 1; i >= 0; i--) {
-			const op = patch.operations[i];
+	transform(edit: Edit): void {
+		for (let i = edit.operations.length - 1; i >= 0; i--) {
+			const op = edit.operations[i];
 			// TODO: Is this correct?
 			switch (op.type) {
 				case "delete":

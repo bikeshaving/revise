@@ -1,8 +1,8 @@
 /// <reference lib="dom" />
-import {Patch} from "./patch";
+import {Edit} from "./edit";
 
 export interface ContentEventDetail {
-	patch: Patch;
+	edit: Edit;
 	// TODO: add information about changed ranges
 }
 
@@ -277,12 +277,12 @@ function validate(
 	if (invalidate(root, cache, records)) {
 		const oldValue = root[$value];
 		const oldSelectionStart = root[$selectionStart];
-		const value = (root[$value] = getContent(root, cache, oldValue));
+		const value = (root[$value] = getValue(root, cache, oldValue));
 		const hint = Math.min(oldSelectionStart, root.selectionStart);
-		// TODO: This call is expensive. If we have getContent return a patch
+		// TODO: This call is expensive. If we have getContent return a edit
 		// instead of a string, we might be able to save a lot in CPU time.
-		const patch = Patch.diff(oldValue, value, hint);
-		root.dispatchEvent(new ContentEvent("contentchange", {detail: {patch}}));
+		const edit = Edit.diff(oldValue, value, hint);
+		root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
 		return true;
 	}
 
@@ -298,7 +298,7 @@ function validate(
  * @param cache - The nodeInfo cache associated with the root
  * @param oldContent - The previous content of the root.
  */
-function getContent(
+function getValue(
 	root: Element,
 	cache: NodeInfoCache,
 	oldContent: string,
@@ -308,7 +308,7 @@ function getContent(
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	// TODO: It might be faster to construct and return a patch rather than
+	// TODO: It might be faster to construct and return a edit rather than
 	// concatenating a giant string.
 	let content = "";
 	// Because the content variable is a heavily concatenated string and likely
