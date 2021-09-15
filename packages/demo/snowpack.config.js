@@ -2,7 +2,7 @@ module.exports = {
   workspaceRoot: "../..",
   mount: {
     public: "/",
-    src: "/js",
+    src: "/static",
   },
   plugins: [
     "@snowpack/plugin-dotenv",

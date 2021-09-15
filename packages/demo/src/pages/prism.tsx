@@ -4,7 +4,7 @@ import {renderer} from '@bikeshaving/crank/dom.js';
 import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
 import type {ContentEvent} from '@bikeshaving/revise/contentarea.js';
 import {Keyer} from '@bikeshaving/revise/keyer.js';
-import './index.css';
+import {EditHistory} from '@bikeshaving/revise/history.js';
 
 /*** Prism Logic ***/
 import Prism from 'prismjs';
@@ -113,7 +113,7 @@ function printLines(
 ): Array<Child> {
 	let cursor = 0;
 	return lines.map((line) => {
-		const key = keyer.keyOf(cursor);
+		const key = keyer.keyAt(cursor);
 		const length = line.reduce((l, t) => l + t.length, 0);
 		cursor += length + 1;
 		return (
@@ -152,25 +152,59 @@ function debounce(fn: Function, ms = 50): any {
 
 function* Editable(this: Context) {
 	let content = '\n';
-	let el: ContentAreaElement;
-	const keyer = new Keyer(content.length);
-	const debouncedRepair = debounce(() => el.repair(() => this.refresh()));
+	let contentArea: ContentAreaElement;
+	const keyer = new Keyer();
+	const history = new EditHistory();
+	let historyInitiated = false;
 	this.addEventListener('contentchange', (ev) => {
-		content = (ev.target as ContentAreaElement).value;
-		keyer.push(ev.detail.patch);
-		debouncedRepair();
+		content = contentArea.value;
+		keyer.transform(ev.detail.edit);
+		if (!historyInitiated) {
+			history.append(ev.detail.edit);
+		}
+
+		const {selectionStart, selectionEnd, selectionDirection} = contentArea;
+		const p = this.refresh();
+		if (typeof p.then !== 'undefined') {
+			throw new Error('Editable children must be synchronous');
+		}
+
+		contentArea.setSelectionRange(
+			selectionStart,
+			selectionEnd,
+			selectionDirection,
+		);
 	});
 
-	this.addEventListener('contentundo', (ev) => {
-		content = (ev.target as ContentAreaElement).value;
-		keyer.push(ev.detail.patch);
-		this.refresh();
-	});
+	// TODO: bring back the old logic where we checkpoint history based on when the cursor moves + time.
+	setInterval(() => {
+		history.checkpoint();
+	}, 5000);
 
-	this.addEventListener('contentredo', (ev) => {
-		content = (ev.target as ContentAreaElement).value;
-		keyer.push(ev.detail.patch);
-		this.refresh();
+	// TODO: add a validate function
+	this.addEventListener('beforeinput', (ev: any) => {
+		// TODO: set selection to the selection before the edit
+		if (ev.inputType === 'historyUndo') {
+			const edit = history.undo();
+			if (edit) {
+				historyInitiated = true;
+				ev.preventDefault();
+				content = edit.apply(content);
+				this.refresh();
+				contentArea.value;
+				historyInitiated = false;
+			}
+		} else if (ev.inputType === 'historyRedo') {
+			const edit = history.redo();
+			if (edit) {
+				historyInitiated = true;
+				ev.preventDefault();
+				content = edit.apply(content);
+				this.refresh();
+				contentArea.value;
+				historyInitiated = false;
+			}
+		}
 	});
 
 	let composing = false;
@@ -180,23 +214,17 @@ function* Editable(this: Context) {
 
 	this.addEventListener('compositionend', () => {
 		composing = false;
-		debouncedRepair();
 	});
 
 	for ({} of this) {
 		yield (
 			<content-area
-				undomode="keydown"
-				crank-ref={(el1: ContentAreaElement) => (el = el1)}
+				crank-ref={(el: ContentAreaElement) => (contentArea = el)}
+				crank-static={composing}
 			>
-				<pre
-					class="editable language-typescript"
-					contenteditable="true"
-					crank-static={composing}
-					spellcheck="false"
-				>
+				<div class="editable" contenteditable="true">
 					{parse(content, keyer)}
-				</pre>
+				</div>
 			</content-area>
 		);
 	}
@@ -205,7 +233,7 @@ function* Editable(this: Context) {
 function App() {
 	return (
 		<div class="app">
-			<p>Using content-area with some custom PrismJS utilities.</p>
+			<p class="">Using content-area with Prism.js.</p>
 			<Editable />
 		</div>
 	);
@@ -215,8 +243,6 @@ declare global {
 	module Crank {
 		interface EventMap {
 			contentchange: ContentEvent;
-			contentundo: ContentEvent;
-			contentredo: ContentEvent;
 		}
 	}
 }
