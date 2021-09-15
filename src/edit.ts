@@ -330,12 +330,7 @@ export class Edit {
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
-		return Edit.synthesize(
-			insertSeq,
-			inserted,
-			deleteSeq,
-			deleted,
-		).normalize();
+		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
 	invert(): Edit {
