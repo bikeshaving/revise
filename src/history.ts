@@ -2,9 +2,7 @@ import {Edit} from "./edit";
 
 // TODO: Figure out if these make sense as Edit methods.
 function isNoop(edit: Edit): boolean {
-	// TODO: Think about if the second part of this condition is actually
-	// necessary
-	return edit.parts.length === 1 && typeof edit.parts[0] === "number";
+	return edit.operations.length === 1 && edit.operations[0].type === "retain";
 }
 
 function isComplex(edit: Edit): boolean {
