@@ -22,13 +22,19 @@ const PREPENDS_NEWLINE = 1 << 1;
 /** Whether the node is responsible for the newline after it. */
 const APPENDS_NEWLINE = 1 << 2;
 
-interface NodeInfo {
+class NodeInfo {
 	/** A bitmask (see flags above) */
 	flags: number;
+	/** The length of this node’s contents. */
+	size: number;
 	/** The start of this node’s contents relative to the start of the parent. */
 	offset: number;
-	/** The length of this node’s contents. */
-	length: number;
+
+	constructor(offset: number) {
+		this.flags = 0;
+		this.size = 0;
+		this.offset = offset;
+	}
 }
 
 type NodeInfoCache = Map<Node, NodeInfo>;
@@ -106,7 +112,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			],
 		});
 
-		document.addEventListener("selectionchange", this[$onselectionchange]);
+		// We use capture so as to attempt to run before any other selectionchange event listeners.
+		document.addEventListener(
+			"selectionchange",
+			this[$onselectionchange],
+			true,
+		);
 	}
 
 	disconnectedCallback() {
@@ -115,7 +126,11 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		// JSDOM-based environments like Jest will make the global document null
 		// before calling the disconnectedCallback for some reason.
 		if (document) {
-			document.removeEventListener("selectionchange", this[$onselectionchange]);
+			document.removeEventListener(
+				"selectionchange",
+				this[$onselectionchange],
+				true,
+			);
 		}
 	}
 
@@ -333,7 +348,7 @@ function getValue(
 	let relativeOldIndex = 0;
 	let info: NodeInfo = cache.get(root)!;
 	if (info === undefined) {
-		info = {flags: 0, offset, length: 0};
+		info = new NodeInfo(offset);
 		cache.set(root, info);
 	}
 
@@ -380,7 +395,7 @@ function getValue(
 			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
-				info = {flags: 0, offset, length: 0};
+				info = new NodeInfo(offset);
 				cache.set(node, info);
 			} else {
 				if (info.offset > 0) {
@@ -395,8 +410,8 @@ function getValue(
 		if (info.flags & IS_VALID) {
 			// The node has been seen before.
 			// Reading from oldContent because length hasn’t been invalidated.
-			const length = info.length;
-			if (oldIndex + info.length > oldContent.length) {
+			const length = info.size;
+			if (oldIndex + info.size > oldContent.length) {
 				throw new Error("String length mismatch");
 			}
 
@@ -441,7 +456,7 @@ function getValue(
 				hasNewline = true;
 			}
 
-			info.length = offset - info.offset;
+			info.size = offset - info.offset;
 			info.flags |= IS_VALID;
 			info.flags = appendsNewline
 				? info.flags | APPENDS_NEWLINE
@@ -453,7 +468,7 @@ function getValue(
 			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
-				info = {flags: 0, offset, length: 0};
+				info = new NodeInfo(offset);
 				cache.set(node, info);
 			} else {
 				const oldOffset = oldIndex - relativeOldIndex;
@@ -618,7 +633,7 @@ function indexAt(
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
 			const info = cache.get(node)!;
-			index = info.length;
+			index = info.size;
 			if (info.flags & APPENDS_NEWLINE) {
 				index -= NEWLINE.length;
 			}
@@ -699,7 +714,7 @@ function findNodeOffset(
 
 			return [previousSibling, getNodeLength(previousSibling)];
 		} else if (
-			index === info.length &&
+			index === info.size &&
 			(node.nodeType === Node.TEXT_NODE ||
 				(node as Element).hasAttribute("data-content"))
 		) {
@@ -708,8 +723,8 @@ function findNodeOffset(
 			} else {
 				return nodeOffsetFromChild(node, true);
 			}
-		} else if (index >= info.length) {
-			index -= info.length;
+		} else if (index >= info.size) {
+			index -= info.size;
 			node = walker.nextSibling();
 		} else {
 			if (
@@ -800,9 +815,10 @@ function setSelectionRange(
 		return;
 	}
 
-	// We bound selection range to the length of value minus the trailing newline
-	// because attempting to the final newline can cause the editable element to
-	// lose focus.
+	// TODO: is this still true?
+	// We bound selection range to the length of value minus the trailing
+	// newline because attempting to select after the final newline can cause
+	// editable elements to lose focus.
 	const length = value.replace(/(\r|\n|\r\n)$/, "").length;
 	selectionStart = selectionStart || 0;
 	selectionEnd = selectionEnd || 0;
