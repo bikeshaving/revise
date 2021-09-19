@@ -25,7 +25,7 @@ const APPENDS_NEWLINE = 1 << 2;
 class NodeInfo {
 	/** A bitmask (see flags above) */
 	flags: number;
-	/** The length of this node’s contents. */
+	/** The string length of this node’s contents. */
 	size: number;
 	/** The start of this node’s contents relative to the start of the parent. */
 	offset: number;
@@ -46,7 +46,7 @@ const $slot = Symbol.for("revise$slot");
 const $cache = Symbol.for("revise$cache");
 const $observer = Symbol.for("revise$observer");
 const $value = Symbol.for("revise$value");
-const $selectionStart = Symbol.for("revise$selectionStart");
+const $selectionRange = Symbol.for("revise$selectionRange");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
 const css = `
@@ -62,7 +62,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$cache]: NodeInfoCache;
 	[$observer]: MutationObserver;
 	[$slot]: HTMLSlotElement;
-	[$selectionStart]: number;
+	[$selectionRange]: SelectionRange;
 	[$onselectionchange]: () => void;
 	constructor() {
 		super();
@@ -77,17 +77,22 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		slot.contentEditable = this.contentEditable;
 		shadow.appendChild(slot);
 
-		this[$observer] = new MutationObserver((records) =>
-			validate(this, records),
-		);
+		this[$observer] = new MutationObserver((records) => {
+			validate(this, records);
+		});
 
-		this[$selectionStart] = 0;
+		this[$selectionRange] = {
+			selectionStart: 0,
+			selectionEnd: 0,
+			selectionDirection: "none",
+		};
+
 		this[$onselectionchange] = () => {
-			validate(this, this[$observer].takeRecords());
-			this[$selectionStart] = getSelectionRange(
-				this,
-				this[$cache],
-			).selectionStart;
+			validate(this);
+			this[$selectionRange] = getSelectionRange(this, this[$cache]);
+			Promise.resolve(() => {
+				this.dispatchEvent(new Event("selectionchange", {bubbles: true}));
+			});
 		};
 	}
 
@@ -99,7 +104,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	connectedCallback() {
-		validate(this, []);
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
@@ -112,7 +116,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			],
 		});
 
-		// We use capture so as to attempt to run before any other selectionchange event listeners.
+		this[$value] = getValue(this, this[$cache], "");
+		this[$selectionRange] = getSelectionRange(this, this[$cache]);
+		// TODO: We use event capture in an attempt to run before any other
+		// selectionchange event listeners. It is still technically possible for a
+		// selectionchange event listener to execute before
+		// this[$onselectionchange], which can cause stale selection range objects
+		// to be read. Figure out a way to deal with this.
 		document.addEventListener(
 			"selectionchange",
 			this[$onselectionchange],
@@ -122,6 +132,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	disconnectedCallback() {
 		this[$cache].clear();
+		this[$value] = "";
 		this[$observer].disconnect();
 		// JSDOM-based environments like Jest will make the global document null
 		// before calling the disconnectedCallback for some reason.
@@ -154,18 +165,19 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	/*** Content methods ***/
 	/***********************/
 	get value(): string {
-		validate(this, this[$observer].takeRecords());
+		validate(this);
 		return this[$value];
 	}
 
 	get selectionStart(): number {
-		validate(this, this[$observer].takeRecords());
-		return getSelectionRange(this, this[$cache]).selectionStart;
+		validate(this);
+		return this[$selectionRange].selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
-		validate(this, this[$observer].takeRecords());
-		const selectionRange = getSelectionRange(this, this[$cache]);
+		validate(this);
+
+		const selectionRange = this[$selectionRange];
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -177,13 +189,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	get selectionEnd(): number {
-		validate(this, this[$observer].takeRecords());
-		return getSelectionRange(this, this[$cache]).selectionEnd;
+		validate(this);
+		return this[$selectionRange].selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
-		validate(this, this[$observer].takeRecords());
-		const selectionRange = getSelectionRange(this, this[$cache]);
+		validate(this);
+		const selectionRange = this[$selectionRange];
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -195,13 +207,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	get selectionDirection(): SelectionDirection {
-		validate(this, this[$observer].takeRecords());
-		return getSelectionRange(this, this[$cache]).selectionDirection;
+		validate(this);
+		return this[$selectionRange].selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
-		validate(this, this[$observer].takeRecords());
-		const selectionRange = getSelectionRange(this, this[$cache]);
+		validate(this);
+		const selectionRange = this[$selectionRange];
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -217,7 +229,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		selectionEnd: number,
 		selectionDirection: SelectionDirection = "none",
 	): void {
-		validate(this, this[$observer].takeRecords());
+		validate(this);
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -229,13 +241,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	indexAt(node: Node | null, offset: number): number {
-		validate(this, this[$observer].takeRecords());
+		validate(this);
 		const cache = this[$cache];
 		return indexAt(this, cache, node, offset);
 	}
 
 	nodeOffsetAt(index: number): [Node | null, number] {
-		validate(this, this[$observer].takeRecords());
+		validate(this);
 		const cache = this[$cache];
 		return nodeOffsetAt(this, cache, index);
 	}
@@ -286,18 +298,41 @@ const BLOCKLIKE_ELEMENTS = new Set([
 
 function validate(
 	root: ContentAreaElement,
-	records: Array<MutationRecord>,
+	records?: Array<MutationRecord> | undefined,
 ): boolean {
 	const cache = root[$cache];
+	let dispatchImmediately = true;
+	if (!records) {
+		records = root[$observer].takeRecords();
+		dispatchImmediately = false;
+	}
+
 	if (invalidate(root, cache, records)) {
 		const oldValue = root[$value];
-		const oldSelectionStart = root[$selectionStart];
+		const oldSelectionRange = root[$selectionRange];
 		const value = (root[$value] = getValue(root, cache, oldValue));
-		const hint = Math.min(oldSelectionStart, root.selectionStart);
-		// TODO: This call is expensive. If we have getContent return a edit
-		// instead of a string, we might be able to save a lot in CPU time.
+		const selectionRange = (root[$selectionRange] = getSelectionRange(root, cache));
+
+		// The hint is used to disambiguate edits to runs of the same character.
+		// For instance, if you deleted the second "a" in the string "aaaa" there
+		// would be no way to disambiguate which "a" you had deleted without
+		// selection information.
+		const hint = Math.min(
+			oldSelectionRange.selectionStart,
+			selectionRange.selectionStart,
+		);
+
+		// TODO: This call is expensive. If we have getValue return an edit instead
+		// of a string, we might be able to save a lot in CPU time.
 		const edit = Edit.diff(oldValue, value, hint);
-		root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
+		if (dispatchImmediately) {
+			root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
+		} else {
+			Promise.resolve().then(() => {
+				root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
+			});
+		}
+
 		return true;
 	}
 
@@ -306,7 +341,7 @@ function validate(
 
 // This is the single most complicated function in the library!!!
 /**
- * This function returns the content of the root (always a content-area
+ * This function both returns the content of the root (always a content-area
  * element, and populates the cache with info about the contents of nodes for
  * future reads.
  * @param root - The root element (usually a content-area element)
@@ -412,6 +447,7 @@ function getValue(
 			// Reading from oldContent because length hasn’t been invalidated.
 			const length = info.size;
 			if (oldIndex + info.size > oldContent.length) {
+				// This should never happen
 				throw new Error("String length mismatch");
 			}
 
@@ -477,7 +513,7 @@ function getValue(
 					oldIndex += info.offset - oldOffset;
 				} else if (info.offset < oldOffset) {
 					// This should never happen
-					throw new Error("Invalid state");
+					throw new Error("Offset is before old offset");
 				}
 
 				info.offset = offset;
@@ -486,6 +522,7 @@ function getValue(
 			descending = false;
 			if (walker.currentNode !== root) {
 				if (!stack.length) {
+					// This should never happen
 					throw new Error("Stack is empty");
 				}
 
@@ -506,11 +543,15 @@ function isBlocklikeElement(node: Node): node is Element {
 }
 
 function invalidate(
-	root: Element,
+	root: ContentAreaElement,
 	cache: NodeInfoCache,
 	records: Array<MutationRecord>,
 ): boolean {
-	let invalidated = false;
+	if (!cache.get(root)) {
+		// This should never happen
+		throw new Error("Cache is missing root");
+	}
+
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
 		// We make sure all added and removed nodes are cleared from the cache just
@@ -525,7 +566,6 @@ function invalidate(
 
 		let node = record.target;
 		if (node === root) {
-			invalidated = true;
 			continue;
 		} else if (!root.contains(node)) {
 			clear(node, cache);
@@ -546,21 +586,15 @@ function invalidate(
 			if (info) {
 				info.flags &= ~IS_VALID;
 			}
-
-			invalidated = true;
 		}
 	}
 
-	if (invalidated) {
-		const info = cache.get(root);
-		if (info) {
-			info.flags &= ~IS_VALID;
-		}
-	} else if (!cache.get(root)) {
-		return true;
+	if (records.length) {
+		const info = cache.get(root)!;
+		info.flags &= ~IS_VALID;
 	}
 
-	return invalidated;
+	return !!records.length;
 }
 
 /**
@@ -709,7 +743,8 @@ function findNodeOffset(
 			// This branch should only run when an element prepends an newline
 			const previousSibling = walker.previousSibling();
 			if (!previousSibling) {
-				throw new Error("Invalid state");
+				// This should never happen
+				throw new Error("Previous sibling missing");
 			}
 
 			return [previousSibling, getNodeLength(previousSibling)];
@@ -778,7 +813,7 @@ function getSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
 ): SelectionRange {
-	const selection = document.getSelection();
+	const selection = window.getSelection();
 	if (selection == null) {
 		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
 	}
@@ -810,16 +845,12 @@ function setSelectionRange(
 	selectionEnd: number,
 	selectionDirection: SelectionDirection,
 ): void {
-	const selection = document.getSelection();
+	const selection = window.getSelection();
 	if (!selection) {
 		return;
 	}
 
-	// TODO: is this still true?
-	// We bound selection range to the length of value minus the trailing
-	// newline because attempting to select after the final newline can cause
-	// editable elements to lose focus.
-	const length = value.replace(/(\r|\n|\r\n)$/, "").length;
+	const length = value.length;
 	selectionStart = selectionStart || 0;
 	selectionEnd = selectionEnd || 0;
 	selectionStart = Math.max(0, Math.min(length, selectionStart));
