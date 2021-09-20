@@ -46,11 +46,10 @@ const $slot = Symbol.for("revise$slot");
 const $cache = Symbol.for("revise$cache");
 const $observer = Symbol.for("revise$observer");
 const $value = Symbol.for("revise$value");
-const $selectionRange = Symbol.for("revise$selectionRange");
+const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
-const css = `
-:host {
+const css = `:host {
 	display: contents;
 	white-space: pre-wrap;
 	white-space: break-spaces;
@@ -62,7 +61,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$cache]: NodeInfoCache;
 	[$observer]: MutationObserver;
 	[$slot]: HTMLSlotElement;
-	[$selectionRange]: SelectionRange;
+	[$selectionStart]: number;
 	[$onselectionchange]: () => void;
 	constructor() {
 		super();
@@ -81,18 +80,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			validate(this, records);
 		});
 
-		this[$selectionRange] = {
-			selectionStart: 0,
-			selectionEnd: 0,
-			selectionDirection: "none",
-		};
-
+		this[$selectionStart] = 0;
 		this[$onselectionchange] = () => {
 			validate(this);
-			this[$selectionRange] = getSelectionRange(this, this[$cache]);
-			Promise.resolve(() => {
-				this.dispatchEvent(new Event("selectionchange", {bubbles: true}));
-			});
+			this[$selectionStart] = getSelectionRange(
+				this,
+				this[$cache],
+			).selectionStart;
 		};
 	}
 
@@ -117,12 +111,10 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		});
 
 		this[$value] = getValue(this, this[$cache], "");
-		this[$selectionRange] = getSelectionRange(this, this[$cache]);
-		// TODO: We use event capture in an attempt to run before any other
-		// selectionchange event listeners. It is still technically possible for a
-		// selectionchange event listener to execute before
-		// this[$onselectionchange], which can cause stale selection range objects
-		// to be read. Figure out a way to deal with this.
+		this[$selectionStart] = getSelectionRange(
+			this,
+			this[$cache],
+		).selectionStart;
 		document.addEventListener(
 			"selectionchange",
 			this[$onselectionchange],
@@ -171,13 +163,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionStart(): number {
 		validate(this);
-		return this[$selectionRange].selectionStart;
+		return getSelectionRange(this, this[$cache]).selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
 		validate(this);
 
-		const selectionRange = this[$selectionRange];
+		const selectionRange = getSelectionRange(this, this[$cache]);
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -190,12 +182,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionEnd(): number {
 		validate(this);
-		return this[$selectionRange].selectionEnd;
+		return getSelectionRange(this, this[$cache]).selectionEnd;
 	}
 
 	set selectionEnd(selectionEnd: number) {
 		validate(this);
-		const selectionRange = this[$selectionRange];
+		const selectionRange = getSelectionRange(this, this[$cache]);
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -208,12 +200,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionDirection(): SelectionDirection {
 		validate(this);
-		return this[$selectionRange].selectionDirection;
+		return getSelectionRange(this, this[$cache]).selectionDirection;
 	}
 
 	set selectionDirection(selectionDirection: SelectionDirection) {
 		validate(this);
-		const selectionRange = this[$selectionRange];
+		const selectionRange = getSelectionRange(this, this[$cache]);
 		setSelectionRange(
 			this,
 			this[$cache],
@@ -222,6 +214,11 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			selectionRange.selectionEnd,
 			selectionDirection,
 		);
+	}
+
+	getSelectionRange(): SelectionRange {
+		validate(this);
+		return getSelectionRange(this, this[$cache]);
 	}
 
 	setSelectionRange(
@@ -299,44 +296,84 @@ const BLOCKLIKE_ELEMENTS = new Set([
 function validate(
 	root: ContentAreaElement,
 	records?: Array<MutationRecord> | undefined,
-): boolean {
+): void {
 	const cache = root[$cache];
-	let dispatchImmediately = true;
 	if (!records) {
 		records = root[$observer].takeRecords();
-		dispatchImmediately = false;
 	}
 
-	if (invalidate(root, cache, records)) {
-		const oldValue = root[$value];
-		const oldSelectionRange = root[$selectionRange];
-		const value = (root[$value] = getValue(root, cache, oldValue));
-		const selectionRange = (root[$selectionRange] = getSelectionRange(root, cache));
+	if (!invalidate(root, cache, records)) {
+		return;
+	}
 
-		// The hint is used to disambiguate edits to runs of the same character.
-		// For instance, if you deleted the second "a" in the string "aaaa" there
-		// would be no way to disambiguate which "a" you had deleted without
-		// selection information.
-		const hint = Math.min(
-			oldSelectionRange.selectionStart,
-			selectionRange.selectionStart,
-		);
+	const oldValue = root[$value];
+	const oldSelectionStart = root[$selectionStart];
+	const value = (root[$value] = getValue(root, cache, oldValue));
+	const selectionStart = getSelectionRange(root, cache).selectionStart;
 
-		// TODO: This call is expensive. If we have getValue return an edit instead
-		// of a string, we might be able to save a lot in CPU time.
-		const edit = Edit.diff(oldValue, value, hint);
-		if (dispatchImmediately) {
-			root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
-		} else {
-			Promise.resolve().then(() => {
-				root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
-			});
+	// The hint is used to disambiguate edits to runs of the same character.
+	// For instance, if you deleted the second "a" in the string "aaaa" there
+	// would be no way to disambiguate which "a" you had deleted without
+	// selection information.
+	const hint = Math.min(oldSelectionStart, selectionStart);
+	// TODO: This call is expensive. If we have getValue return an edit instead
+	// of a string, we might be able to save a lot in CPU time.
+	const edit = Edit.diff(oldValue, value, hint);
+	root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
+}
+
+function invalidate(
+	root: ContentAreaElement,
+	cache: NodeInfoCache,
+	records: Array<MutationRecord>,
+): boolean {
+	if (!cache.get(root)) {
+		// This should never happen
+		throw new Error("Cache is missing root");
+	}
+
+	let invalid = false;
+	for (let i = 0; i < records.length; i++) {
+		const record = records[i];
+		// We make sure all added and removed nodes are cleared from the cache just
+		// in case of any MutationObserver weirdness.
+		for (let j = 0; j < record.addedNodes.length; j++) {
+			clear(record.addedNodes[j], cache);
 		}
 
-		return true;
+		for (let j = 0; j < record.removedNodes.length; j++) {
+			clear(record.removedNodes[j], cache);
+		}
+
+		let node = record.target;
+		if (node === root) {
+			invalid = true;
+			continue;
+		} else if (!root.contains(node)) {
+			clear(node, cache);
+			continue;
+		}
+
+		for (; node !== root; node = node.parentNode!) {
+			if (!cache.has(node)) {
+				break;
+			}
+
+			const info = cache.get(node);
+			if (info) {
+				info.flags &= ~IS_VALID;
+			}
+
+			invalid = true;
+		}
 	}
 
-	return false;
+	if (invalid) {
+		const info = cache.get(root)!;
+		info.flags &= ~IS_VALID;
+	}
+
+	return invalid;
 }
 
 // This is the single most complicated function in the library!!!
@@ -540,61 +577,6 @@ function isBlocklikeElement(node: Node): node is Element {
 	return (
 		node.nodeType === Node.ELEMENT_NODE && BLOCKLIKE_ELEMENTS.has(node.nodeName)
 	);
-}
-
-function invalidate(
-	root: ContentAreaElement,
-	cache: NodeInfoCache,
-	records: Array<MutationRecord>,
-): boolean {
-	if (!cache.get(root)) {
-		// This should never happen
-		throw new Error("Cache is missing root");
-	}
-
-	for (let i = 0; i < records.length; i++) {
-		const record = records[i];
-		// We make sure all added and removed nodes are cleared from the cache just
-		// in case of any MutationObserver weirdness.
-		for (let j = 0; j < record.addedNodes.length; j++) {
-			clear(record.addedNodes[j], cache);
-		}
-
-		for (let j = 0; j < record.removedNodes.length; j++) {
-			clear(record.removedNodes[j], cache);
-		}
-
-		let node = record.target;
-		if (node === root) {
-			continue;
-		} else if (!root.contains(node)) {
-			clear(node, cache);
-			continue;
-		}
-
-		for (; node !== root; node = node.parentNode!) {
-			if (
-				!cache.has(node) ||
-				(node !== record.target &&
-					node.nodeType === Node.ELEMENT_NODE &&
-					(node as Element).hasAttribute("data-content"))
-			) {
-				break;
-			}
-
-			const info = cache.get(node);
-			if (info) {
-				info.flags &= ~IS_VALID;
-			}
-		}
-	}
-
-	if (records.length) {
-		const info = cache.get(root)!;
-		info.flags &= ~IS_VALID;
-	}
-
-	return !!records.length;
 }
 
 /**
@@ -814,7 +796,7 @@ function getSelectionRange(
 	cache: NodeInfoCache,
 ): SelectionRange {
 	const selection = window.getSelection();
-	if (selection == null) {
+	if (!selection) {
 		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
 	}
 
@@ -833,7 +815,7 @@ function getSelectionRange(
 		selectionStart: Math.min(focus, anchor),
 		selectionEnd: Math.max(focus, anchor),
 		selectionDirection:
-			focus === anchor ? "none" : focus < anchor ? "backward" : "forward",
+			focus < anchor ? "backward" : focus > anchor ? "forward" : "none",
 	};
 }
 
@@ -882,7 +864,7 @@ function setSelectionRange(
 		} else if (focusNode === null) {
 			selection.collapse(anchorNode, anchorOffset);
 		} else {
-			// TODO: This is not a method in IE. Do we care???
+			// This is not a method in IE. We don’t care.
 			selection.setBaseAndExtent(
 				anchorNode,
 				anchorOffset,
