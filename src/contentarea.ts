@@ -43,9 +43,13 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
 const $slot = Symbol.for("revise$slot");
+const $value = Symbol.for("revise$value");
 const $cache = Symbol.for("revise$cache");
 const $observer = Symbol.for("revise$observer");
-const $value = Symbol.for("revise$value");
+// For the most part, we compute selection info on the fly, because of weird
+// race conditions. However, we need to retain the previous selectionStart when
+// building edits so that we can disambiguate edits to runs of characters. See
+// the Edit.diff call below.
 const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
@@ -65,17 +69,19 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$onselectionchange]: () => void;
 	constructor() {
 		super();
+		{
+			const slot = document.createElement("slot");
+			const shadow = this.attachShadow({mode: "closed"});
+			const style = document.createElement("style");
+			style.textContent = css;
+			shadow.appendChild(style);
+			slot.contentEditable = this.contentEditable;
+			shadow.appendChild(slot);
+			this[$slot] = slot;
+		}
+
 		this[$value] = "";
 		this[$cache] = new Map();
-		const shadow = this.attachShadow({mode: "closed"});
-		const style = document.createElement("style");
-		style.textContent = css;
-		shadow.appendChild(style);
-		const slot = document.createElement("slot");
-		this[$slot] = slot;
-		slot.contentEditable = this.contentEditable;
-		shadow.appendChild(slot);
-
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, records);
 		});
@@ -311,10 +317,6 @@ function validate(
 	const value = (root[$value] = getValue(root, cache, oldValue));
 	const selectionStart = getSelectionRange(root, cache).selectionStart;
 
-	// The hint is used to disambiguate edits to runs of the same character.
-	// For instance, if you deleted the second "a" in the string "aaaa" there
-	// would be no way to disambiguate which "a" you had deleted without
-	// selection information.
 	const hint = Math.min(oldSelectionStart, selectionStart);
 	// TODO: This call is expensive. If we have getValue return an edit instead
 	// of a string, we might be able to save a lot in CPU time.

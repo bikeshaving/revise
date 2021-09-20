@@ -110,17 +110,23 @@ export class Edit {
 		);
 	}
 
+	/**
+	 * Given two strings, this method finds an edit which can be applied to the
+	 * first string to result in the second.
+	 * An optional hint can be provided to disambiguate edits when they are made
+	 * to overlapping characters.
+	 */
 	static diff(text1: string, text2: string, hint?: number): Edit {
 		let prefix = commonPrefixLength(text1, text2);
 		let suffix = commonSuffixLength(text1, text2);
+		// prefix and suffix overlap when edits are runs of the same character.
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {
-			// prefix and suffix overlap when edits are runs of the same character.
 			if (hint !== undefined && hint > -1) {
 				prefix = Math.min(prefix, hint);
 			}
 
 			// TODO: We can probably avoid the commonSuffixLength() call here in
-			// favor of arithmetic.
+			// favor of arithmetic but I’m too dumb to figure it out.
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
@@ -413,6 +419,7 @@ function commonPrefixLength(text1: string, text2: string) {
 			return i;
 		}
 	}
+
 	return length;
 }
 
