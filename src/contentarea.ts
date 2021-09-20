@@ -46,10 +46,6 @@ const $slot = Symbol.for("revise$slot");
 const $value = Symbol.for("revise$value");
 const $cache = Symbol.for("revise$cache");
 const $observer = Symbol.for("revise$observer");
-// For the most part, we compute selection info on the fly, because of weird
-// race conditions. However, we need to retain the previous selectionStart when
-// building edits so that we can disambiguate edits to runs of characters. See
-// the Edit.diff call below.
 const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
@@ -65,6 +61,10 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$cache]: NodeInfoCache;
 	[$observer]: MutationObserver;
 	[$slot]: HTMLSlotElement;
+	// For the most part, we compute selection info on the fly, because of weird
+	// race conditions. However, we need to retain the previous selectionStart when
+	// building edits so that we can disambiguate edits to runs of characters. See
+	// the Edit.diff call below.
 	[$selectionStart]: number;
 	[$onselectionchange]: () => void;
 	constructor() {
