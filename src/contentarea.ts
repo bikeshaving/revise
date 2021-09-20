@@ -179,7 +179,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		setSelectionRange(
 			this,
 			this[$cache],
-			this[$value],
 			selectionStart,
 			selectionRange.selectionEnd,
 			selectionRange.selectionDirection,
@@ -197,7 +196,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		setSelectionRange(
 			this,
 			this[$cache],
-			this[$value],
 			selectionRange.selectionStart,
 			selectionEnd,
 			selectionRange.selectionDirection,
@@ -215,7 +213,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		setSelectionRange(
 			this,
 			this[$cache],
-			this[$value],
 			selectionRange.selectionStart,
 			selectionRange.selectionEnd,
 			selectionDirection,
@@ -236,7 +233,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		setSelectionRange(
 			this,
 			this[$cache],
-			this[$value],
 			selectionStart,
 			selectionEnd,
 			selectionDirection,
@@ -824,7 +820,6 @@ function getSelectionRange(
 function setSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
-	value: string,
 	selectionStart: number,
 	selectionEnd: number,
 	selectionDirection: SelectionDirection,
@@ -834,24 +829,15 @@ function setSelectionRange(
 		return;
 	}
 
-	const length = value.length;
-	selectionStart = selectionStart || 0;
-	selectionEnd = selectionEnd || 0;
-	selectionStart = Math.max(0, Math.min(length, selectionStart));
-	selectionEnd = Math.max(0, Math.min(length, selectionEnd));
+	selectionStart = Math.max(0, selectionStart || 0);
+	selectionEnd = Math.max(0, selectionEnd || 0);
 	if (selectionEnd < selectionStart) {
 		selectionStart = selectionEnd;
 	}
 
-	let focusIndex: number;
-	let anchorIndex: number;
-	if (selectionDirection === "backward") {
-		anchorIndex = selectionEnd;
-		focusIndex = selectionStart;
-	} else {
-		anchorIndex = selectionStart;
-		focusIndex = selectionEnd;
-	}
+	const [focusIndex, anchorIndex] = selectionDirection === "backward"
+		? [selectionStart, selectionEnd]
+		: [selectionEnd, selectionStart];
 
 	if (focusIndex === anchorIndex) {
 		const [node, offset] = nodeOffsetAt(root, cache, focusIndex);
