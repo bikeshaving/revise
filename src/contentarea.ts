@@ -835,9 +835,10 @@ function setSelectionRange(
 		selectionStart = selectionEnd;
 	}
 
-	const [focusIndex, anchorIndex] = selectionDirection === "backward"
-		? [selectionStart, selectionEnd]
-		: [selectionEnd, selectionStart];
+	const [focusIndex, anchorIndex] =
+		selectionDirection === "backward"
+			? [selectionStart, selectionEnd]
+			: [selectionEnd, selectionStart];
 
 	if (focusIndex === anchorIndex) {
 		const [node, offset] = nodeOffsetAt(root, cache, focusIndex);
