@@ -728,19 +728,22 @@ function findNodeOffset(
 			}
 
 			return [previousSibling, getNodeLength(previousSibling)];
-		} else if (
-			index === info.size &&
-			(node.nodeType === Node.TEXT_NODE ||
-				(node as Element).hasAttribute("data-content"))
-		) {
-			if (node.nodeType === Node.TEXT_NODE) {
-				return [node, (node as Text).data.length];
-			} else {
-				return nodeOffsetFromChild(node, true);
-			}
+		} else if (index === info.size && node.nodeType === Node.TEXT_NODE) {
+			return [node, (node as Text).data.length];
 		} else if (index >= info.size) {
 			index -= info.size;
-			node = walker.nextSibling();
+			const nextSibling = walker.nextSibling();
+			if (nextSibling === null) {
+				// This branch seems necessary mainly when working with data-content
+				// nodes.
+				if (node === root) {
+					return [node, getNodeLength(node)];
+				}
+
+				return nodeOffsetFromChild(walker.currentNode, true);
+			}
+
+			node = nextSibling;
 		} else {
 			if (
 				node.nodeType === Node.ELEMENT_NODE &&

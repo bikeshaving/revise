@@ -760,14 +760,82 @@ describe("contentarea", () => {
 			}
 		});
 
-		test("data-content", () => {
+		test("data content", () => {
+			//<div>Hello <img> World <img></div>
+			area.innerHTML =
+				'<div>hello <img data-content="👋"> world <img data-content="🌎"></div>';
+
+			expect(area.value).toEqual("hello 👋 world 🌎\n");
+			const div = area.firstChild!;
+			const hello = div.childNodes[0];
+			const wave = div.childNodes[1];
+			const world = div.childNodes[2];
+			const globe = div.childNodes[3];
+			expect(area.nodeOffsetAt(-1)).toEqual([null, 0]);
+			expect(area.nodeOffsetAt(0)).toEqual([hello, 0]);
+			expect(area.nodeOffsetAt(1)).toEqual([hello, 1]);
+			expect(area.nodeOffsetAt(2)).toEqual([hello, 2]);
+			expect(area.nodeOffsetAt(3)).toEqual([hello, 3]);
+			expect(area.nodeOffsetAt(4)).toEqual([hello, 4]);
+			expect(area.nodeOffsetAt(5)).toEqual([hello, 5]);
+			expect(area.nodeOffsetAt(6)).toEqual([hello, 6]);
+			// TODO: It would be nice to have the node be a text node here.
+			expect(area.nodeOffsetAt(7)).toEqual([div, 2]);
+			expect(area.nodeOffsetAt(8)).toEqual([world, 0]);
+			expect(area.nodeOffsetAt(9)).toEqual([world, 1]);
+			expect(area.nodeOffsetAt(10)).toEqual([world, 2]);
+			expect(area.nodeOffsetAt(11)).toEqual([world, 3]);
+			expect(area.nodeOffsetAt(12)).toEqual([world, 4]);
+			expect(area.nodeOffsetAt(13)).toEqual([world, 5]);
+			expect(area.nodeOffsetAt(14)).toEqual([world, 6]);
+			expect(area.nodeOffsetAt(15)).toEqual([world, 7]);
+			expect(area.nodeOffsetAt(16)).toEqual([div, 4]);
+			expect(area.nodeOffsetAt(17)).toEqual([div, 4]);
+			expect(area.nodeOffsetAt(18)).toEqual([area, 1]);
+
+			expect(area.indexAt(div, 0)).toBe(0);
+			expect(area.indexAt(div, 1)).toBe(6);
+			expect(area.indexAt(div, 2)).toBe(8);
+			expect(area.indexAt(div, 3)).toBe(15);
+			expect(area.indexAt(div, 4)).toBe(17);
+			expect(area.indexAt(hello, 0)).toBe(0);
+			expect(area.indexAt(hello, 1)).toBe(1);
+			expect(area.indexAt(hello, 2)).toBe(2);
+			expect(area.indexAt(hello, 3)).toBe(3);
+			expect(area.indexAt(hello, 4)).toBe(4);
+			expect(area.indexAt(hello, 5)).toBe(5);
+			expect(area.indexAt(hello, 6)).toBe(6);
+			expect(area.indexAt(wave, 0)).toBe(6);
+			expect(area.indexAt(wave, 1)).toBe(8);
+			expect(area.indexAt(world, 0)).toBe(8);
+			expect(area.indexAt(world, 1)).toBe(9);
+			expect(area.indexAt(world, 2)).toBe(10);
+			expect(area.indexAt(world, 3)).toBe(11);
+			expect(area.indexAt(world, 4)).toBe(12);
+			expect(area.indexAt(world, 5)).toBe(13);
+			expect(area.indexAt(world, 6)).toBe(14);
+			expect(area.indexAt(world, 7)).toBe(15);
+			expect(area.indexAt(globe, 0)).toBe(15);
+			expect(area.indexAt(globe, 1)).toBe(17);
+
+			for (let i = -1; i < area.value.length + 1; i++) {
+				expect(area.indexAt(...area.nodeOffsetAt(i))).toBe(
+					Math.max(
+						-1,
+						Math.min(area.value.length, i === 7 ? 8 : i === 16 ? 17 : i),
+					),
+				);
+			}
+		});
+
+		test("data-content before end of line", () => {
 			//<div>
 			//  <div>Hello <img></div>
 			//  <div><br></div>
 			//  <div><br></div>
 			//</div>
 			area.innerHTML =
-				'<div><div>Hello <img src="" data-content="🌎"></div><div><br></div><div><br></div></div>';
+				'<div><div>Hello <img data-content="🌎"></div><div><br></div><div><br></div></div>';
 			expect(area.value).toEqual("Hello 🌎\n\n\n");
 			const root = area.firstChild!;
 			const div1 = root.childNodes[0];
@@ -824,9 +892,8 @@ describe("contentarea", () => {
 
 		test("data-content with different children", () => {
 			// <div>
-			//   <span><span>Double a</span></span>
+			//   aa<span data-content="bb"><span>double b</span></span>cc
 			// </div>
-			// <div><br></div>
 			area.innerHTML =
 				'<div>aa<span data-content="bb"><span>double b</span></span>cc</div>';
 			expect(area.value).toBe("aabbcc\n");
@@ -835,14 +902,16 @@ describe("contentarea", () => {
 			const span1 = div.childNodes[1];
 			const cc = div.childNodes[2];
 			const span2 = span1.firstChild;
+
 			expect(area.nodeOffsetAt(0)).toEqual([aa, 0]);
 			expect(area.nodeOffsetAt(1)).toEqual([aa, 1]);
 			expect(area.nodeOffsetAt(2)).toEqual([aa, 2]);
 			expect(area.nodeOffsetAt(3)).toEqual([div, 2]);
-			expect(area.nodeOffsetAt(4)).toEqual([div, 2]);
+			expect(area.nodeOffsetAt(4)).toEqual([cc, 0]);
 			expect(area.nodeOffsetAt(5)).toEqual([cc, 1]);
 			expect(area.nodeOffsetAt(6)).toEqual([cc, 2]);
 			expect(area.nodeOffsetAt(7)).toEqual([area, 1]);
+
 			expect(area.indexAt(span1, 0)).toBe(2);
 			expect(area.indexAt(span1, 1)).toBe(4);
 			expect(area.indexAt(span2, 0)).toBe(2);
@@ -853,6 +922,7 @@ describe("contentarea", () => {
 			expect(area.indexAt(span2, 6)).toBe(2);
 			expect(area.indexAt(span2, 7)).toBe(2);
 			expect(area.indexAt(span2, 8)).toBe(2);
+
 			for (let i = -1; i < area.value.length + 1; i++) {
 				expect(area.indexAt(...area.nodeOffsetAt(i))).toBe(
 					Math.max(-1, Math.min(area.value.length, i === 3 ? 4 : i)),
