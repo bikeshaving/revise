@@ -3,6 +3,7 @@ import {Edit} from "./edit";
 
 export interface ContentEventDetail {
 	edit: Edit;
+	source: string | null;
 	// TODO: add information about changed ranges
 }
 
@@ -15,7 +16,7 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
-/** Whether the node or its children have been mutated */
+/** Whether the node’s info is up to date. */
 const IS_VALID = 1 << 0;
 /** Whether the node is responsible for the newline before it. */
 const PREPENDS_NEWLINE = 1 << 1;
@@ -83,9 +84,8 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 		this[$cache] = new Map([[this, new NodeInfo(0)]]);
 		this[$value] = "";
-
 		this[$observer] = new MutationObserver((records) => {
-			validate(this, records);
+			validate(this, null, records);
 		});
 		this[$selectionStart] = 0;
 		this[$onselectionchange] = () => {
@@ -252,6 +252,10 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		const cache = this[$cache];
 		return nodeOffsetAt(this, cache, index);
 	}
+
+	source(source: string): boolean {
+		return validate(this, source);
+	}
 }
 
 // TODO: custom newlines?
@@ -299,15 +303,12 @@ const BLOCKLIKE_ELEMENTS = new Set([
 
 function validate(
 	root: ContentAreaElement,
-	records?: Array<MutationRecord> | undefined,
-): void {
+	source: string | null = null,
+	records: Array<MutationRecord> = root[$observer].takeRecords(),
+): boolean {
 	const cache = root[$cache];
-	if (!records) {
-		records = root[$observer].takeRecords();
-	}
-
 	if (!invalidate(root, cache, records)) {
-		return;
+		return false;
 	}
 
 	const oldValue = root[$value];
@@ -319,7 +320,16 @@ function validate(
 	// TODO: This call is expensive. If we have getValue return an edit instead
 	// of a string, we might be able to save a lot in CPU time.
 	const edit = Edit.diff(oldValue, value, hint);
-	root.dispatchEvent(new ContentEvent("contentchange", {detail: {edit}}));
+	root.dispatchEvent(
+		new ContentEvent("contentchange", {
+			detail: {
+				edit,
+				source,
+			},
+		}),
+	);
+
+	return true;
 }
 
 function invalidate(
@@ -345,6 +355,7 @@ function invalidate(
 			clear(record.removedNodes[j], cache);
 		}
 
+		// TODO: invalidate data-content nodes correctly.
 		let node = record.target;
 		if (node === root) {
 			invalid = true;
