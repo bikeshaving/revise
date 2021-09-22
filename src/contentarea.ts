@@ -43,8 +43,8 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
 const $slot = Symbol.for("revise$slot");
-const $value = Symbol.for("revise$value");
 const $cache = Symbol.for("revise$cache");
+const $value = Symbol.for("revise$value");
 const $observer = Symbol.for("revise$observer");
 const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
@@ -57,19 +57,20 @@ const css = `:host {
 }`;
 
 export class ContentAreaElement extends HTMLElement implements SelectionRange {
-	[$value]: string;
-	[$cache]: NodeInfoCache;
-	[$observer]: MutationObserver;
 	[$slot]: HTMLSlotElement;
+	[$cache]: NodeInfoCache;
+	[$value]: string;
+	[$observer]: MutationObserver;
 	// For the most part, we compute selection info on the fly, because of weird
-	// race conditions. However, we need to retain the previous selectionStart when
-	// building edits so that we can disambiguate edits to runs of characters. See
-	// the Edit.diff call below.
+	// race conditions. However, we need to retain the previous selectionStart
+	// when building edits so that we can disambiguate edits to runs of
+	// characters. See the Edit.diff call below.
 	[$selectionStart]: number;
 	[$onselectionchange]: () => void;
 	constructor() {
 		super();
 		{
+			// Creating the shadow DOM.
 			const slot = document.createElement("slot");
 			const shadow = this.attachShadow({mode: "closed"});
 			const style = document.createElement("style");
@@ -80,12 +81,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			this[$slot] = slot;
 		}
 
+		this[$cache] = new Map([[this, new NodeInfo(0)]]);
 		this[$value] = "";
-		this[$cache] = new Map();
+
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, records);
 		});
-
 		this[$selectionStart] = 0;
 		this[$onselectionchange] = () => {
 			validate(this);
@@ -124,6 +125,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		document.addEventListener(
 			"selectionchange",
 			this[$onselectionchange],
+			// We use capture in an attempt to run before other event listeners.
 			true,
 		);
 	}
