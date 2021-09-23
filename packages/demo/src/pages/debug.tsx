@@ -40,8 +40,7 @@ function* Debugger(this: Context) {
 	});
 
 	for ({} of this) {
-		this.schedule(([area1]) => {
-			area = area1;
+		this.schedule(() => {
 			const html1 = area.firstChild!.innerHTML;
 			if (html !== html1) {
 				html = html1;
@@ -50,7 +49,8 @@ function* Debugger(this: Context) {
 		});
 		yield (
 			<Fragment>
-				<content-area>
+				<h1>😤 Debugger 😤</h1>
+				<content-area crank-ref={(ref: ContentAreaElement) => (area = ref)}>
 					<div class="editable" contenteditable="true" crank-static={true}>
 						<div>Hello</div>
 						<div>World</div>
