@@ -82,7 +82,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			this[$slot] = slot;
 		}
 
-		this[$cache] = new Map([[this, new NodeInfo(0)]]);
+		this[$cache] = new Map();
 		this[$value] = "";
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, null, records);
@@ -338,8 +338,7 @@ function invalidate(
 	records: Array<MutationRecord>,
 ): boolean {
 	if (!cache.get(root)) {
-		// This should never happen
-		throw new Error("Cache is missing root");
+		return true;
 	}
 
 	let invalid = false;
