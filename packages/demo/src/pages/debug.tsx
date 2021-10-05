@@ -47,11 +47,12 @@ function* Debugger(this: Context) {
 				this.refresh();
 			}
 		});
+
 		yield (
 			<Fragment>
 				<h1>😤 Debugger 😤</h1>
-				<content-area crank-ref={(ref: ContentAreaElement) => (area = ref)}>
-					<div class="editable" contenteditable="true" crank-static={true}>
+				<content-area c-ref={(ref: any) => (area = ref)}>
+					<div class="editable" contenteditable="true" c-static={true}>
 						<div>Hello</div>
 						<div>World</div>
 					</div>

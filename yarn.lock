@@ -369,10 +369,10 @@
   resolved "https://registry.yarnpkg.com/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz#75a2e8b51cb758a7553d6804a5932d7aace75c39"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bikeshaving/crank@^0.4.0-beta.1":
-  version "0.4.0-beta.1"
-  resolved "https://registry.yarnpkg.com/@bikeshaving/crank/-/crank-0.4.0-beta.1.tgz#163292e96fa9c5f0b2da45d2fb8743df8d905007"
-  integrity sha512-CUXpY1JG6w7D/bgxwCtX9oamKEX2g4uI0nvU1t4pnd8trCDPD4b8bHaBYsX5eAOZx5/bTU9wPzhVGAu7wI+v3w==
+"@bikeshaving/crank@^0.4.0-beta.3":
+  version "0.4.0-beta.3"
+  resolved "https://registry.yarnpkg.com/@bikeshaving/crank/-/crank-0.4.0-beta.3.tgz#66c80df7db28654f327e7cb2751a473ca706662d"
+  integrity sha512-7/cZSLKxLDJIsDtWZNIaGQ8zOpE+0tILhUWvYaF9GxSRcY9o586AHhxd9LVoeTf/qRXpcLneOjn95VOiR3dwKw==
 
 "@cnakazawa/watch@^1.0.3":
   version "1.0.4"
