@@ -254,15 +254,14 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	source(source: string): boolean {
-		return validate(this, source);
+		return validate(this, source, this[$observer].takeRecords());
 	}
 }
 
 // TODO: custom newlines?
 const NEWLINE = "\n";
 
-// TODO: Allow the list of block-like elements to be overridden with an
-// attribute.
+// TODO: Try using getComputedStyle
 const BLOCKLIKE_ELEMENTS = new Set([
 	"ADDRESS",
 	"ARTICLE",
@@ -304,9 +303,17 @@ const BLOCKLIKE_ELEMENTS = new Set([
 function validate(
 	root: ContentAreaElement,
 	source: string | null = null,
-	records: Array<MutationRecord> = root[$observer].takeRecords(),
+	records?: Array<MutationRecord> | undefined,
 ): boolean {
 	const cache = root[$cache];
+	// We use the existence of records to determine whether
+	// contentchange events should be fired synchronously.
+	let delay = false;
+	if (records === undefined) {
+		delay = true;
+		records = root[$observer].takeRecords();
+	}
+
 	if (!invalidate(root, cache, records)) {
 		return false;
 	}
@@ -320,14 +327,12 @@ function validate(
 	// TODO: This call is expensive. If we have getValue return an edit instead
 	// of a string, we might be able to save a lot in CPU time.
 	const edit = Edit.diff(oldValue, value, hint);
-	root.dispatchEvent(
-		new ContentEvent("contentchange", {
-			detail: {
-				edit,
-				source,
-			},
-		}),
-	);
+	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
+	if (delay) {
+		Promise.resolve().then(() => root.dispatchEvent(ev));
+	} else {
+		root.dispatchEvent(ev);
+	}
 
 	return true;
 }
