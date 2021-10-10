@@ -1,11 +1,8 @@
-import {createElement, Fragment} from '@bikeshaving/crank/crank.js';
-import type {Context} from '@bikeshaving/crank/crank.js';
-import {renderer} from '@bikeshaving/crank/dom.js';
-import {ContentAreaElement} from '@bikeshaving/revise/contentarea.js';
-import type {
-	ContentEvent,
-	SelectionRange,
-} from '@bikeshaving/revise/contentarea.js';
+import {createElement, Fragment} from '@b9g/crank/crank.js';
+import type {Context} from '@b9g/crank/crank.js';
+import {renderer} from '@b9g/crank/dom.js';
+import {ContentAreaElement} from '@b9g/revise/contentarea.js';
+import type {ContentEvent, SelectionRange} from '@b9g/revise/contentarea.js';
 
 function* Debugger(this: Context) {
 	let content = '\n';

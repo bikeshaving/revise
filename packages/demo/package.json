@@ -6,8 +6,8 @@
     "start": "snowpack dev"
   },
   "dependencies": {
-    "@bikeshaving/crank": "^0.4.0-beta.3",
-    "@bikeshaving/revise": "*",
+    "@b9g/crank": "^0.4.0",
+    "@b9g/revise": "*",
     "@types/prismjs": "^1.16.2",
     "prismjs": "^1.23.0",
     "twemoji": "^13.0.1"

@@ -1,8 +1,8 @@
 import {ContentArea} from '../components/contentarea.js';
-import type {Keyer} from '@bikeshaving/revise/keyer.js';
-import {createElement} from '@bikeshaving/crank/crank.js';
-import type {Context, Element} from '@bikeshaving/crank/crank.js';
-import {renderer} from '@bikeshaving/crank/dom.js';
+import type {Keyer} from '@b9g/revise/keyer.js';
+import {createElement} from '@b9g/crank/crank.js';
+import type {Context, Element} from '@b9g/crank/crank.js';
+import {renderer} from '@b9g/crank/dom.js';
 
 /*** Prism Logic ***/
 import Prism from 'prismjs';

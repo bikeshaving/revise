@@ -1,6 +1,6 @@
-import {createElement} from '@bikeshaving/crank/crank.js';
-import type {Context} from '@bikeshaving/crank/crank.js';
-import {renderer} from '@bikeshaving/crank/dom.js';
+import {createElement} from '@b9g/crank/crank.js';
+import type {Context} from '@b9g/crank/crank.js';
+import {renderer} from '@b9g/crank/dom.js';
 import {ContentArea} from '../components/contentarea.js';
 import twemoji from 'twemoji';
 

@@ -1,6 +1,6 @@
-import type {Context} from '@bikeshaving/crank/crank.js';
-import {createElement} from '@bikeshaving/crank/crank.js';
-import {renderer} from '@bikeshaving/crank/dom.js';
+import type {Context} from '@b9g/crank/crank.js';
+import {createElement} from '@b9g/crank/crank.js';
+import {renderer} from '@b9g/crank/dom.js';
 import {ContentArea} from '../components/contentarea.js';
 
 const COLORS = [
@@ -26,7 +26,7 @@ function Rainbow(this: Context, {value}: {value: string}) {
 		const key = keyer.keyAt(cursor);
 		cursor += line.length + 1;
 		return (
-			<div crank-key={key} data-key={key}>
+			<div c-key={key} data-key={key}>
 				{line ? (
 					[...line].map((char, i) => (
 						<span style={{color: COLORS[i % COLORS.length]}}>{char}</span>

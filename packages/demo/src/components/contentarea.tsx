@@ -1,12 +1,9 @@
-import {
-	ContentEvent,
-	ContentAreaElement,
-} from '@bikeshaving/revise/contentarea.js';
-import type {SelectionRange} from '@bikeshaving/revise/contentarea.js';
-import {Keyer} from '@bikeshaving/revise/keyer.js';
+import {ContentEvent, ContentAreaElement} from '@b9g/revise/contentarea.js';
+import type {SelectionRange} from '@b9g/revise/contentarea.js';
+import {Keyer} from '@b9g/revise/keyer.js';
 
-import {createElement} from '@bikeshaving/crank/crank.js';
-import type {Context} from '@bikeshaving/crank/crank.js';
+import {createElement} from '@b9g/crank/crank.js';
+import type {Context} from '@b9g/crank/crank.js';
 
 export interface ContentAreaProps {
 	children: unknown;
@@ -17,14 +14,8 @@ export interface ContentAreaProps {
 
 export function* ContentArea(
 	this: Context<ContentAreaProps>,
-	{children, selectionRange, value, renderSource}: ContentAreaProps,
+	{value, children, selectionRange, renderSource}: ContentAreaProps,
 ) {
-	const initialSelectionRange = {
-		selectionStart: 0,
-		selectionEnd: 0,
-		selectionDirection: 'none',
-	} as const;
-
 	const keyer = new Keyer();
 	this.provide('ContentAreaKeyer', keyer);
 
@@ -42,42 +33,40 @@ export function* ContentArea(
 		this.refresh();
 	});
 
-	let newSelectionRange: SelectionRange | null | undefined;
+	let oldSelectionRange: SelectionRange | undefined;
 	for ({
-		children,
-		selectionRange: newSelectionRange = selectionRange || initialSelectionRange,
 		value,
+		children,
+		selectionRange = oldSelectionRange,
 		renderSource,
 	} of this) {
-		if (newSelectionRange) {
-			selectionRange = newSelectionRange;
-		}
-
-		this.flush((el) => {
+		this.flush((area) => {
 			if (typeof renderSource === 'string') {
-				el.source(renderSource);
+				area.source(renderSource);
 			}
 
-			if (typeof value === 'string' && value !== el.value) {
+			if (typeof value === 'string' && value !== area.value) {
 				console.error(
 					`Expected value ${JSON.stringify(
 						value,
-					)} but received ${JSON.stringify(el.value)} from the DOM`,
+					)} but received ${JSON.stringify(area.value)} from the DOM`,
 				);
 			}
 
-			el.setSelectionRange(
-				selectionRange!.selectionStart,
-				selectionRange!.selectionEnd,
-				selectionRange!.selectionDirection,
-			);
+			if (selectionRange) {
+				area.setSelectionRange(
+					selectionRange.selectionStart,
+					selectionRange.selectionEnd,
+					selectionRange.selectionDirection,
+				);
+			}
 		});
 
-		const el = yield (
+		const area = yield (
 			<content-area crank-static={composing}>{children}</content-area>
 		);
 
-		selectionRange = el.getSelectionRange();
+		oldSelectionRange = area.getSelectionRange();
 	}
 }
 
