@@ -99,7 +99,14 @@ function printTokens(tokens: Array<Token | string>): Array<Element | string> {
 			const children = Array.isArray(token.content)
 				? printTokens(token.content)
 				: token.content;
-			result.push(<span class={'token ' + token.type}>{children}</span>);
+			let className = "token " + token.type;
+			if (Array.isArray(token.alias)) {
+				className += " " + token.alias.join(" ");
+			} else if (typeof token.alias === "string") {
+				className += " " + token.alias;
+			}
+
+			result.push(<span class={className}>{children}</span>);
 		}
 	}
 
