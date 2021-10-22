@@ -30,7 +30,10 @@ export function* ContentArea(
 
 	this.addEventListener('compositionend', () => {
 		composing = false;
-		this.refresh();
+		// Refreshing synchronously seems to cause weird effects with
+		// characters getting preserved in Korean (and probably other
+		// langauges).
+		Promise.resolve().then(() => this.refresh());
 	});
 
 	let oldSelectionRange: SelectionRange | undefined;
