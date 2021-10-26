@@ -23,7 +23,7 @@ function* Debugger(this: Context) {
 	this.addEventListener('contentchange', (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		const edit = ev.detail.edit;
-		operations = edit.operations;
+		operations = edit.operations();
 		this.refresh();
 	});
 

@@ -152,7 +152,7 @@ export class Edit {
 		return text;
 	}
 
-	get operations(): Array<Operation> {
+	operations(): Array<Operation> {
 		const operations: Array<Operation> = [];
 		let retaining = false;
 		let index = 0;
@@ -187,19 +187,14 @@ export class Edit {
 			}
 		}
 
-		Object.defineProperty(this, "operations", {
-			value: operations,
-			writable: false,
-			configurable: false,
-		});
-
 		return operations;
 	}
 
 	apply(text: string): string {
 		let text1 = "";
-		for (let i = 0; i < this.operations.length; i++) {
-			const op = this.operations[i];
+		const operations = this.operations();
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
 			switch (op.type) {
 				case "retain":
 					text1 += text.slice(op.start, op.end);
@@ -217,8 +212,9 @@ export class Edit {
 		const insertSizes: Array<number> = [];
 		const deleteSizes: Array<number> = [];
 		let inserted = "";
-		for (let i = 0; i < this.operations.length; i++) {
-			const op = this.operations[i];
+		const operations = this.operations();
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
 			switch (op.type) {
 				case "retain": {
 					const length = op.end - op.start;
@@ -256,8 +252,9 @@ export class Edit {
 		let inserted = "";
 		let deleted = "";
 		let prevInserted: string | undefined;
-		for (let i = 0; i < this.operations.length; i++) {
-			const op = this.operations[i];
+		const operations = this.operations();
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
 			switch (op.type) {
 				case "insert":
 					prevInserted = op.value;

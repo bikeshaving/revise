@@ -4,11 +4,11 @@ import {Edit} from "../edit";
 describe("Edit", () => {
 	describe("operations", () => {
 		test("empty", () => {
-			expect(new Edit([0]).operations).toEqual([]);
+			expect(new Edit([0]).operations()).toEqual([]);
 		});
 
 		test("operations 1", () => {
-			expect(new Edit([0, 5, "oo", 5, 11]).operations).toEqual([
+			expect(new Edit([0, 5, "oo", 5, 11]).operations()).toEqual([
 				{type: "retain", start: 0, end: 5},
 				{type: "insert", start: 5, value: "oo"},
 				{type: "retain", start: 5, end: 11},
@@ -16,7 +16,7 @@ describe("Edit", () => {
 		});
 
 		test("operations 2", () => {
-			expect(new Edit([0, 1, "era", 9, 11]).operations).toEqual([
+			expect(new Edit([0, 1, "era", 9, 11]).operations()).toEqual([
 				{type: "retain", start: 0, end: 1},
 				{type: "insert", start: 1, value: "era"},
 				{type: "delete", start: 1, end: 9},
@@ -25,7 +25,7 @@ describe("Edit", () => {
 		});
 
 		test("operations 3", () => {
-			expect(new Edit(["je", 2, 5, 11]).operations).toEqual([
+			expect(new Edit(["je", 2, 5, 11]).operations()).toEqual([
 				{type: "insert", start: 0, value: "je"},
 				{type: "delete", start: 0, end: 2},
 				{type: "retain", start: 2, end: 5},
@@ -34,7 +34,7 @@ describe("Edit", () => {
 		});
 
 		test("operations 4", () => {
-			expect(new Edit([0, 4, " ", 4, 5, "n Earth", 11]).operations).toEqual([
+			expect(new Edit([0, 4, " ", 4, 5, "n Earth", 11]).operations()).toEqual([
 				{type: "retain", start: 0, end: 4},
 				{type: "insert", start: 4, value: " "},
 				{type: "retain", start: 4, end: 5},
@@ -44,7 +44,7 @@ describe("Edit", () => {
 		});
 
 		test("operations 5", () => {
-			expect(new Edit([0, 6, "buddy", 11]).operations).toEqual([
+			expect(new Edit([0, 6, "buddy", 11]).operations()).toEqual([
 				{type: "retain", start: 0, end: 6},
 				{type: "insert", start: 6, value: "buddy"},
 				{type: "delete", start: 6, end: 11},
@@ -52,14 +52,14 @@ describe("Edit", () => {
 		});
 
 		test("operations 6", () => {
-			expect(new Edit([0, 10, 11]).operations).toEqual([
+			expect(new Edit([0, 10, 11]).operations()).toEqual([
 				{type: "retain", start: 0, end: 10},
 				{type: "delete", start: 10, end: 11},
 			]);
 		});
 
 		test("operations 7", () => {
-			expect(new Edit([0, 11, "s"]).operations).toEqual([
+			expect(new Edit([0, 11, "s"]).operations()).toEqual([
 				{type: "retain", start: 0, end: 11},
 				{type: "insert", start: 11, value: "s"},
 			]);

@@ -19,8 +19,9 @@ export class Keyer {
 	}
 
 	transform(edit: Edit): void {
-		for (let i = edit.operations.length - 1; i >= 0; i--) {
-			const op = edit.operations[i];
+		const operations = edit.operations();
+		for (let i = operations.length - 1; i >= 0; i--) {
+			const op = operations[i];
 			// TODO: Is this correct?
 			switch (op.type) {
 				case "delete":

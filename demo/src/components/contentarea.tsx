@@ -65,7 +65,7 @@ export function* ContentArea(
 			}
 		});
 
-		const area = yield (
+		const area: ContentAreaElement = yield (
 			<content-area crank-static={composing}>{children}</content-area>
 		);
 

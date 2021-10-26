@@ -2,12 +2,13 @@ import {Edit} from "./edit";
 
 // TODO: Figure out if these make sense as Edit methods.
 function isNoop(edit: Edit): boolean {
-	return edit.operations.length === 1 && edit.operations[0].type === "retain";
+	const operations = edit.operations();
+	return operations.length === 1 && operations[0].type === "retain";
 }
 
 function isComplex(edit: Edit): boolean {
 	let count = 0;
-	for (const op of edit.operations) {
+	for (const op of edit.operations()) {
 		if (op.type !== "retain") {
 			count++;
 			if (count > 1) {
