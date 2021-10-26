@@ -8,7 +8,7 @@
     "build": "rollup -c rollup.config.js",
     "test": "jest --rootDir src",
     "debug": "node --inspect-brk ./node_modules/.bin/jest --runInBand --rootDir src",
-    "lint": "eslint --ext js,jsx,ts,tsx src packages/demo/src",
+    "lint": "eslint --ext .js,.jsx,.ts,.tsx .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -51,9 +51,5 @@
       "import": "./history.js",
       "require": "./history.cjs"
     }
-  },
-  "workspaces": [
-    ".",
-    "packages/*"
-  ]
+  }
 }

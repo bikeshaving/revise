@@ -39,7 +39,13 @@ function copyPackage() {
 	};
 }
 
-const input = ["src/subseq.ts", "src/edit.ts", "src/contentarea.ts", "src/keyer.ts", "src/history.ts"];
+const input = [
+	"src/subseq.ts",
+	"src/edit.ts",
+	"src/contentarea.ts",
+	"src/keyer.ts",
+	"src/history.ts",
+];
 
 export default [
 	{
