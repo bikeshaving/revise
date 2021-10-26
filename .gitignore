@@ -1,13 +1,4 @@
 node_modules
 coverage
-lib
-.next
+dist
 *.log
-*.js.map
-*.d.ts
-
-contentarea.js
-edit.js
-keyer.js
-subseq.js
-history.js
