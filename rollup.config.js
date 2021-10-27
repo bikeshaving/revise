@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import ts from "rollup-plugin-typescript2";
+import typescript2 from "rollup-plugin-typescript2";
 import MagicString from "magic-string";
 import pkg from "./package.json";
 
@@ -47,6 +47,13 @@ const input = [
 	"src/history.ts",
 ];
 
+const ts = typescript2({
+	clean: true,
+	tsconfigOverride: {
+		exclude: ["src/__tests__"],
+	},
+});
+
 export default [
 	{
 		input,
@@ -57,7 +64,7 @@ export default [
 			sourcemap: true,
 			exports: "named",
 		},
-		plugins: [ts({clean: true}), dts(), copyPackage()],
+		plugins: [ts, dts(), copyPackage()],
 	},
 	{
 		input,
@@ -69,18 +76,18 @@ export default [
 			sourcemap: true,
 			exports: "named",
 		},
-		plugins: [ts()],
+		plugins: [ts],
 	},
 	//{
 	//	input: "src/umd.ts",
 	//	output: {
 	//		format: "umd",
 	//		dir: "dist",
-	//		name: "Crank",
+	//		name: "Revise",
 	//		preserveModules: false,
 	//		sourcemap: true,
 	//		exports: "named",
 	//	},
-	//	plugins: [ts()],
+	//	plugins: [ts],
 	//},
 ];
