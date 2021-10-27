@@ -60,7 +60,7 @@ function* App(this: Context<{}>) {
 	for ({} of this) {
 		yield (
 			<div class="app">
-				<p class="">Using content-area to render a plaintext field.</p>
+				<p class="">Using content-area to render a rainbow textarea.</p>
 				<ContentArea value={value} renderSource="render">
 					<Rainbow value={value} />
 				</ContentArea>
