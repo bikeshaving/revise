@@ -1,6 +1,6 @@
 {
   "name": "demo",
-  "private" true,
+  "private": true,
   "version": "0.69.420",
   "scripts": {
     "start": "vite"
@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@b9g/crank": "^0.4.0",
-    "@b9g/revise": "*"
+    "@b9g/revise": "file:../dist",
+    "prismjs": "^1.25.0",
+    "twemoji": "^13.1.0"
   }
 }
