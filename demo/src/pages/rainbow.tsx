@@ -1,21 +1,21 @@
-import {createElement} from '@b9g/crank/crank.js';
-import type {Context} from '@b9g/crank/crank.js';
-import {renderer} from '@b9g/crank/dom.js';
+import {createElement} from "@b9g/crank/crank.js";
+import type {Context} from "@b9g/crank/crank.js";
+import {renderer} from "@b9g/crank/dom.js";
 
-import {ContentArea} from '../components/contentarea';
+import {ContentArea} from "../components/contentarea";
 
 const COLORS = [
-	'#FF0000',
-	'#FFA500',
-	'#FFDC00',
-	'#008000',
-	'#0000FF',
-	'#4B0082',
-	'#800080',
+	"#FF0000",
+	"#FFA500",
+	"#FFDC00",
+	"#008000",
+	"#0000FF",
+	"#4B0082",
+	"#800080",
 ];
 
 function Rainbow(this: Context, {value}: {value: string}) {
-	const keyer = this.consume('ContentAreaKeyer');
+	const keyer = this.consume("ContentAreaKeyer");
 	let lines = value.split(/\r\n|\r|\n/);
 	if (/\r\n|\r|\n$/.test(value)) {
 		lines.pop();
@@ -47,9 +47,9 @@ function Rainbow(this: Context, {value}: {value: string}) {
 }
 
 function* App(this: Context<{}>) {
-	let value = '\n';
-	this.addEventListener('contentchange', (ev: any) => {
-		if (ev.detail.source === 'render') {
+	let value = "\n";
+	this.addEventListener("contentchange", (ev: any) => {
+		if (ev.detail.source === "render") {
 			return;
 		}
 
@@ -69,4 +69,4 @@ function* App(this: Context<{}>) {
 	}
 }
 
-renderer.render(<App />, document.getElementById('root')!);
+renderer.render(<App />, document.getElementById("root")!);

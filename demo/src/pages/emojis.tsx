@@ -1,12 +1,12 @@
-import {createElement} from '@b9g/crank/crank.js';
-import type {Context} from '@b9g/crank/crank.js';
-import {renderer} from '@b9g/crank/dom.js';
-import twemoji from 'twemoji';
+import {createElement} from "@b9g/crank/crank.js";
+import type {Context} from "@b9g/crank/crank.js";
+import {renderer} from "@b9g/crank/dom.js";
+import twemoji from "twemoji";
 
-import {ContentArea} from '../components/contentarea';
+import {ContentArea} from "../components/contentarea";
 
 function Twemoji(this: Context, {value}: {value: string}) {
-	const keyer = this.consume('ContentAreaKeyer');
+	const keyer = this.consume("ContentAreaKeyer");
 	const lines = value.split(/\r\n|\r|\n/);
 	if (/\r\n|\r|\n$/.test(value)) {
 		lines.pop();
@@ -18,7 +18,7 @@ function Twemoji(this: Context, {value}: {value: string}) {
 			{lines.map((line) => {
 				const line1 = twemoji.parse(line, {
 					attributes(emoji) {
-						return {'data-content': emoji};
+						return {"data-content": emoji};
 					},
 				});
 				const key = keyer.keyAt(cursor);
@@ -36,9 +36,9 @@ function Twemoji(this: Context, {value}: {value: string}) {
 }
 
 function* App(this: Context<{}>) {
-	let value = '\n';
-	this.addEventListener('contentchange', (ev: any) => {
-		if (ev.detail.source === 'render') {
+	let value = "\n";
+	this.addEventListener("contentchange", (ev: any) => {
+		if (ev.detail.source === "render") {
 			return;
 		}
 
@@ -58,4 +58,4 @@ function* App(this: Context<{}>) {
 	}
 }
 
-renderer.render(<App />, document.getElementById('root')!);
+renderer.render(<App />, document.getElementById("root")!);

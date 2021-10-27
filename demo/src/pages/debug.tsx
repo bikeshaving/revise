@@ -1,17 +1,17 @@
-import {createElement, Fragment} from '@b9g/crank/crank.js';
-import type {Context} from '@b9g/crank/crank.js';
-import {renderer} from '@b9g/crank/dom.js';
-import {ContentAreaElement} from '@b9g/revise/contentarea.js';
-import type {ContentEvent, SelectionRange} from '@b9g/revise/contentarea.js';
+import {createElement, Fragment} from "@b9g/crank/crank.js";
+import type {Context} from "@b9g/crank/crank.js";
+import {renderer} from "@b9g/crank/dom.js";
+import {ContentAreaElement} from "@b9g/revise/contentarea.js";
+import type {ContentEvent, SelectionRange} from "@b9g/revise/contentarea.js";
 
 function* Debugger(this: Context) {
-	let content = '\n';
-	let html = '';
+	let content = "\n";
+	let html = "";
 	let area: any;
 	let selectionRange: SelectionRange = {
 		selectionStart: 0,
 		selectionEnd: 0,
-		selectionDirection: 'none',
+		selectionDirection: "none",
 	};
 	let operations: undefined | Array<any>;
 
@@ -20,14 +20,14 @@ function* Debugger(this: Context) {
 		this.refresh();
 	});
 
-	this.addEventListener('contentchange', (ev) => {
+	this.addEventListener("contentchange", (ev) => {
 		content = (ev.target as ContentAreaElement).value;
 		const edit = ev.detail.edit;
 		operations = edit.operations();
 		this.refresh();
 	});
 
-	document.addEventListener('selectionchange', () => {
+	document.addEventListener("selectionchange", () => {
 		selectionRange = {
 			selectionStart: area.selectionStart,
 			selectionEnd: area.selectionEnd,
@@ -100,5 +100,5 @@ declare global {
 	}
 }
 
-window.customElements.define('content-area', ContentAreaElement);
-renderer.render(<App />, document.getElementById('root')!);
+window.customElements.define("content-area", ContentAreaElement);
+renderer.render(<App />, document.getElementById("root")!);

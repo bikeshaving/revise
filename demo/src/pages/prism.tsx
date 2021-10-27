@@ -1,14 +1,14 @@
-import type {Keyer} from '@b9g/revise/keyer.js';
-import {createElement} from '@b9g/crank/crank.js';
-import type {Context, Element} from '@b9g/crank/crank.js';
-import {renderer} from '@b9g/crank/dom.js';
+import type {Keyer} from "@b9g/revise/keyer.js";
+import {createElement} from "@b9g/crank/crank.js";
+import type {Context, Element} from "@b9g/crank/crank.js";
+import {renderer} from "@b9g/crank/dom.js";
 
-import Prism from 'prismjs';
-import type {Token} from 'prismjs';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/themes/prism.css';
+import Prism from "prismjs";
+import type {Token} from "prismjs";
+import "prismjs/components/prism-typescript";
+import "prismjs/themes/prism.css";
 
-import {ContentArea} from '../components/contentarea';
+import {ContentArea} from "../components/contentarea";
 
 /*** Prism Logic ***/
 // @ts-ignore
@@ -23,8 +23,8 @@ function unwrapContent(
 	content: Array<Token | string>,
 ): Array<Token | string> | string {
 	if (content.length === 0) {
-		return '';
-	} else if (content.length === 1 && typeof content[0] === 'string') {
+		return "";
+	} else if (content.length === 1 && typeof content[0] === "string") {
 		return content[0];
 	}
 
@@ -38,7 +38,7 @@ function splitLinesRec(
 	const lines: Array<Array<Token | string>> = [currentLine];
 	for (let i = 0; i < tokens.length; i++) {
 		const token = tokens[i];
-		if (typeof token === 'string') {
+		if (typeof token === "string") {
 			const split = token.split(/\r\n|\r|\n/);
 			for (let j = 0; j < split.length; j++) {
 				if (j > 0) {
@@ -94,17 +94,17 @@ function printTokens(tokens: Array<Token | string>): Array<Element | string> {
 	const result: Array<Element | string> = [];
 	for (let i = 0; i < tokens.length; i++) {
 		const token = tokens[i];
-		if (typeof token === 'string') {
+		if (typeof token === "string") {
 			result.push(token);
 		} else {
 			const children = Array.isArray(token.content)
 				? printTokens(token.content)
 				: token.content;
-			let className = 'token ' + token.type;
+			let className = "token " + token.type;
 			if (Array.isArray(token.alias)) {
-				className += ' ' + token.alias.join(' ');
-			} else if (typeof token.alias === 'string') {
-				className += ' ' + token.alias;
+				className += " " + token.alias.join(" ");
+			} else if (typeof token.alias === "string") {
+				className += " " + token.alias;
 			}
 
 			result.push(<span class={className}>{children}</span>);
@@ -136,7 +136,7 @@ function printLines(
 
 function CodeBlock(this: Context, {value}: {value: string}) {
 	const lines = splitLines(Prism.tokenize(value, Prism.languages.typescript));
-	const keyer = this.consume('ContentAreaKeyer');
+	const keyer = this.consume("ContentAreaKeyer");
 	return (
 		<pre class="editable" contenteditable="true" spellcheck="false">
 			{printLines(lines, keyer)}
@@ -145,9 +145,9 @@ function CodeBlock(this: Context, {value}: {value: string}) {
 }
 
 function* App(this: Context) {
-	let value = '\n';
-	this.addEventListener('contentchange', (ev: any) => {
-		if (ev.detail.source === 'render') {
+	let value = "\n";
+	this.addEventListener("contentchange", (ev: any) => {
+		if (ev.detail.source === "render") {
 			return;
 		}
 
@@ -167,4 +167,4 @@ function* App(this: Context) {
 	}
 }
 
-renderer.render(<App />, document.getElementById('root')!);
+renderer.render(<App />, document.getElementById("root")!);

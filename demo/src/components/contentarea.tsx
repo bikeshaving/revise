@@ -1,8 +1,8 @@
-import {createElement} from '@b9g/crank/crank.js';
-import type {Context} from '@b9g/crank/crank.js';
-import {ContentEvent, ContentAreaElement} from '@b9g/revise/contentarea.js';
-import type {SelectionRange} from '@b9g/revise/contentarea.js';
-import {Keyer} from '@b9g/revise/keyer.js';
+import {createElement} from "@b9g/crank/crank.js";
+import type {Context} from "@b9g/crank/crank.js";
+import {ContentEvent, ContentAreaElement} from "@b9g/revise/contentarea.js";
+import type {SelectionRange} from "@b9g/revise/contentarea.js";
+import {Keyer} from "@b9g/revise/keyer.js";
 
 export interface ContentAreaProps {
 	children: unknown;
@@ -16,18 +16,18 @@ export function* ContentArea(
 	{value, children, selectionRange, renderSource}: ContentAreaProps,
 ) {
 	const keyer = new Keyer();
-	this.provide('ContentAreaKeyer', keyer);
+	this.provide("ContentAreaKeyer", keyer);
 
-	this.addEventListener('contentchange', (ev) => {
+	this.addEventListener("contentchange", (ev) => {
 		keyer.transform(ev.detail.edit);
 	});
 
 	let composing = false;
-	this.addEventListener('compositionstart', () => {
+	this.addEventListener("compositionstart", () => {
 		composing = true;
 	});
 
-	this.addEventListener('compositionend', () => {
+	this.addEventListener("compositionend", () => {
 		composing = false;
 		// Refreshing synchronously seems to cause weird effects with
 		// characters getting preserved in Korean (and probably other
@@ -43,11 +43,11 @@ export function* ContentArea(
 		renderSource,
 	} of this) {
 		this.flush((area) => {
-			if (typeof renderSource === 'string') {
+			if (typeof renderSource === "string") {
 				area.source(renderSource);
 			}
 
-			if (typeof value === 'string' && value !== area.value) {
+			if (typeof value === "string" && value !== area.value) {
 				console.error(
 					`Expected value ${JSON.stringify(
 						value,
@@ -80,6 +80,6 @@ declare global {
 	}
 }
 
-if (!window.customElements.get('content-area')) {
-	window.customElements.define('content-area', ContentAreaElement);
+if (!window.customElements.get("content-area")) {
+	window.customElements.define("content-area", ContentAreaElement);
 }
