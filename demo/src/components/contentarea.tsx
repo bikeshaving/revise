@@ -1,9 +1,8 @@
+import {createElement} from '@b9g/crank/crank.js';
+import type {Context} from '@b9g/crank/crank.js';
 import {ContentEvent, ContentAreaElement} from '@b9g/revise/contentarea.js';
 import type {SelectionRange} from '@b9g/revise/contentarea.js';
 import {Keyer} from '@b9g/revise/keyer.js';
-
-import {createElement} from '@b9g/crank/crank.js';
-import type {Context} from '@b9g/crank/crank.js';
 
 export interface ContentAreaProps {
 	children: unknown;

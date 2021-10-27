@@ -1,15 +1,16 @@
-import {ContentArea} from '../components/contentarea.js';
 import type {Keyer} from '@b9g/revise/keyer.js';
 import {createElement} from '@b9g/crank/crank.js';
 import type {Context, Element} from '@b9g/crank/crank.js';
 import {renderer} from '@b9g/crank/dom.js';
 
-/*** Prism Logic ***/
 import Prism from 'prismjs';
 import type {Token} from 'prismjs';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/themes/prism.css';
 
+import {ContentArea} from '../components/contentarea';
+
+/*** Prism Logic ***/
 // @ts-ignore
 Prism.manual = true;
 function wrapContent(

@@ -1,7 +1,8 @@
-import type {Context} from '@b9g/crank/crank.js';
 import {createElement} from '@b9g/crank/crank.js';
+import type {Context} from '@b9g/crank/crank.js';
 import {renderer} from '@b9g/crank/dom.js';
-import {ContentArea} from '../components/contentarea.js';
+
+import {ContentArea} from '../components/contentarea';
 
 const COLORS = [
 	'#FF0000',

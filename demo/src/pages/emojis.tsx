@@ -1,8 +1,9 @@
 import {createElement} from '@b9g/crank/crank.js';
 import type {Context} from '@b9g/crank/crank.js';
 import {renderer} from '@b9g/crank/dom.js';
-import {ContentArea} from '../components/contentarea.js';
 import twemoji from 'twemoji';
+
+import {ContentArea} from '../components/contentarea';
 
 function Twemoji(this: Context, {value}: {value: string}) {
 	const keyer = this.consume('ContentAreaKeyer');
