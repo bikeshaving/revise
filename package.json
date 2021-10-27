@@ -2,34 +2,8 @@
   "name": "@b9g/revise",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "clean": "shx rm -rf dist",
-    "prebuild": "npm run clean",
-    "build": "rollup -c rollup.config.js",
-    "test": "jest --rootDir src",
-    "debug": "node --inspect-brk ./node_modules/.bin/jest --runInBand --rootDir src",
-    "lint": "eslint --ext .js,.jsx,.ts,.tsx .",
-    "typecheck": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/jest": "^26.0.20",
-    "@typescript-eslint/eslint-plugin": "^4.14.0",
-    "@typescript-eslint/parser": "^4.14.0",
-    "eslint": "^7.18.0",
-    "eslint-config-prettier": "^7.2.0",
-    "eslint-plugin-jest": "^24.1.3",
-    "eslint-plugin-prettier": "^3.3.1",
-    "eslint-plugin-react": "^7.22.0",
-    "jest": "^26.6.3",
-    "magic-string": "^0.25.7",
-    "prettier": "^2.2.1",
-    "rollup": "^2.38.0",
-    "rollup-plugin-typescript2": "^0.29.0",
-    "shx": "^0.3.3",
-    "ts-jest": "^26.4.4",
-    "ts-node": "^9.1.1",
-    "typescript": "^4.1.2"
-  },
+  "license": "MIT",
+  "type": "module",
   "exports": {
     "./subseq": {
       "import": "./subseq.js",
@@ -71,5 +45,35 @@
       "import": "./history.js",
       "require": "./history.cjs"
     }
+  },
+  "scripts": {
+    "prebuild": "npm run clean",
+    "build": "rollup -c rollup.config.js",
+    "clean": "shx rm -rf dist",
+    "debug": "node --inspect-brk ./node_modules/.bin/jest --runInBand --rootDir src",
+    "lint": "eslint --ext .js,.jsx,.ts,.tsx .",
+    "preshipit": "npm run typecheck && npm run test && npm run build",
+    "shipit": "cd dist && npm publish",
+    "test": "jest --rootDir src",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/jest": "^26.0.20",
+    "@typescript-eslint/eslint-plugin": "^4.14.0",
+    "@typescript-eslint/parser": "^4.14.0",
+    "eslint": "^7.18.0",
+    "eslint-config-prettier": "^7.2.0",
+    "eslint-plugin-jest": "^24.1.3",
+    "eslint-plugin-prettier": "^3.3.1",
+    "eslint-plugin-react": "^7.22.0",
+    "jest": "^26.6.3",
+    "magic-string": "^0.25.7",
+    "prettier": "^2.2.1",
+    "rollup": "^2.38.0",
+    "rollup-plugin-typescript2": "^0.29.0",
+    "shx": "^0.3.3",
+    "ts-jest": "^26.4.4",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.1.2"
   }
 }
