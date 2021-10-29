@@ -3,6 +3,9 @@ import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
 
+import type {ContentAreaElement} from "@b9g/revise/contentarea.js";
+import {Edit} from "@b9g/revise/edit.js";
+
 import Prism from "prismjs";
 import type {Token} from "prismjs";
 import "prismjs/components/prism-typescript";
@@ -146,6 +149,8 @@ function CodeBlock(this: Context, {value}: {value: string}) {
 
 function* App(this: Context) {
 	let value = "\n";
+	let selectionStart: number | undefined;
+	let area: ContentAreaElement;
 	this.addEventListener("contentchange", (ev: any) => {
 		if (ev.detail.source === "render") {
 			return;
@@ -155,11 +160,102 @@ function* App(this: Context) {
 		this.refresh();
 	});
 
+	this.addEventListener("keydown", (ev) => {
+		if (ev.key === "Enter") {
+			// Potato quality tab-matching.
+			let {value: value1, selectionStart: selectionStart1, selectionEnd} = area;
+			if (selectionStart1 !== selectionEnd) {
+				return;
+			}
+
+			// A reasonable length to look for tabs and braces.
+			const prev = value.slice(0, selectionStart1);
+			const tabMatch = prev.match(/[\r\n]?([^\S\r\n]*).*$/);
+			// [^\S\r\n] = non-newline whitespace
+			const prevMatch = prev.match(/({|\(|\[)([^\S\r\n]*)$/);
+			if (prevMatch) {
+				// increase tab
+				ev.preventDefault();
+				const next = value1.slice(selectionStart1);
+				const startBracket = prevMatch[1];
+				const startWhitespace = prevMatch[2];
+				let insertBefore = "\n";
+				if (tabMatch) {
+					insertBefore += tabMatch[1] + "  ";
+				}
+
+				let edit = Edit.build(
+					value1,
+					insertBefore,
+					selectionStart1,
+					selectionStart1 + startWhitespace.length,
+				);
+
+				selectionStart1 -= startWhitespace.length;
+				selectionStart1 += insertBefore.length;
+
+				const closingMap: Record<string, string> = {
+					"{": "}",
+					"(": ")",
+					"[": "]",
+				};
+				let closing = closingMap[startBracket];
+				if (closing !== "}") {
+					closing = "\\" + closing;
+				}
+
+				const nextMatch = next.match(
+					new RegExp(String.raw`^([^\S\r\n]*)${closing}`),
+				);
+
+				if (nextMatch) {
+					const value2 = edit.apply(value1);
+					const endWhitespace = nextMatch[1];
+					const insertAfter = tabMatch ? "\n" + tabMatch[1] : "\n";
+					const edit1 = Edit.build(
+						value2,
+						insertAfter,
+						selectionStart1,
+						selectionStart1 + endWhitespace.length,
+					);
+
+					edit = edit.compose(edit1);
+				}
+
+				value = edit.apply(value1);
+				selectionStart = selectionStart1;
+				this.refresh();
+			} else if (tabMatch && tabMatch[1].length) {
+				// match the tabbing of the previous line
+				ev.preventDefault();
+				const insertBefore = "\n" + tabMatch[1];
+				const edit = Edit.build(value1, insertBefore, selectionStart1);
+				value = edit.apply(value1);
+				selectionStart = selectionStart1 + insertBefore.length;
+				this.refresh();
+			}
+		}
+	});
+
 	for ({} of this) {
+		const selectionRange =
+			selectionStart != null
+				? {
+						selectionStart,
+						selectionEnd: selectionStart,
+						selectionDirection: "none" as const,
+				  }
+				: undefined;
+		selectionStart = undefined;
 		yield (
 			<div class="app">
 				<p>Using content-area with Prism.js.</p>
-				<ContentArea value={value} renderSource="render">
+				<ContentArea
+					c-ref={(area1: any) => (area = area1)}
+					value={value}
+					renderSource="render"
+					selectionRange={selectionRange}
+				>
 					<CodeBlock value={value} />
 				</ContentArea>
 			</div>

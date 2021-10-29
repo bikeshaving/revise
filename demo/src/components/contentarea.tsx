@@ -65,7 +65,7 @@ export function* ContentArea(
 		});
 
 		const area: ContentAreaElement = yield (
-			<content-area crank-static={composing}>{children}</content-area>
+			<content-area c-static={composing}>{children}</content-area>
 		);
 
 		oldSelectionRange = area.getSelectionRange();
