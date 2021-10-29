@@ -11,7 +11,7 @@
     "vite": "^2.6.4"
   },
   "dependencies": {
-    "@b9g/crank": "^0.4.0",
+    "@b9g/crank": "^0.4.1",
     "@b9g/revise": "file:../dist",
     "prismjs": "^1.25.0",
     "twemoji": "^13.1.0"
