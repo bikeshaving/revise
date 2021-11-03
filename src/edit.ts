@@ -25,9 +25,7 @@ export type Operation = RetainOperation | DeleteOperation | InsertOperation;
  * A data structure which represents edits to strings.
  */
 export class Edit {
-	/**
-	 * An array of strings and numbers representing operations.
-	 */
+	/** An array of strings and numbers representing operations. */
 	parts: Array<string | number>;
 
 	/**
@@ -190,6 +188,8 @@ export class Edit {
 		return operations;
 	}
 
+	// TODO: I’m not too happy about the name of this method, insofar as it might
+	// imply that this object is callable.
 	apply(text: string): string {
 		let text1 = "";
 		const operations = this.operations();
@@ -256,10 +256,12 @@ export class Edit {
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i];
 			switch (op.type) {
-				case "insert":
+				case "insert": {
 					prevInserted = op.value;
 					break;
-				case "retain":
+				}
+
+				case "retain": {
 					if (prevInserted !== undefined) {
 						Subseq.pushSegment(insertSizes, prevInserted.length, true);
 						inserted += prevInserted;
@@ -269,6 +271,8 @@ export class Edit {
 					Subseq.pushSegment(insertSizes, op.end - op.start, false);
 					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
 					break;
+				}
+
 				case "delete": {
 					const length = op.end - op.start;
 					let prefix = 0;
@@ -286,8 +290,10 @@ export class Edit {
 					Subseq.pushSegment(insertSizes, length - prefix, false);
 					break;
 				}
-				default:
+
+				default: {
 					throw new TypeError("Invalid operation type");
+				}
 			}
 		}
 
