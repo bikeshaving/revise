@@ -18,6 +18,7 @@ body {
   tab-size: 2;
   border: 1px solid black;
   padding: 15px;
+  outline: none;
 }
 
 .emoji {
