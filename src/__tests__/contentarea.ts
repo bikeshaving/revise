@@ -290,6 +290,30 @@ describe("contentarea", () => {
 			expect(area.innerHTML).toEqual("<div>Hello\n\nWorld</div>");
 			expect(area.value).toEqual("Hello\n\nWorld\n");
 		});
+
+		test("empty inline element edge-case", () => {
+			// An edge case when rendering code as such.
+			//<pre>
+			//  <div><code></code><br></div>
+			//  <div><code></code><br></div>
+			//</pre>
+			area.innerHTML =
+				"<pre><div><code></code><br></div><div><code></code><br></div></pre>";
+			expect(area.value).toBe("\n\n");
+			const pre = area.firstChild;
+
+			const div0 = pre!.childNodes[0];
+			const br0 = div0.childNodes[1];
+			const div1 = pre!.childNodes[1];
+
+			//<pre>
+			//  <div><br><code></code></div>
+			//</pre>
+			div1.remove();
+			br0.remove();
+			(div0 as HTMLElement).prepend(document.createElement("br"));
+			expect(area.value).toBe("\n");
+		});
 	});
 
 	describe("nodeOffsetAt/indexAt", () => {

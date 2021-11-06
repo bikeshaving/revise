@@ -519,7 +519,9 @@ function getValue(
 			content += oldContent1;
 			offset += length;
 			oldIndex += length;
-			hasNewline = oldContent1.endsWith(NEWLINE);
+			if (oldContent1.length) {
+				hasNewline = oldContent1.endsWith(NEWLINE);
+			}
 		} else {
 			// The node hasn’t been seen before.
 			let appendsNewline = false;
@@ -527,12 +529,16 @@ function getValue(
 				const content1 = (node as Text).data;
 				content += content1;
 				offset += content1.length;
-				hasNewline = content1.endsWith(NEWLINE);
+				if (content1.length) {
+					hasNewline = content1.endsWith(NEWLINE);
+				}
 			} else if ((node as Element).hasAttribute("data-content")) {
 				const content1 = (node as Element).getAttribute("data-content") || "";
 				content += content1;
 				offset += content1.length;
-				hasNewline = content1.endsWith(NEWLINE);
+				if (content1.length) {
+					hasNewline = content1.endsWith(NEWLINE);
+				}
 			} else if (!hasNewline && isBlocklikeElement(node)) {
 				content += NEWLINE;
 				offset += NEWLINE.length;
