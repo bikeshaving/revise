@@ -24,10 +24,11 @@ export class Keyer {
 			const op = operations[i];
 			// TODO: Is this correct?
 			switch (op.type) {
-				case "delete":
+				case "delete": {
 					this.keys.splice(op.start + 1, op.end - op.start);
 					break;
-				case "insert":
+				}
+				case "insert": {
 					// We use slice and concat rather than splice(op.start, 0, ...new
 					// Array(op.value.length) because the latter seems to fill in added
 					// indices with undefined rather than leaving the array sparse.
@@ -37,6 +38,7 @@ export class Keyer {
 						.concat(new Array(op.value.length))
 						.concat(this.keys.slice(op.start + 1));
 					break;
+				}
 			}
 		}
 	}
