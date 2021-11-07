@@ -1,10 +1,14 @@
-import type {Keyer} from "@b9g/revise/keyer.js";
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
 
-import type {ContentAreaElement} from "@b9g/revise/contentarea.js";
+import type {
+	ContentAreaElement,
+	SelectionRange,
+} from "@b9g/revise/contentarea.js";
 import {Edit} from "@b9g/revise/edit.js";
+import {Keyer} from "@b9g/revise/keyer.js";
+import {EditHistory} from "@b9g/revise/history.js";
 
 import Prism from "prismjs";
 import type {Token} from "prismjs";
@@ -117,50 +121,43 @@ function printTokens(tokens: Array<Token | string>): Array<Element | string> {
 	return result;
 }
 
-function printLines(
-	lines: Array<Array<Token | string>>,
-	keyer: Keyer,
-): Array<Element> {
-	let cursor = 0;
-	return lines.map((line) => {
-		const key = keyer.keyAt(cursor);
-		const length = line.reduce((l, t) => l + t.length, 0);
-		cursor += length + 1;
-		//return (
-		//	<div crank-key={key}>
-		//		<code>
-		//			<span>{printTokens(line)}</span>
-		//		</code>
-		//		<br />
-		//	</div>
-		//);
-		return (
-			<div c-key={key}>
-				<code>{printTokens(line)}</code>
-				<br />
-			</div>
-		);
-	});
-}
-
-function CodeBlock(this: Context, {value}: {value: string}) {
-	// We can pass in the keyer via props.
-	const keyer = this.consume("ContentAreaKeyer");
+function CodeBlock(
+	this: Context,
+	{value, keyer}: {value: string; keyer: Keyer},
+) {
 	const lines = splitLines(Prism.tokenize(value, Prism.languages.typescript));
+	let cursor = 0;
 	return (
 		<pre class="editable" contenteditable="true" spellcheck="false">
-			{printLines(lines, keyer)}
+			{lines.map((line) => {
+				const key = keyer.keyAt(cursor);
+				const length = line.reduce((l, t) => l + t.length, 0);
+				cursor += length + 1;
+				return (
+					<div c-key={key}>
+						<code>{printTokens(line)}</code>
+						<br />
+					</div>
+				);
+			})}
 		</pre>
 	);
 }
 
 function* App(this: Context) {
 	let value = "\n";
-	let selectionStart: number | undefined;
+	let selectionRange: SelectionRange | undefined;
 	let area: ContentAreaElement;
+	let renderSource: string | undefined;
+	const keyer = new Keyer();
+	const editHistory = new EditHistory();
 	this.addEventListener("contentchange", (ev: any) => {
-		if (ev.detail.source === "render") {
+		const {edit, source} = ev.detail;
+		keyer.transform(edit);
+		if (source === "render") {
 			return;
+		} else if (source !== "history") {
+			editHistory.append(edit);
 		}
 
 		value = ev.target.value;
@@ -230,7 +227,11 @@ function* App(this: Context) {
 				}
 
 				value = edit.apply(value1);
-				selectionStart = selectionStart1;
+				selectionRange = {
+					selectionStart: selectionStart1,
+					selectionEnd: selectionStart1,
+					selectionDirection: "none",
+				};
 				this.refresh();
 			} else if (tabMatch && tabMatch[1].length) {
 				// match the tabbing of the previous line
@@ -238,36 +239,152 @@ function* App(this: Context) {
 				const insertBefore = "\n" + tabMatch[1];
 				const edit = Edit.build(value1, insertBefore, selectionStart1);
 				value = edit.apply(value1);
-				selectionStart = selectionStart1 + insertBefore.length;
+				selectionRange = {
+					selectionStart: selectionStart1 + insertBefore.length,
+					selectionEnd: selectionStart1 + insertBefore.length,
+					selectionDirection: "none",
+				};
 				this.refresh();
 			}
 		}
 	});
 
+	this.addEventListener("beforeinput", (ev: any) => {
+		switch (ev.inputType) {
+			case "historyUndo": {
+				const edit = editHistory.undo();
+				if (edit) {
+					selectionRange = selectionRangeFromEdit(edit);
+					value = edit.apply(value);
+					ev.preventDefault();
+					renderSource = "history";
+					this.refresh();
+				}
+				break;
+			}
+			case "historyRedo": {
+				const edit = editHistory.redo();
+				if (edit) {
+					value = edit.apply(value);
+					selectionRange = selectionRangeFromEdit(edit);
+					ev.preventDefault();
+					renderSource = "history";
+					this.refresh();
+				}
+				break;
+			}
+		}
+	});
+
+	checkpointEditHistoryBySelection(this, editHistory);
 	for ({} of this) {
-		const selectionRange =
-			selectionStart != null
-				? {
-						selectionStart,
-						selectionEnd: selectionStart,
-						selectionDirection: "none" as const,
-				  }
-				: undefined;
-		selectionStart = undefined;
+		this.schedule(() => {
+			selectionRange = undefined;
+			renderSource = undefined;
+		});
 		yield (
 			<div class="app">
 				<p>Using content-area with Prism.js.</p>
 				<ContentArea
 					c-ref={(area1: any) => (area = area1)}
 					value={value}
-					renderSource="render"
+					renderSource={renderSource}
 					selectionRange={selectionRange}
 				>
-					<CodeBlock value={value} />
+					<CodeBlock value={value} keyer={keyer} />
 				</ContentArea>
 			</div>
 		);
 	}
+}
+
+function checkpointEditHistoryBySelection(
+	ctx: Context,
+	editHistory: EditHistory,
+): void {
+	let oldSelectionRange: SelectionRange | undefined;
+	let area: any;
+
+	ctx.addEventListener("contentchange", () => {
+		oldSelectionRange = area.getSelectionRange();
+	});
+
+	const onselectionchange = () => {
+		if (!area) {
+			return;
+		}
+
+		const newSelectionRange = area.getSelectionRange();
+		if (
+			oldSelectionRange &&
+			(oldSelectionRange.selectionStart !== newSelectionRange.selectionStart ||
+				oldSelectionRange.selectionEnd !== newSelectionRange.selectionEnd ||
+				oldSelectionRange.selectionDirection !==
+					newSelectionRange.selectionDirection)
+		) {
+			editHistory.checkpoint();
+		}
+
+		oldSelectionRange = newSelectionRange;
+	};
+
+	ctx.schedule((el) => {
+		area = el.querySelector("content-area");
+	});
+
+	document.addEventListener("selectionchange", onselectionchange);
+	ctx.cleanup(() => {
+		document.removeEventListener("selectionchange", onselectionchange);
+	});
+}
+
+function selectionRangeFromEdit(edit: Edit): SelectionRange | undefined {
+	const operations = edit.operations();
+	let index = 0;
+	let start: number | undefined;
+	let end: number | undefined;
+	for (const op of operations) {
+		switch (op.type) {
+			case "delete": {
+				if (start === undefined) {
+					start = index;
+				}
+
+				break;
+			}
+
+			case "insert": {
+				if (start === undefined) {
+					start = index;
+				}
+
+				index += op.value.length;
+				end = index;
+				break;
+			}
+
+			case "retain": {
+				index += op.end - op.start;
+				break;
+			}
+		}
+	}
+
+	if (start !== undefined && end !== undefined) {
+		return {
+			selectionStart: start,
+			selectionEnd: end,
+			selectionDirection: "forward",
+		};
+	} else if (start !== undefined) {
+		return {
+			selectionStart: start,
+			selectionEnd: start,
+			selectionDirection: "none",
+		};
+	}
+
+	return undefined;
 }
 
 renderer.render(<App />, document.getElementById("root")!);

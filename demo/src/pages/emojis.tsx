@@ -4,9 +4,9 @@ import {renderer} from "@b9g/crank/dom.js";
 import twemoji from "twemoji";
 
 import {ContentArea} from "../components/contentarea";
+import {Keyer} from "@b9g/revise/keyer.js";
 
-function Twemoji(this: Context, {value}: {value: string}) {
-	const keyer = this.consume("ContentAreaKeyer");
+function Twemoji(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	const lines = value.split(/\r\n|\r|\n/);
 	if (/\r\n|\r|\n$/.test(value)) {
 		lines.pop();
@@ -37,7 +37,9 @@ function Twemoji(this: Context, {value}: {value: string}) {
 
 function* App(this: Context<{}>) {
 	let value = "\n";
+	const keyer = new Keyer();
 	this.addEventListener("contentchange", (ev: any) => {
+		keyer.transform(ev.detail.edit);
 		if (ev.detail.source === "render") {
 			return;
 		}
@@ -51,7 +53,7 @@ function* App(this: Context<{}>) {
 			<div class="app">
 				<p>Using content-area to render Twemojis.</p>
 				<ContentArea value={value} renderSource="render">
-					<Twemoji value={value} />
+					<Twemoji value={value} keyer={keyer} />
 				</ContentArea>
 			</div>
 		);

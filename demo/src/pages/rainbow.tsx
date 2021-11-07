@@ -3,6 +3,7 @@ import type {Context} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
 
 import {ContentArea} from "../components/contentarea";
+import {Keyer} from "@b9g/revise/keyer.js";
 
 const COLORS = [
 	"#FF0000",
@@ -14,8 +15,7 @@ const COLORS = [
 	"#800080",
 ];
 
-function Rainbow(this: Context, {value}: {value: string}) {
-	const keyer = this.consume("ContentAreaKeyer");
+function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	let lines = value.split(/\r\n|\r|\n/);
 	if (/\r\n|\r|\n$/.test(value)) {
 		lines.pop();
@@ -48,7 +48,9 @@ function Rainbow(this: Context, {value}: {value: string}) {
 
 function* App(this: Context<{}>) {
 	let value = "\n";
+	const keyer = new Keyer();
 	this.addEventListener("contentchange", (ev: any) => {
+		keyer.transform(ev.detail.edit);
 		if (ev.detail.source === "render") {
 			return;
 		}
@@ -62,7 +64,7 @@ function* App(this: Context<{}>) {
 			<div class="app">
 				<p class="">Using content-area to render a rainbow textarea.</p>
 				<ContentArea value={value} renderSource="render">
-					<Rainbow value={value} />
+					<Rainbow value={value} keyer={keyer} />
 				</ContentArea>
 			</div>
 		);

@@ -2,7 +2,6 @@ import {createElement} from "@b9g/crank/crank.js";
 import type {Context} from "@b9g/crank/crank.js";
 import {ContentEvent, ContentAreaElement} from "@b9g/revise/contentarea.js";
 import type {SelectionRange} from "@b9g/revise/contentarea.js";
-import {Keyer} from "@b9g/revise/keyer.js";
 
 export interface ContentAreaProps {
 	children: unknown;
@@ -15,13 +14,6 @@ export function* ContentArea(
 	this: Context<ContentAreaProps>,
 	{value, children, selectionRange, renderSource}: ContentAreaProps,
 ) {
-	const keyer = new Keyer();
-	this.provide("ContentAreaKeyer", keyer);
-
-	this.addEventListener("contentchange", (ev) => {
-		keyer.transform(ev.detail.edit);
-	});
-
 	let composing = false;
 	this.addEventListener("compositionstart", () => {
 		composing = true;
@@ -31,7 +23,7 @@ export function* ContentArea(
 		composing = false;
 		// Refreshing synchronously seems to cause weird effects with
 		// characters getting preserved in Korean (and probably other
-		// langauges).
+		// languages).
 		Promise.resolve().then(() => this.refresh());
 	});
 
