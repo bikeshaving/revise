@@ -1,9 +1,8 @@
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
-
-import {ContentArea} from "../components/contentarea";
 import {Keyer} from "@b9g/revise/keyer.js";
+import {ContentArea} from "../components/contentarea";
 
 const COLORS = [
 	"#FF0000",
@@ -17,7 +16,7 @@ const COLORS = [
 
 function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	let lines = value.split(/\r\n|\r|\n/);
-	if (/\r\n|\r|\n$/.test(value)) {
+	if (/(?:\r\n|\r|\n)$/.test(value)) {
 		lines.pop();
 	}
 
@@ -26,17 +25,12 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	lines = lines.map((line) => {
 		const key = keyer.keyAt(cursor);
 		cursor += line.length + 1;
-		return (
-			<div c-key={key} data-key={key}>
-				{line ? (
-					[...line].map((char, i) => (
-						<span style={{color: COLORS[i % COLORS.length]}}>{char}</span>
-					))
-				) : (
-					<br />
-				)}
-			</div>
-		);
+		const chars = line
+			? [...line].map((char, i) => (
+				<span style={{color: COLORS[i % COLORS.length]}}>{char}</span>
+			))
+			: <br />;
+		return <div c-key={key}>{chars}</div>;
 	});
 
 	return (

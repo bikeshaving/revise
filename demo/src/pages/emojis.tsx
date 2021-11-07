@@ -1,10 +1,10 @@
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
+// @ts-ignore
 import twemoji from "twemoji";
-
-import {ContentArea} from "../components/contentarea";
 import {Keyer} from "@b9g/revise/keyer.js";
+import {ContentArea} from "../components/contentarea";
 
 function Twemoji(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	const lines = value.split(/\r\n|\r|\n/);
@@ -17,15 +17,14 @@ function Twemoji(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 		<div class="editable" contenteditable="true">
 			{lines.map((line) => {
 				const line1 = twemoji.parse(line, {
-					attributes(emoji) {
+					attributes(emoji: any) {
 						return {"data-content": emoji};
 					},
 				});
+
 				const key = keyer.keyAt(cursor);
 				cursor += line.length + 1;
-				return line ? (
-					<div crank-key={key} innerHTML={line1} />
-				) : (
+				return line ? <div crank-key={key} innerHTML={line1} /> : (
 					<div crank-key={key}>
 						<br />
 					</div>

@@ -1,7 +1,6 @@
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
-
 import type {
 	ContentAreaElement,
 	SelectionRange,
@@ -250,24 +249,27 @@ function* App(this: Context) {
 	});
 
 	this.addEventListener("beforeinput", (ev: any) => {
+		console.log(ev.inputType);
 		switch (ev.inputType) {
 			case "historyUndo": {
+				console.log("historyUndo");
+				ev.preventDefault();
 				const edit = editHistory.undo();
 				if (edit) {
 					selectionRange = selectionRangeFromEdit(edit);
 					value = edit.apply(value);
-					ev.preventDefault();
 					renderSource = "history";
 					this.refresh();
 				}
 				break;
 			}
 			case "historyRedo": {
+				console.log("historyRedo");
+				ev.preventDefault();
 				const edit = editHistory.redo();
 				if (edit) {
 					value = edit.apply(value);
 					selectionRange = selectionRangeFromEdit(edit);
-					ev.preventDefault();
 					renderSource = "history";
 					this.refresh();
 				}
