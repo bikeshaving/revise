@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@b9g/crank": "^0.4.1",
-    "@b9g/revise": "file:../dist",
+    "@b9g/revise": "^0.1.0",
     "prismjs": "^1.25.0",
     "twemoji": "^13.1.0"
   }

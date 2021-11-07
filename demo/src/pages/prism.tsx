@@ -126,11 +126,17 @@ function printLines(
 		const key = keyer.keyAt(cursor);
 		const length = line.reduce((l, t) => l + t.length, 0);
 		cursor += length + 1;
+		//return (
+		//	<div crank-key={key}>
+		//		<code>
+		//			<span>{printTokens(line)}</span>
+		//		</code>
+		//		<br />
+		//	</div>
+		//);
 		return (
-			<div style="font-family: monospace" crank-key={key}>
-				<code>
-					<span>{printTokens(line)}</span>
-				</code>
+			<div c-key={key}>
+				<code>{printTokens(line)}</code>
 				<br />
 			</div>
 		);
@@ -138,8 +144,9 @@ function printLines(
 }
 
 function CodeBlock(this: Context, {value}: {value: string}) {
-	const lines = splitLines(Prism.tokenize(value, Prism.languages.typescript));
+	// We can pass in the keyer via props.
 	const keyer = this.consume("ContentAreaKeyer");
+	const lines = splitLines(Prism.tokenize(value, Prism.languages.typescript));
 	return (
 		<pre class="editable" contenteditable="true" spellcheck="false">
 			{printLines(lines, keyer)}
