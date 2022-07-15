@@ -50,7 +50,7 @@ const input = [
 const ts = typescript2({
 	clean: true,
 	tsconfigOverride: {
-		exclude: ["src/__tests__"],
+		exclude: ["test"],
 	},
 });
 

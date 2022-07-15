@@ -25,11 +25,13 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	lines = lines.map((line) => {
 		const key = keyer.keyAt(cursor);
 		cursor += line.length + 1;
-		const chars = line
-			? [...line].map((char, i) => (
+		const chars = line ? (
+			[...line].map((char, i) => (
 				<span style={{color: COLORS[i % COLORS.length]}}>{char}</span>
 			))
-			: <br />;
+		) : (
+			<br />
+		);
 		return <div c-key={key}>{chars}</div>;
 	});
 
