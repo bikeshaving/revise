@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import {Edit} from "./edit";
+import {Edit} from "./edit.js";
 
 export interface ContentEventDetail {
 	edit: Edit;
@@ -64,8 +64,8 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$observer]: MutationObserver;
 	// For the most part, we compute selection info on the fly, because of weird
 	// race conditions. However, we need to retain the previous selectionStart
-	// when building edits so that we can disambiguate edits to runs of
-	// characters. See the Edit.diff call below.
+	// when building edits so that we can disambiguate edits to runs of the same
+	// character.
 	[$selectionStart]: number;
 	[$onselectionchange]: () => void;
 	constructor() {
@@ -161,14 +161,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		}
 	}
 
-	/***********************/
-	/*** Content methods ***/
-	/***********************/
 	get value(): string {
 		validate(this);
 		return this[$value];
 	}
 
+	// TODO: Delete this method from the public API probably.
 	get selectionStart(): number {
 		validate(this);
 		return getSelectionRange(this, this[$cache]).selectionStart;
@@ -308,9 +306,9 @@ function validate(
 	const cache = root[$cache];
 	// We use the existence of records to determine whether
 	// contentchange events should be fired synchronously.
-	let delay = false;
+	let deferEvent = false;
 	if (records === undefined) {
-		delay = true;
+		deferEvent = true;
 		records = root[$observer].takeRecords();
 	}
 
@@ -320,15 +318,16 @@ function validate(
 
 	const oldValue = root[$value];
 	const oldSelectionStart = root[$selectionStart];
-	const value = (root[$value] = getValue(root, cache, oldValue));
+	const value = getValue(root, cache, oldValue);
 	const selectionStart = getSelectionRange(root, cache).selectionStart;
+	root[$value] = value;
 
 	const hint = Math.min(oldSelectionStart, selectionStart);
 	// TODO: This call is expensive. If we have getValue return an edit instead
 	// of a string, we might be able to save a lot in CPU time.
 	const edit = Edit.diff(oldValue, value, hint);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
-	if (delay) {
+	if (deferEvent) {
 		Promise.resolve().then(() => root.dispatchEvent(ev));
 	} else {
 		root.dispatchEvent(ev);
@@ -391,47 +390,58 @@ function invalidate(
 	return invalid;
 }
 
-// This is the single most complicated function in the library!!!
+// This is the single most complicated function in this library!!!
 /**
  * This function both returns the content of the root (always a content-area
  * element, and populates the cache with info about the contents of nodes for
  * future reads.
- * @param root - The root element (usually a content-area element)
+ *
+ * @param root - The root element
  * @param cache - The nodeInfo cache associated with the root
- * @param oldContent - The previous content of the root.
+ * @param oldValue - The previous content of the root.
  */
 function getValue(
-	root: Element,
+	root: ContentAreaElement,
 	cache: NodeInfoCache,
-	oldContent: string,
+	oldValue: string,
 ): string {
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	// TODO: It might be faster to construct and return a edit rather than
+	// TODO: It might be faster to construct and return an edit rather than
 	// concatenating a giant string.
-	let content = "";
-	// Because the content variable is a heavily concatenated string and likely
-	// inferred by most engines as requiring a “rope-like” data structure for
-	// performance, reading from the end of the string to detect newlines can be
-	// a bottleneck. Therefore, we store that info in this boolean instead.
-	/** A boolean which indicates whether content currently ends in a newline. */
+	let value = "";
+	/**
+	 * A boolean which indicates whether content currently ends in a newline.
+	 *
+	 * Because the value variable is a heavily concatenated string and likely
+	 * inferred by most engines as requiring a “rope-like” data structure for
+	 * performance, reading from the end of the string to detect newlines can be
+	 * a bottleneck. Therefore, we store that info in this boolean instead.
+	 */
 	let hasNewline = false;
 	/** The start of the current node relative to its parent. */
 	let offset = 0;
-	// The current index into oldContent. We use this to copy unchanged text over
-	// and track deletions.
-	// If there are nodes which have cached start and length information, we get
-	// their contents from oldContent string using oldIndex so we don’t have to
-	// read it from the DOM.
+	/**
+	 * The current index into oldValue. We use this to copy unchanged text over
+	 * and track deletions.
+	 *
+	 * If there are nodes which have cached start and length information, we get
+	 * their contents from oldValue string using oldIndex so we don’t have to
+	 * read it from the DOM.
+	 */
 	let oldIndex = 0;
-	// The current index into oldContent of the current node’s parent. We can get
-	// the expected start of a node if none of the nodes before it were deleted
-	// by finding the difference between oldIndex and relativeOldIndex. We can
-	// compare this difference to the cached start information to detect
-	// deletions.
+
+	/**
+	 * The current index into oldValue of the current node’s parent.
+	 *
+	 * We can get the expected start of a node if none of the nodes before it
+	 * were deleted by finding the difference between oldIndex and
+	 * relativeOldIndex. We can compare this difference to the cached start
+	 * information to detect deletions.
+	 */
 	let relativeOldIndex = 0;
 	let info: NodeInfo = cache.get(root)!;
 	if (info === undefined) {
@@ -455,12 +465,13 @@ function getValue(
 			// If the current node is a block-like element, and the previous
 			// node/elements did not end with a newline, then the current element
 			// would introduce a linebreak before its contents.
+
 			// We check that the offset is non-zero so that the first child of a
 			// parent does not introduce a newline before it.
 			const prependsNewline =
 				!!offset && !hasNewline && isBlocklikeElement(node);
 			if (prependsNewline) {
-				content += NEWLINE;
+				value += NEWLINE;
 				hasNewline = true;
 				offset += NEWLINE.length;
 				info.offset += NEWLINE.length;
@@ -496,56 +507,62 @@ function getValue(
 
 		if (info.flags & IS_VALID) {
 			// The node has been seen before.
-			// Reading from oldContent because length hasn’t been invalidated.
 			const length = info.size;
-			if (oldIndex + info.size > oldContent.length) {
+			if (oldIndex + info.size > oldValue.length) {
 				// This should never happen
-				throw new Error("String length mismatch");
+				throw new Error("Old value length is incorrect");
 			}
 
 			const prependsNewline =
 				!!offset && !hasNewline && isBlocklikeElement(node);
 			if (prependsNewline) {
-				content += NEWLINE;
+				// OPERATION: INSERT(NEWLINE) OR RETAIN(newline.length)
+				value += NEWLINE;
 				hasNewline = true;
 				offset += NEWLINE.length;
 				info.offset += NEWLINE.length;
 				info.flags |= PREPENDS_NEWLINE;
 			} else {
+				// OPERATION: DELETE(NEWLINE) OR RETAIN(newline.length)
 				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
-			const oldContent1 = oldContent.slice(oldIndex, oldIndex + length);
-			content += oldContent1;
+			const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
+			// OPERATION: RETAIN(length)
+			value += oldValue1;
 			offset += length;
 			oldIndex += length;
-			if (oldContent1.length) {
-				hasNewline = oldContent1.endsWith(NEWLINE);
+			if (oldValue1.length) {
+				hasNewline = oldValue1.endsWith(NEWLINE);
 			}
 		} else {
 			// The node hasn’t been seen before.
 			let appendsNewline = false;
 			if (node.nodeType === Node.TEXT_NODE) {
-				const content1 = (node as Text).data;
-				content += content1;
-				offset += content1.length;
-				if (content1.length) {
-					hasNewline = content1.endsWith(NEWLINE);
+				const value1 = (node as Text).data;
+				// OPERATION: INSERT(value1)
+				value += value1;
+				offset += value1.length;
+				if (value1.length) {
+					hasNewline = value1.endsWith(NEWLINE);
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
-				const content1 = (node as Element).getAttribute("data-content") || "";
-				content += content1;
-				offset += content1.length;
-				if (content1.length) {
-					hasNewline = content1.endsWith(NEWLINE);
+				const value1 = (node as Element).getAttribute("data-content") || "";
+				// OPERATION: INSERT(value1)
+				value += value1;
+				offset += value1.length;
+				if (value1.length) {
+					hasNewline = value1.endsWith(NEWLINE);
 				}
 			} else if (!hasNewline && isBlocklikeElement(node)) {
-				content += NEWLINE;
+				// OPERATION: INSERT(NEWLINE)
+				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
 				appendsNewline = true;
 			} else if (node.nodeName === "BR") {
-				content += NEWLINE;
+				// OPERATION: INSERT(NEWLINE)
+				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
 			}
@@ -568,10 +585,11 @@ function getValue(
 				const oldOffset = oldIndex - relativeOldIndex;
 				if (info.offset > oldOffset) {
 					// deletion detected
+					// OPERATION: DELETE(info.offset - oldOffset)
 					oldIndex += info.offset - oldOffset;
 				} else if (info.offset < oldOffset) {
 					// This should never happen
-					throw new Error("Offset is before old offset");
+					throw new Error("Offset error");
 				}
 
 				info.offset = offset;
@@ -591,7 +609,7 @@ function getValue(
 		}
 	}
 
-	return content;
+	return value;
 }
 
 function isBlocklikeElement(node: Node): node is Element {
