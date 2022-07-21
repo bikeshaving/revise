@@ -1,9 +1,10 @@
-import type {Edit} from "./edit";
+import type {Edit} from "./edit.js";
 
 export class Keyer {
 	nextKey: number;
 	keys: Array<number>;
 
+	// TODO: Accept a custom key function.
 	constructor() {
 		this.nextKey = 0;
 		this.keys = [];
