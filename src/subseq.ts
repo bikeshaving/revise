@@ -1,7 +1,12 @@
 /**
  * A data structure for representing “subsequences.” Subsequences are created
- * by removing zero or more elements from a given sequence while preserving the
- * order of remaining elements.
+ * by removing zero or more elements from a sequence while preserving the
+ * order of the remaining elements.
+ *
+ * Subseqs are used to represent things like deletions and into insertions into
+ * a sequence, usually a string. Methods like shrink(), expand() and
+ * interleave() allow us to describe the way edits to strings can be
+ * transformed.
  */
 export class Subseq {
 	/**
@@ -52,9 +57,7 @@ export class Subseq {
 		this.sizes = sizes;
 	}
 
-	/**
-	 * A utility method to debug subseqs.
-	 */
+	/** A utility method to debug subseqs. */
 	print(): string {
 		let result = "";
 		for (let i = 0; i < this.sizes.length; i++) {
@@ -288,6 +291,23 @@ export class Subseq {
 	static pushSegment = pushSegment;
 }
 
+function measure(sizes: Array<number>): [number, number, number] {
+	let size = 0,
+		includedSize = 0,
+		excludedSize = 0;
+	for (let i = 0; i < sizes.length; i++) {
+		const s = sizes[i];
+		size += s;
+		if (i % 2 === 0) {
+			excludedSize += s;
+		} else {
+			includedSize += s;
+		}
+	}
+
+	return [size, includedSize, excludedSize];
+}
+
 function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
 	if (size < 0) {
 		throw new RangeError("Negative size");
@@ -307,21 +327,4 @@ function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
 			sizes.push(size);
 		}
 	}
-}
-
-function measure(sizes: Array<number>): [number, number, number] {
-	let size = 0,
-		includedSize = 0,
-		excludedSize = 0;
-	for (let i = 0; i < sizes.length; i++) {
-		const s = sizes[i];
-		size += s;
-		if (i % 2 === 0) {
-			excludedSize += s;
-		} else {
-			includedSize += s;
-		}
-	}
-
-	return [size, includedSize, excludedSize];
 }
