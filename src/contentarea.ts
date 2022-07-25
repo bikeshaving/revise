@@ -466,44 +466,83 @@ function getValue(
 				info.offset = offset;
 			}
 
-			if (
-				info.flags & IS_CLEAN ||
-				node.nodeType === Node.TEXT_NODE ||
-				// We treat elements with data-content attributes as opaque.
-				(node as Element).hasAttribute("data-content")
-			) {
-				break;
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				const prependsNewline =
+					// We check that the offset is non-zero so that the first child of a
+					// parent does not introduce a newline before it.
+					offset &&
+					// If the previous node/text did not end with a newline, and the
+					// current node is a block-like element, it would introduce a linebreak
+					// before its contents.
+					!hasNewline &&
+					isBlocklikeElement(node);
+				if (prependsNewline) {
+					if (info.flags & PREPENDS_NEWLINE) {
+						builder.retain(NEWLINE.length);
+					} else {
+						builder.insert(NEWLINE);
+					}
+
+					value += NEWLINE;
+					hasNewline = true;
+					offset += NEWLINE.length;
+					info.offset += NEWLINE.length;
+					info.flags |= PREPENDS_NEWLINE;
+				} else {
+					if (info.flags & PREPENDS_NEWLINE) {
+						builder.delete(NEWLINE.length);
+					}
+
+					info.flags &= ~PREPENDS_NEWLINE;
+				}
 			}
 
-			// If the current node is a block-like element, and the previous
-			// node/elements did not end with a newline, then the current element
-			// would introduce a linebreak before its contents.
-
-			// We check that the offset is non-zero so that the first child of a
-			// parent does not introduce a newline before it.
-
-			// checkPrependsNewline
-			const prependsNewline = offset && !hasNewline && isBlocklikeElement(node);
-			if (prependsNewline) {
-				if (info.flags & PREPENDS_NEWLINE) {
-					builder.retain(NEWLINE.length);
-				} else {
-					builder.insert(NEWLINE);
+			if (info.flags & IS_CLEAN) {
+				// The node and its children are unchanged.
+				const length = info.size;
+				if (oldIndex + info.size > oldValue.length) {
+					// This should never happen
+					throw new Error("Old value length is incorrect");
 				}
 
+				const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
+				builder.retain(length);
+				value += oldValue1;
+				offset += length;
+				oldIndex += length;
+				if (oldValue1.length) {
+					hasNewline = oldValue1.endsWith(NEWLINE);
+				}
+
+				break;
+			} else if (node.nodeType === Node.TEXT_NODE) {
+				const value1 = (node as Text).data;
+				builder.insert(value1);
+				// TODO: We might need to diff here.
+				value += value1;
+				offset += value1.length;
+				if (value1.length) {
+					hasNewline = value1.endsWith(NEWLINE);
+				}
+
+				break;
+			} else if (node.nodeName === "BR") {
+				// TODO: Is there a way to determine if this node is new to retain?
+				// OPERATION: INSERT(NEWLINE)
 				value += NEWLINE;
-				hasNewline = true;
-
-				// TODO: Does this logic make sense?????????????????????
 				offset += NEWLINE.length;
-				info.offset += NEWLINE.length;
-				info.flags |= PREPENDS_NEWLINE;
-			} else {
-				if (info.flags & PREPENDS_NEWLINE) {
-					builder.delete(NEWLINE.length);
+				hasNewline = true;
+				break;
+			} else if ((node as Element).hasAttribute("data-content")) {
+				const value1 = (node as Element).getAttribute("data-content") || "";
+				builder.insert(value1);
+				value += value1;
+				offset += value1.length;
+				if (value1.length) {
+					hasNewline = value1.endsWith(NEWLINE);
 				}
 
-				info.flags &= ~PREPENDS_NEWLINE;
+				break;
 			}
 
 			const firstChild = walker.firstChild();
@@ -517,68 +556,8 @@ function getValue(
 			}
 		}
 
-		// post-order stuff
-		if (info.flags & IS_CLEAN) {
-			// The node and its children are unchanged.
-			const length = info.size;
-			if (oldIndex + info.size > oldValue.length) {
-				// This should never happen
-				throw new Error("Old value length is incorrect");
-			}
-
-			// TODO: deduplicate this logic
-			// checkPrependsNewline
-			const prependsNewline =
-				!!offset && !hasNewline && isBlocklikeElement(node);
-			if (prependsNewline) {
-				if (info.flags & PREPENDS_NEWLINE) {
-					builder.retain(NEWLINE.length);
-				} else {
-					builder.insert(NEWLINE);
-				}
-
-				value += NEWLINE;
-				hasNewline = true;
-				offset += NEWLINE.length;
-				info.offset += NEWLINE.length;
-				info.flags |= PREPENDS_NEWLINE;
-			} else {
-				if (info.flags & PREPENDS_NEWLINE) {
-					builder.delete(NEWLINE.length);
-				}
-
-				info.flags &= ~PREPENDS_NEWLINE;
-			}
-
-			const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
-			builder.retain(length);
-			value += oldValue1;
-			offset += length;
-			oldIndex += length;
-			if (oldValue1.length) {
-				hasNewline = oldValue1.endsWith(NEWLINE);
-			}
-		} else {
-			// The node is dirty.
-			let appendsNewline = false;
-			if (node.nodeType === Node.TEXT_NODE) {
-				const value1 = (node as Text).data;
-				builder.insert(value1);
-				// TODO: We might need to diff here.
-				value += value1;
-				offset += value1.length;
-				if (value1.length) {
-					hasNewline = value1.endsWith(NEWLINE);
-				}
-			} else if ((node as Element).hasAttribute("data-content")) {
-				const value1 = (node as Element).getAttribute("data-content") || "";
-				builder.insert(value1);
-				value += value1;
-				offset += value1.length;
-				if (value1.length) {
-					hasNewline = value1.endsWith(NEWLINE);
-				}
-			} else if (!hasNewline && isBlocklikeElement(node)) {
+		if (!(info.flags & IS_CLEAN)) {
+			if (!hasNewline && isBlocklikeElement(node)) {
 				if (info.flags & APPENDS_NEWLINE) {
 					builder.retain(NEWLINE.length);
 				} else {
@@ -588,28 +567,19 @@ function getValue(
 				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
-				appendsNewline = true;
-			} else if (node.nodeName === "BR") {
-				// TODO: Is there a way to determine if this node is new to retain?
-				// OPERATION: INSERT(NEWLINE)
-				value += NEWLINE;
-				offset += NEWLINE.length;
-				hasNewline = true;
+				info.flags |= APPENDS_NEWLINE;
+			} else {
+				info.flags &= ~APPENDS_NEWLINE;
 			}
 
 			info.size = offset - info.offset;
 			info.flags |= IS_CLEAN;
-			info.flags = appendsNewline
-				? info.flags | APPENDS_NEWLINE
-				: info.flags & ~APPENDS_NEWLINE;
 		}
 
 		const nextSibling = walker.nextSibling();
 		if (nextSibling) {
-			// next sibling logic
 			descending = true;
 		} else {
-			// we have reached the last sibling and can now return to the parent node
 			descending = false;
 			if (walker.currentNode === root) {
 				break;
