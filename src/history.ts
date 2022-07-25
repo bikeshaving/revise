@@ -1,4 +1,4 @@
-import {Edit} from "./edit.js";
+import type {Edit} from "./edit.js";
 
 // TODO: Figure out if these make sense as Edit methods.
 function isNoop(edit: Edit): boolean {
