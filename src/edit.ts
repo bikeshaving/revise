@@ -54,7 +54,8 @@ export class Edit {
 	 */
 	parts: Array<string | number>;
 
-	/** A string which represents a concatenation of all deletions.
+	/**
+	 * A string which represents a concatenation of all deletions.
 	 *
 	 * This property is optional, but necessary if you want to call the invert()
 	 * method on an edit.
@@ -194,6 +195,57 @@ export class Edit {
 		return Edit.synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
 
+	static createBuilder(value: string) {
+		let index = 0;
+		let inserted = "";
+		const insertSizes: Array<number> = [];
+		let deleted = "";
+		const deleteSizes: Array<number> = [];
+		return {
+			retain(size: number) {
+				//console.log("retain:", size);
+				size = Math.min(value.length - index, size);
+				Subseq.pushSegment(insertSizes, size, false);
+				Subseq.pushSegment(deleteSizes, size, false);
+				index += size;
+				return this;
+			},
+
+			delete(size: number) {
+				size = Math.min(value.length - index, size);
+				Subseq.pushSegment(insertSizes, size, false);
+				Subseq.pushSegment(deleteSizes, size, true);
+				//console.log("delete:", size, [value.slice(index, index + size)]);
+				deleted += value.slice(index, index + size);
+				index += size;
+				return this;
+			},
+
+			insert(value: string) {
+				//console.log("insert:", [value]);
+				Subseq.pushSegment(insertSizes, value.length, true);
+				inserted += value;
+				return this;
+			},
+
+			build(): Edit {
+				if (index < value.length) {
+					//console.log("delete:", [value.length - index, value.slice(index)]);
+					Subseq.pushSegment(insertSizes, value.length - index, false);
+					Subseq.pushSegment(deleteSizes, value.length - index, true);
+					deleted += value.slice(index);
+				}
+
+				return Edit.synthesize(
+					new Subseq(insertSizes),
+					inserted,
+					new Subseq(deleteSizes),
+					deleted,
+				);
+			},
+		};
+	}
+
 	static synthesize(
 		insertSeq: Subseq,
 		inserted: string,
@@ -238,8 +290,7 @@ export class Edit {
 		return new Edit(parts, deleted);
 	}
 
-	// TODO: I wish we had a way to build edits. Take inspiration from Quill.js
-	// API maybe.
+	// TODO: DELETE
 	static build(
 		text: string,
 		inserted: string,
@@ -288,12 +339,13 @@ export class Edit {
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
-		return Edit.build(
-			text1,
-			text2.slice(prefix, text2.length - suffix),
-			prefix,
-			text1.length - suffix,
-		);
+		const builder = Edit.createBuilder(text1);
+		return builder
+			.retain(prefix)
+			.insert(text2.slice(text2.length - suffix))
+			.delete(text1.length - suffix)
+			.retain(suffix)
+			.build();
 	}
 }
 
@@ -331,6 +383,7 @@ function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
 	return [insertSeq, inserted, deleteSeq, edit.deleted];
 }
 
+// TODO: public or private?
 function normalize(edit: Edit): Edit {
 	if (typeof edit.deleted === "undefined") {
 		throw new Error("Missing deleted property");
