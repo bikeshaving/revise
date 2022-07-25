@@ -400,8 +400,6 @@ function getValue(
 	cache: NodeInfoCache,
 	oldValue: string,
 ): string {
-	// TODO: It might be faster to construct and return an edit rather than
-	// concatenating a giant string.
 	let value = "";
 	const builder = Edit.createBuilder(oldValue);
 
@@ -437,22 +435,19 @@ function getValue(
 	 */
 	let relativeOldIndex = 0;
 
-	let node: Node | null = root;
-
 	// A stack to save some variables as we walk up and down the tree.
 	const stack: Array<{info: NodeInfo; relativeOldIndex: number}> = [];
-
-	let descending = true;
-	// info can be asserted as non-nullable because it will always be defined
-	// before it is used.
-	let info!: NodeInfo;
 
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
-	while (node !== null) {
-		while (descending) {
+
+	let node: Node = root;
+	let info!: NodeInfo;
+	let descending = true;
+	for (; ; node = walker.currentNode) {
+		for (; descending; node = walker.currentNode) {
 			info = cache.get(node)!;
 			if (info === undefined) {
 				info = new NodeInfo(offset);
@@ -472,7 +467,7 @@ function getValue(
 			}
 
 			if (
-				(info.flags & IS_CLEAN) ||
+				info.flags & IS_CLEAN ||
 				node.nodeType === Node.TEXT_NODE ||
 				// We treat elements with data-content attributes as opaque.
 				(node as Element).hasAttribute("data-content")
@@ -480,14 +475,14 @@ function getValue(
 				break;
 			}
 
-			// TODO: Why do we put logic here????????????????
-
 			// If the current node is a block-like element, and the previous
 			// node/elements did not end with a newline, then the current element
 			// would introduce a linebreak before its contents.
 
 			// We check that the offset is non-zero so that the first child of a
 			// parent does not introduce a newline before it.
+
+			// checkPrependsNewline
 			const prependsNewline = offset && !hasNewline && isBlocklikeElement(node);
 			if (prependsNewline) {
 				if (info.flags & PREPENDS_NEWLINE) {
@@ -511,13 +506,13 @@ function getValue(
 				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
-			if ((node = walker.firstChild())) {
+			const firstChild = walker.firstChild();
+			if (firstChild) {
 				descending = true;
 				stack.push({info, relativeOldIndex});
 				relativeOldIndex = oldIndex;
 				offset = 0;
 			} else {
-				node = walker.currentNode;
 				break;
 			}
 		}
@@ -532,6 +527,7 @@ function getValue(
 			}
 
 			// TODO: deduplicate this logic
+			// checkPrependsNewline
 			const prependsNewline =
 				!!offset && !hasNewline && isBlocklikeElement(node);
 			if (prependsNewline) {
@@ -608,13 +604,16 @@ function getValue(
 				: info.flags & ~APPENDS_NEWLINE;
 		}
 
-		if ((node = walker.nextSibling())) {
+		const nextSibling = walker.nextSibling();
+		if (nextSibling) {
 			// next sibling logic
 			descending = true;
 		} else {
 			// we have reached the last sibling and can now return to the parent node
 			descending = false;
-			if (walker.currentNode !== root) {
+			if (walker.currentNode === root) {
+				break;
+			} else {
 				if (!stack.length) {
 					// This should never happen
 					throw new Error("Stack is empty");
@@ -622,10 +621,7 @@ function getValue(
 
 				({info, relativeOldIndex} = stack.pop()!);
 				offset = info.offset + offset;
-				// We are relying on some logic where walker.parentNode() returns null
-				// when walker.currentNode is the root node. Not really sure why I
-				// thought this was a good idea.
-				node = walker.parentNode();
+				walker.parentNode();
 			}
 		}
 	}
