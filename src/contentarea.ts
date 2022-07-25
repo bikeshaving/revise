@@ -17,7 +17,7 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 }
 
 /** Whether the node’s info is up to date. */
-const IS_VALID = 1 << 0;
+const IS_CLEAN = 1 << 0;
 /** Whether the node is responsible for the newline before it. */
 const PREPENDS_NEWLINE = 1 << 1;
 /** Whether the node is responsible for the newline after it. */
@@ -375,7 +375,7 @@ function invalidate(
 
 			const info = cache.get(node);
 			if (info) {
-				info.flags &= ~IS_VALID;
+				info.flags &= ~IS_CLEAN;
 			}
 
 			invalid = true;
@@ -384,7 +384,7 @@ function invalidate(
 
 	if (invalid) {
 		const info = cache.get(root)!;
-		info.flags &= ~IS_VALID;
+		info.flags &= ~IS_CLEAN;
 	}
 
 	return invalid;
@@ -397,7 +397,7 @@ function invalidate(
  * future reads.
  *
  * @param root - The root element
- * @param cache - The nodeInfo cache associated with the root
+ * @param cache - The NodeInfo cache associated with the root
  * @param oldValue - The previous content of the root.
  */
 function getValue(
@@ -413,17 +413,21 @@ function getValue(
 	// TODO: It might be faster to construct and return an edit rather than
 	// concatenating a giant string.
 	let value = "";
+	const builder = Edit.createBuilder(oldValue);
+
 	/**
 	 * A boolean which indicates whether content currently ends in a newline.
 	 *
 	 * Because the value variable is a heavily concatenated string and likely
 	 * inferred by most engines as requiring a “rope-like” data structure for
 	 * performance, reading from the end of the string to detect newlines can be
-	 * a bottleneck. Therefore, we store that info in this boolean instead.
+	 * costly. Therefore, we store that info in this boolean instead.
 	 */
 	let hasNewline = false;
+
 	/** The start of the current node relative to its parent. */
 	let offset = 0;
+
 	/**
 	 * The current index into oldValue. We use this to copy unchanged text over
 	 * and track deletions.
@@ -438,22 +442,36 @@ function getValue(
 	 * The current index into oldValue of the current node’s parent.
 	 *
 	 * We can get the expected start of a node if none of the nodes before it
-	 * were deleted by finding the difference between oldIndex and
-	 * relativeOldIndex. We can compare this difference to the cached start
-	 * information to detect deletions.
+	 * were deleted by comparing oldIndex - relativeOldIndex to the current
+	 * node’s offset.
 	 */
 	let relativeOldIndex = 0;
-	let info: NodeInfo = cache.get(root)!;
+
+	let node: Node | null = root;
+
+	// getNodeInfo
+	let info = cache.get(node)!;
 	if (info === undefined) {
 		info = new NodeInfo(offset);
-		cache.set(root, info);
+		cache.set(node, info);
+	} else {
+		const oldOffset = oldIndex - relativeOldIndex;
+		if (info.offset > oldOffset) {
+			// deletion detected
+			builder.delete(info.offset - oldOffset);
+			oldIndex += info.offset - oldOffset;
+		} else if (info.offset < oldOffset) {
+			// This should never happen
+			throw new Error("Offset error");
+		}
+
+		info.offset = offset;
 	}
 
 	// A stack to save some variables as we walk up and down the tree.
-	const stack: Array<{relativeOldIndex: number; info: NodeInfo}> = [];
-	for (let node: Node | null = root, descending = true; node !== null; ) {
-		// A loop to descend into the DOM tree.
-		while (descending && !(info.flags & IS_VALID)) {
+	const stack: Array<{info: NodeInfo; relativeOldIndex: number}> = [];
+	for (let descending = true; node !== null; ) {
+		while (descending && !(info.flags & IS_CLEAN)) {
 			if (
 				node.nodeType === Node.TEXT_NODE ||
 				// We treat elements with data-content attributes as opaque.
@@ -461,6 +479,7 @@ function getValue(
 			) {
 				break;
 			}
+			// TODO: Why do we put logic here????????????????
 
 			// If the current node is a block-like element, and the previous
 			// node/elements did not end with a newline, then the current element
@@ -468,15 +487,26 @@ function getValue(
 
 			// We check that the offset is non-zero so that the first child of a
 			// parent does not introduce a newline before it.
-			const prependsNewline =
-				!!offset && !hasNewline && isBlocklikeElement(node);
+			const prependsNewline = offset && !hasNewline && isBlocklikeElement(node);
 			if (prependsNewline) {
+				if (info.flags & PREPENDS_NEWLINE) {
+					builder.retain(NEWLINE.length);
+				} else {
+					builder.insert(NEWLINE);
+				}
+
 				value += NEWLINE;
 				hasNewline = true;
+
+				// TODO: Does this logic make sense?????????????????????
 				offset += NEWLINE.length;
 				info.offset += NEWLINE.length;
 				info.flags |= PREPENDS_NEWLINE;
 			} else {
+				if (info.flags & PREPENDS_NEWLINE) {
+					builder.delete(NEWLINE.length);
+				}
+
 				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
@@ -487,48 +517,63 @@ function getValue(
 				break;
 			}
 
-			stack.push({relativeOldIndex, info});
+			// all of these nodes are first children
+			stack.push({info, relativeOldIndex});
 			relativeOldIndex = oldIndex;
 			offset = 0;
+
 			// getNodeInfo
 			info = cache.get(node)!;
 			if (info === undefined) {
 				info = new NodeInfo(offset);
 				cache.set(node, info);
 			} else {
-				if (info.offset > 0) {
+				const oldOffset = oldIndex - relativeOldIndex;
+				if (info.offset > oldOffset) {
 					// deletion detected
-					oldIndex += info.offset;
+					builder.delete(info.offset - oldOffset);
+					oldIndex += info.offset - oldOffset;
+				} else if (info.offset < oldOffset) {
+					throw new Error("Offset error");
 				}
 
 				info.offset = offset;
 			}
 		}
 
-		if (info.flags & IS_VALID) {
-			// The node has been seen before.
+		if (info.flags & IS_CLEAN) {
+			// The node and its children are unchanged.
 			const length = info.size;
 			if (oldIndex + info.size > oldValue.length) {
 				// This should never happen
 				throw new Error("Old value length is incorrect");
 			}
 
+			// TODO: deduplicate this logic
 			const prependsNewline =
 				!!offset && !hasNewline && isBlocklikeElement(node);
 			if (prependsNewline) {
-				// OPERATION: INSERT(NEWLINE) OR RETAIN(newline.length)
+				if (info.flags & PREPENDS_NEWLINE) {
+					builder.retain(NEWLINE.length);
+				} else {
+					builder.insert(NEWLINE);
+				}
+
 				value += NEWLINE;
 				hasNewline = true;
 				offset += NEWLINE.length;
 				info.offset += NEWLINE.length;
 				info.flags |= PREPENDS_NEWLINE;
 			} else {
-				// OPERATION: DELETE(NEWLINE) OR RETAIN(newline.length)
+				if (info.flags & PREPENDS_NEWLINE) {
+					builder.delete(NEWLINE.length);
+				}
+
 				info.flags &= ~PREPENDS_NEWLINE;
 			}
 
 			const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
-			// OPERATION: RETAIN(length)
+			builder.retain(length);
 			value += oldValue1;
 			offset += length;
 			oldIndex += length;
@@ -536,11 +581,12 @@ function getValue(
 				hasNewline = oldValue1.endsWith(NEWLINE);
 			}
 		} else {
-			// The node hasn’t been seen before.
+			// The node is dirty.
 			let appendsNewline = false;
 			if (node.nodeType === Node.TEXT_NODE) {
 				const value1 = (node as Text).data;
-				// OPERATION: INSERT(value1)
+				builder.insert(value1);
+				// TODO: We might need to diff here.
 				value += value1;
 				offset += value1.length;
 				if (value1.length) {
@@ -548,19 +594,25 @@ function getValue(
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
 				const value1 = (node as Element).getAttribute("data-content") || "";
-				// OPERATION: INSERT(value1)
+				builder.insert(value1);
 				value += value1;
 				offset += value1.length;
 				if (value1.length) {
 					hasNewline = value1.endsWith(NEWLINE);
 				}
 			} else if (!hasNewline && isBlocklikeElement(node)) {
-				// OPERATION: INSERT(NEWLINE)
+				if (info.flags & APPENDS_NEWLINE) {
+					builder.retain(NEWLINE.length);
+				} else {
+					builder.insert(NEWLINE);
+				}
+
 				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
 				appendsNewline = true;
 			} else if (node.nodeName === "BR") {
+				// TODO: Is there a way to determine if this node is new to retain?
 				// OPERATION: INSERT(NEWLINE)
 				value += NEWLINE;
 				offset += NEWLINE.length;
@@ -568,13 +620,14 @@ function getValue(
 			}
 
 			info.size = offset - info.offset;
-			info.flags |= IS_VALID;
+			info.flags |= IS_CLEAN;
 			info.flags = appendsNewline
 				? info.flags | APPENDS_NEWLINE
 				: info.flags & ~APPENDS_NEWLINE;
 		}
 
 		if ((node = walker.nextSibling())) {
+			// next sibling logic
 			descending = true;
 			// getNodeInfo
 			info = cache.get(node)!;
@@ -585,16 +638,16 @@ function getValue(
 				const oldOffset = oldIndex - relativeOldIndex;
 				if (info.offset > oldOffset) {
 					// deletion detected
-					// OPERATION: DELETE(info.offset - oldOffset)
+					builder.delete(info.offset - oldOffset);
 					oldIndex += info.offset - oldOffset;
 				} else if (info.offset < oldOffset) {
-					// This should never happen
 					throw new Error("Offset error");
 				}
 
 				info.offset = offset;
 			}
 		} else {
+			// we have reached the last sibling and can now return to the parent node
 			descending = false;
 			if (walker.currentNode !== root) {
 				if (!stack.length) {
@@ -602,13 +655,20 @@ function getValue(
 					throw new Error("Stack is empty");
 				}
 
-				({relativeOldIndex, info} = stack.pop()!);
+				({info, relativeOldIndex} = stack.pop()!);
 				offset = info.offset + offset;
 				node = walker.parentNode();
 			}
 		}
 	}
 
+	//try {
+	//	const ops = builder.build().operations();
+	//	//console.log("builder ops:", ops);
+	//} catch (err) {
+	//	//console.log("builder err:", err);
+	//	throw err;
+	//}
 	return value;
 }
 
