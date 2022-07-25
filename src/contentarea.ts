@@ -70,6 +70,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$onselectionchange]: () => void;
 	constructor() {
 		super();
+
 		{
 			// Creating the shadow DOM.
 			const slot = document.createElement("slot");
@@ -304,15 +305,7 @@ function validate(
 	records?: Array<MutationRecord> | undefined,
 ): boolean {
 	const cache = root[$cache];
-	// We use the existence of records to determine whether
-	// contentchange events should be fired synchronously.
-	let deferEvent = false;
-	if (records === undefined) {
-		deferEvent = true;
-		records = root[$observer].takeRecords();
-	}
-
-	if (!invalidate(root, cache, records)) {
+	if (!invalidate(root, cache, records || root[$observer].takeRecords())) {
 		return false;
 	}
 
@@ -327,7 +320,9 @@ function validate(
 	// of a string, we might be able to save a lot in CPU time.
 	const edit = Edit.diff(oldValue, value, hint);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
-	if (deferEvent) {
+	// We use the existence of records to determine whether
+	// contentchange events should be fired synchronously.
+	if (records === undefined) {
 		Promise.resolve().then(() => root.dispatchEvent(ev));
 	} else {
 		root.dispatchEvent(ev);
@@ -405,11 +400,6 @@ function getValue(
 	cache: NodeInfoCache,
 	oldValue: string,
 ): string {
-	const walker = document.createTreeWalker(
-		root,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-
 	// TODO: It might be faster to construct and return an edit rather than
 	// concatenating a giant string.
 	let value = "";
@@ -449,36 +439,47 @@ function getValue(
 
 	let node: Node | null = root;
 
-	// getNodeInfo
-	let info = cache.get(node)!;
-	if (info === undefined) {
-		info = new NodeInfo(offset);
-		cache.set(node, info);
-	} else {
-		const oldOffset = oldIndex - relativeOldIndex;
-		if (info.offset > oldOffset) {
-			// deletion detected
-			builder.delete(info.offset - oldOffset);
-			oldIndex += info.offset - oldOffset;
-		} else if (info.offset < oldOffset) {
-			// This should never happen
-			throw new Error("Offset error");
-		}
-
-		info.offset = offset;
-	}
-
 	// A stack to save some variables as we walk up and down the tree.
 	const stack: Array<{info: NodeInfo; relativeOldIndex: number}> = [];
-	for (let descending = true; node !== null; ) {
-		while (descending && !(info.flags & IS_CLEAN)) {
+
+	let descending = true;
+	// info can be asserted as non-nullable because it will always be defined
+	// before it is used.
+	let info!: NodeInfo;
+
+	const walker = document.createTreeWalker(
+		root,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+	while (node !== null) {
+		while (descending) {
+			info = cache.get(node)!;
+			if (info === undefined) {
+				info = new NodeInfo(offset);
+				cache.set(node, info);
+			} else {
+				const oldOffset = oldIndex - relativeOldIndex;
+				if (info.offset > oldOffset) {
+					// deletion detected
+					builder.delete(info.offset - oldOffset);
+					oldIndex += info.offset - oldOffset;
+				} else if (info.offset < oldOffset) {
+					// This should never happen
+					throw new Error("Offset error");
+				}
+
+				info.offset = offset;
+			}
+
 			if (
+				(info.flags & IS_CLEAN) ||
 				node.nodeType === Node.TEXT_NODE ||
 				// We treat elements with data-content attributes as opaque.
 				(node as Element).hasAttribute("data-content")
 			) {
 				break;
 			}
+
 			// TODO: Why do we put logic here????????????????
 
 			// If the current node is a block-like element, and the previous
@@ -512,35 +513,16 @@ function getValue(
 
 			if ((node = walker.firstChild())) {
 				descending = true;
+				stack.push({info, relativeOldIndex});
+				relativeOldIndex = oldIndex;
+				offset = 0;
 			} else {
 				node = walker.currentNode;
 				break;
 			}
-
-			// all of these nodes are first children
-			stack.push({info, relativeOldIndex});
-			relativeOldIndex = oldIndex;
-			offset = 0;
-
-			// getNodeInfo
-			info = cache.get(node)!;
-			if (info === undefined) {
-				info = new NodeInfo(offset);
-				cache.set(node, info);
-			} else {
-				const oldOffset = oldIndex - relativeOldIndex;
-				if (info.offset > oldOffset) {
-					// deletion detected
-					builder.delete(info.offset - oldOffset);
-					oldIndex += info.offset - oldOffset;
-				} else if (info.offset < oldOffset) {
-					throw new Error("Offset error");
-				}
-
-				info.offset = offset;
-			}
 		}
 
+		// post-order stuff
 		if (info.flags & IS_CLEAN) {
 			// The node and its children are unchanged.
 			const length = info.size;
@@ -629,23 +611,6 @@ function getValue(
 		if ((node = walker.nextSibling())) {
 			// next sibling logic
 			descending = true;
-			// getNodeInfo
-			info = cache.get(node)!;
-			if (info === undefined) {
-				info = new NodeInfo(offset);
-				cache.set(node, info);
-			} else {
-				const oldOffset = oldIndex - relativeOldIndex;
-				if (info.offset > oldOffset) {
-					// deletion detected
-					builder.delete(info.offset - oldOffset);
-					oldIndex += info.offset - oldOffset;
-				} else if (info.offset < oldOffset) {
-					throw new Error("Offset error");
-				}
-
-				info.offset = offset;
-			}
 		} else {
 			// we have reached the last sibling and can now return to the parent node
 			descending = false;
@@ -657,6 +622,9 @@ function getValue(
 
 				({info, relativeOldIndex} = stack.pop()!);
 				offset = info.offset + offset;
+				// We are relying on some logic where walker.parentNode() returns null
+				// when walker.currentNode is the root node. Not really sure why I
+				// thought this was a good idea.
 				node = walker.parentNode();
 			}
 		}
