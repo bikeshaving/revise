@@ -339,8 +339,7 @@ export class Edit {
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
-		const builder = Edit.createBuilder(text1);
-		return builder
+		return Edit.createBuilder(text1)
 			.retain(prefix)
 			.insert(text2.slice(text2.length - suffix))
 			.delete(text1.length - suffix)

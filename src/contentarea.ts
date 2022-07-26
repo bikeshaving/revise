@@ -16,24 +16,26 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
+/** Whether the node is old. */
+const IS_OLD = 1 << 0;
 /** Whether the node’s info is up to date. */
-const IS_CLEAN = 1 << 0;
+const IS_CLEAN = 1 << 1;
 /** Whether the node is responsible for the newline before it. */
-const PREPENDS_NEWLINE = 1 << 1;
+const PREPENDS_NEWLINE = 1 << 2;
 /** Whether the node is responsible for the newline after it. */
-const APPENDS_NEWLINE = 1 << 2;
+const APPENDS_NEWLINE = 1 << 3;
 
 class NodeInfo {
 	/** A bitmask (see flags above) */
 	flags: number;
 	/** The string length of this node’s contents. */
-	size: number;
+	stringLength: number;
 	/** The start of this node’s contents relative to the start of the parent. */
 	offset: number;
 
 	constructor(offset: number) {
 		this.flags = 0;
-		this.size = 0;
+		this.stringLength = 0;
 		this.offset = offset;
 	}
 }
@@ -402,180 +404,149 @@ function getValue(
 ): string {
 	let value = "";
 	const builder = Edit.createBuilder(oldValue);
-
-	/**
-	 * A boolean which indicates whether content currently ends in a newline.
-	 *
-	 * Because the value variable is a heavily concatenated string and likely
-	 * inferred by most engines as requiring a “rope-like” data structure for
-	 * performance, reading from the end of the string to detect newlines can be
-	 * costly. Therefore, we store that info in this boolean instead.
-	 */
-	let hasNewline = false;
-
-	/** The start of the current node relative to its parent. */
-	let offset = 0;
-
-	/**
-	 * The current index into oldValue. We use this to copy unchanged text over
-	 * and track deletions.
-	 *
-	 * If there are nodes which have cached start and length information, we get
-	 * their contents from oldValue string using oldIndex so we don’t have to
-	 * read it from the DOM.
-	 */
-	let oldIndex = 0;
-
-	/**
-	 * The current index into oldValue of the current node’s parent.
-	 *
-	 * We can get the expected start of a node if none of the nodes before it
-	 * were deleted by comparing oldIndex - relativeOldIndex to the current
-	 * node’s offset.
-	 */
-	let relativeOldIndex = 0;
-
-	// A stack to save some variables as we walk up and down the tree.
-	const stack: Array<{info: NodeInfo; relativeOldIndex: number}> = [];
-
+	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
 	let node: Node = root;
-	let info!: NodeInfo;
-	let descending = true;
-	for (; ; node = walker.currentNode) {
+	let nodeInfo!: NodeInfo;
+	// The current offset relative to the current node
+	let offset = 0;
+	// The index into the old string
+	let oldIndex = 0;
+	// The index into the old string of the current node
+	let oldIndexRelative = 0;
+	// Whether or not the previous element ends with a newline
+	let hasNewline = false;
+	for (let descending = true; ; node = walker.currentNode) {
 		for (; descending; node = walker.currentNode) {
-			info = cache.get(node)!;
-			if (info === undefined) {
-				info = new NodeInfo(offset);
-				cache.set(node, info);
+			nodeInfo = cache.get(node)!;
+			if (nodeInfo === undefined) {
+				nodeInfo = new NodeInfo(offset);
+				cache.set(node, nodeInfo);
 			} else {
-				const oldOffset = oldIndex - relativeOldIndex;
-				if (info.offset > oldOffset) {
+				const expectedIndex = oldIndex - oldIndexRelative;
+				if (nodeInfo.offset > expectedIndex) {
 					// deletion detected
-					builder.delete(info.offset - oldOffset);
-					oldIndex += info.offset - oldOffset;
-				} else if (info.offset < oldOffset) {
+					builder.delete(nodeInfo.offset - expectedIndex);
+					oldIndex += nodeInfo.offset - expectedIndex;
+				} else if (nodeInfo.offset < expectedIndex) {
 					// This should never happen
-					throw new Error("Offset error");
+					throw new Error("cache offset error");
 				}
 
-				info.offset = offset;
+				nodeInfo.offset = offset;
 			}
 
-			if (node.nodeType === Node.ELEMENT_NODE) {
-				const prependsNewline =
-					// We check that the offset is non-zero so that the first child of a
-					// parent does not introduce a newline before it.
-					offset &&
-					// If the previous node/text did not end with a newline, and the
-					// current node is a block-like element, it would introduce a linebreak
-					// before its contents.
-					!hasNewline &&
-					isBlocklikeElement(node);
-				if (prependsNewline) {
-					if (info.flags & PREPENDS_NEWLINE) {
-						builder.retain(NEWLINE.length);
-					} else {
-						builder.insert(NEWLINE);
-					}
-
-					value += NEWLINE;
-					hasNewline = true;
-					offset += NEWLINE.length;
-					info.offset += NEWLINE.length;
-					info.flags |= PREPENDS_NEWLINE;
+			// PRE-ORDER LOGIC
+			// block elements prepend a newline
+			if (offset && !hasNewline && isBlocklikeElement(node)) {
+				value += NEWLINE;
+				if ((nodeInfo.flags & IS_OLD) && (nodeInfo.flags & PREPENDS_NEWLINE)) {
+					builder.retain(NEWLINE.length);
 				} else {
-					if (info.flags & PREPENDS_NEWLINE) {
-						builder.delete(NEWLINE.length);
-					}
-
-					info.flags &= ~PREPENDS_NEWLINE;
+					builder.insert(NEWLINE);
 				}
+
+				hasNewline = true;
+				offset += NEWLINE.length;
+				// TODO: We advance the nodeInfo offset. Is that sound logic?
+				nodeInfo.offset += NEWLINE.length;
+				nodeInfo.flags |= PREPENDS_NEWLINE;
+			} else {
+				nodeInfo.flags &= ~PREPENDS_NEWLINE;
 			}
 
-			if (info.flags & IS_CLEAN) {
+			if (nodeInfo.flags & IS_CLEAN) {
 				// The node and its children are unchanged.
-				const length = info.size;
-				if (oldIndex + info.size > oldValue.length) {
+				const length = nodeInfo.stringLength;
+				if (oldIndex + nodeInfo.stringLength > oldValue.length) {
 					// This should never happen
-					throw new Error("Old value length is incorrect");
+					throw new Error("cache stringLength error");
 				}
 
-				const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
 				builder.retain(length);
+				const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
 				value += oldValue1;
 				offset += length;
 				oldIndex += length;
-				if (oldValue1.length) {
+				if (length) {
 					hasNewline = oldValue1.endsWith(NEWLINE);
 				}
 
 				break;
 			} else if (node.nodeType === Node.TEXT_NODE) {
+				// TODO: DIFF
 				const value1 = (node as Text).data;
 				builder.insert(value1);
-				// TODO: We might need to diff here.
 				value += value1;
 				offset += value1.length;
+				if (value1.length) {
+					hasNewline = value1.endsWith(NEWLINE);
+				}
+
+				break;
+			} else if ((node as Element).hasAttribute("data-content")) {
+				// TODO: DIFF
+				// TODO: merge with the logic for text nodes
+				const value1 = (node as Element).getAttribute("data-content") || "";
+				builder.insert(value1);
+				value += value1;
+				offset += value1.length;
+
 				if (value1.length) {
 					hasNewline = value1.endsWith(NEWLINE);
 				}
 
 				break;
 			} else if (node.nodeName === "BR") {
-				// TODO: Is there a way to determine if this node is new to retain?
-				// OPERATION: INSERT(NEWLINE)
+				builder.insert(NEWLINE);
 				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
 				break;
-			} else if ((node as Element).hasAttribute("data-content")) {
-				const value1 = (node as Element).getAttribute("data-content") || "";
-				builder.insert(value1);
-				value += value1;
-				offset += value1.length;
-				if (value1.length) {
-					hasNewline = value1.endsWith(NEWLINE);
-				}
-
-				break;
-			}
-
-			const firstChild = walker.firstChild();
-			if (firstChild) {
-				descending = true;
-				stack.push({info, relativeOldIndex});
-				relativeOldIndex = oldIndex;
-				offset = 0;
 			} else {
-				break;
+				// ITERATION LOGIC
+				// MOVE INTO FIRST CHILD
+				const firstChild = walker.firstChild();
+				if (firstChild) {
+					descending = true;
+					stack.push({nodeInfo, oldIndexRelative});
+					oldIndexRelative = oldIndex;
+					offset = 0;
+				} else {
+					break;
+				}
 			}
 		}
 
-		if (!(info.flags & IS_CLEAN)) {
+		// POST-ORDER LOGIC
+		if (!(nodeInfo.flags & IS_CLEAN)) {
+			// block elements append a newline
 			if (!hasNewline && isBlocklikeElement(node)) {
-				if (info.flags & APPENDS_NEWLINE) {
+				value += NEWLINE;
+				if ((nodeInfo.flags & IS_OLD) && (nodeInfo.flags & APPENDS_NEWLINE)) {
 					builder.retain(NEWLINE.length);
 				} else {
 					builder.insert(NEWLINE);
 				}
 
-				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
-				info.flags |= APPENDS_NEWLINE;
+
+				nodeInfo.flags |= APPENDS_NEWLINE;
 			} else {
-				info.flags &= ~APPENDS_NEWLINE;
+				nodeInfo.flags &= ~APPENDS_NEWLINE;
 			}
 
-			info.size = offset - info.offset;
-			info.flags |= IS_CLEAN;
+			nodeInfo.stringLength = offset - nodeInfo.offset;
+			nodeInfo.flags |= IS_CLEAN;
 		}
 
+		// ITERATION LOGIC
+		// MOVE TO NEXT SIBLING
 		const nextSibling = walker.nextSibling();
 		if (nextSibling) {
 			descending = true;
@@ -589,18 +560,23 @@ function getValue(
 					throw new Error("Stack is empty");
 				}
 
-				({info, relativeOldIndex} = stack.pop()!);
-				offset = info.offset + offset;
+				({nodeInfo, oldIndexRelative} = stack.pop()!);
+				offset = nodeInfo.offset + offset;
 				walker.parentNode();
 			}
 		}
 	}
 
 	//try {
-	//	const ops = builder.build().operations();
-	//	//console.log("builder ops:", ops);
+	//	const edit = builder.build();
+	//	const ops = edit.operations();
+	//	//console.log("edit ops:", ops);
+	//	const newValue = edit.apply(oldValue);
+	//	if (value !== newValue) {
+	//		console.log({oldValue, newValue, expectedValue: value});
+	//	}
 	//} catch (err) {
-	//	//console.log("builder err:", err);
+	//	//console.log("edit err:", err);
 	//	throw err;
 	//}
 	return value;
@@ -631,6 +607,8 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 	}
 }
 
+// All of the following functions expect validate to have been called and the
+// cache to be accurate
 /***********************/
 /*** Selection Logic ***/
 /***********************/
@@ -664,8 +642,8 @@ function indexAt(
 		// If the node is not found in the cache but is contained in the root,
 		// then it is probably the child of an element with a data-content
 		// attribute.
-		// TODO: Maybe a non-zero offset should put the index at the end of
-		// the data-content node.
+		// TODO: Maybe a non-zero offset should put the index at the end of the
+		// data-content node.
 		offset = 0;
 		while (!cache.has(node)) {
 			node = node.parentNode!;
@@ -682,7 +660,7 @@ function indexAt(
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
 			const info = cache.get(node)!;
-			index = info.size;
+			index = info.stringLength;
 			if (info.flags & APPENDS_NEWLINE) {
 				index -= NEWLINE.length;
 			}
@@ -763,10 +741,13 @@ function findNodeOffset(
 			}
 
 			return [previousSibling, getNodeLength(previousSibling)];
-		} else if (index === info.size && node.nodeType === Node.TEXT_NODE) {
+		} else if (
+			index === info.stringLength &&
+			node.nodeType === Node.TEXT_NODE
+		) {
 			return [node, (node as Text).data.length];
-		} else if (index >= info.size) {
-			index -= info.size;
+		} else if (index >= info.stringLength) {
+			index -= info.stringLength;
 			const nextSibling = walker.nextSibling();
 			if (nextSibling === null) {
 				// This branch seems necessary mainly when working with data-content
@@ -891,7 +872,7 @@ function setSelectionRange(
 		} else if (focusNode === null) {
 			selection.collapse(anchorNode, anchorOffset);
 		} else {
-			// This is not a method in IE. We don’t care.
+			// This method is not implemented in IE.
 			selection.setBaseAndExtent(
 				anchorNode,
 				anchorOffset,
