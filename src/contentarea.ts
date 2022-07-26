@@ -52,7 +52,8 @@ const $observer = Symbol.for("revise$observer");
 const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
-const css = `:host {
+const css = `
+:host {
 	display: contents;
 	white-space: pre-wrap;
 	white-space: break-spaces;
@@ -63,12 +64,12 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$slot]: HTMLSlotElement;
 	[$cache]: NodeInfoCache;
 	[$value]: string;
+	[$selectionStart]: number;
 	[$observer]: MutationObserver;
 	// For the most part, we compute selection info on the fly, because of weird
 	// race conditions. However, we need to retain the previous selectionStart
 	// when building edits so that we can disambiguate edits to runs of the same
 	// character.
-	[$selectionStart]: number;
 	[$onselectionchange]: () => void;
 	constructor() {
 		super();
@@ -87,10 +88,11 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 		this[$cache] = new Map();
 		this[$value] = "";
+		this[$selectionStart] = 0;
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, null, records);
 		});
-		this[$selectionStart] = 0;
+
 		this[$onselectionchange] = () => {
 			validate(this);
 			this[$selectionStart] = getSelectionRange(
@@ -301,6 +303,12 @@ const BLOCKLIKE_ELEMENTS = new Set([
 	"UL",
 ]);
 
+/**
+ * Should be pre-emptively called before we read from the cache. Dispatches
+ * "contentchange" events, and makes sure the cache is up to date.
+ *
+ * @returns whether there was a change detected
+ */
 function validate(
 	root: ContentAreaElement,
 	source: string | null = null,
@@ -312,18 +320,21 @@ function validate(
 	}
 
 	const oldValue = root[$value];
-	const oldSelectionStart = root[$selectionStart];
 	const value = getValue(root, cache, oldValue);
-	const selectionStart = getSelectionRange(root, cache).selectionStart;
 	root[$value] = value;
 
-	const hint = Math.min(oldSelectionStart, selectionStart);
+	const oldSelectionStart = root[$selectionStart];
+	const selectionStart = getSelectionRange(root, cache).selectionStart;
 	// TODO: This call is expensive. If we have getValue return an edit instead
 	// of a string, we might be able to save a lot in CPU time.
-	const edit = Edit.diff(oldValue, value, hint);
+	const edit = Edit.diff(
+		oldValue,
+		value,
+		Math.min(selectionStart, oldSelectionStart),
+	);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
-	// We use the existence of records to determine whether
-	// contentchange events should be fired synchronously.
+	// We use the existence of records to determine whether contentchange events
+	// should be fired synchronously.
 	if (records === undefined) {
 		Promise.resolve().then(() => root.dispatchEvent(ev));
 	} else {
@@ -444,7 +455,7 @@ function getValue(
 			// block elements prepend a newline
 			if (offset && !hasNewline && isBlocklikeElement(node)) {
 				value += NEWLINE;
-				if ((nodeInfo.flags & IS_OLD) && (nodeInfo.flags & PREPENDS_NEWLINE)) {
+				if (nodeInfo.flags & IS_OLD && nodeInfo.flags & PREPENDS_NEWLINE) {
 					builder.retain(NEWLINE.length);
 				} else {
 					builder.insert(NEWLINE);
@@ -452,7 +463,8 @@ function getValue(
 
 				hasNewline = true;
 				offset += NEWLINE.length;
-				// TODO: We advance the nodeInfo offset. Is that sound logic?
+
+				// TODO: We advance the nodeInfo offset. Is that sound logic? I can’t tell.
 				nodeInfo.offset += NEWLINE.length;
 				nodeInfo.flags |= PREPENDS_NEWLINE;
 			} else {
@@ -527,7 +539,7 @@ function getValue(
 			// block elements append a newline
 			if (!hasNewline && isBlocklikeElement(node)) {
 				value += NEWLINE;
-				if ((nodeInfo.flags & IS_OLD) && (nodeInfo.flags & APPENDS_NEWLINE)) {
+				if (nodeInfo.flags & IS_OLD && nodeInfo.flags & APPENDS_NEWLINE) {
 					builder.retain(NEWLINE.length);
 				} else {
 					builder.insert(NEWLINE);
