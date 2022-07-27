@@ -53,12 +53,13 @@ const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
 
 const css = `
-:host {
-	display: contents;
-	white-space: pre-wrap;
-	white-space: break-spaces;
-	overflow-wrap: break-word;
-}`;
+	:host {
+		display: contents;
+		white-space: pre-wrap;
+		white-space: break-spaces;
+		overflow-wrap: break-word;
+	}
+`;
 
 export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$slot]: HTMLSlotElement;
@@ -432,6 +433,16 @@ function getValue(
 	// Whether or not the previous element ends with a newline
 	let hasNewline = false;
 	for (let descending = true; ; node = walker.currentNode) {
+		if (!descending) {
+			if (!stack.length) {
+				// This should never happen
+				throw new Error("Stack is empty");
+			}
+
+			({nodeInfo, oldIndexRelative} = stack.pop()!);
+			offset = nodeInfo.offset + offset;
+		}
+
 		for (; descending; node = walker.currentNode) {
 			nodeInfo = cache.get(node)!;
 			if (nodeInfo === undefined) {
@@ -567,13 +578,6 @@ function getValue(
 			if (walker.currentNode === root) {
 				break;
 			} else {
-				if (!stack.length) {
-					// This should never happen
-					throw new Error("Stack is empty");
-				}
-
-				({nodeInfo, oldIndexRelative} = stack.pop()!);
-				offset = nodeInfo.offset + offset;
 				walker.parentNode();
 			}
 		}
