@@ -399,7 +399,6 @@ function invalidate(
 	return invalid;
 }
 
-// This is the single most complicated function in this library!!!
 /**
  * This function both returns the content of the root (always a content-area
  * element, and populates the cache with info about the contents of nodes for
@@ -422,32 +421,26 @@ function getValue(
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	let node: Node = root;
-	let nodeInfo!: NodeInfo;
-	// The current offset relative to the current node
-	let offset = 0;
-	// The index into the old string
-	let oldIndex = 0;
-	// The index into the old string of the current node
-	let oldIndexRelative = 0;
-	// Whether or not the previous element ends with a newline
-	let hasNewline = false;
-	for (let descending = true; ; node = walker.currentNode) {
-		if (!descending) {
-			if (!stack.length) {
-				// This should never happen
-				throw new Error("Stack is empty");
-			}
-
-			({nodeInfo, oldIndexRelative} = stack.pop()!);
-			offset = nodeInfo.offset + offset;
-		}
-
-		for (; descending; node = walker.currentNode) {
+	for (
+		let node: Node = root,
+			// The current offset relative to the current node
+			offset = 0,
+			// The index into the old string
+			oldIndex = 0,
+			// The index into the old string of the current node
+			oldIndexRelative = 0,
+			// Whether or not the previous element ends with a newline
+			hasNewline = false,
+			descending = true;
+		;
+		node = walker.currentNode
+	) {
+		let nodeInfo: NodeInfo;
+		if (descending) {
+			// PRE-ORDER LOGIC
 			nodeInfo = cache.get(node)!;
 			if (nodeInfo === undefined) {
-				nodeInfo = new NodeInfo(offset);
-				cache.set(node, nodeInfo);
+				cache.set(node, (nodeInfo = new NodeInfo(offset)));
 			} else {
 				const expectedIndex = oldIndex - oldIndexRelative;
 				if (nodeInfo.offset > expectedIndex) {
@@ -462,7 +455,6 @@ function getValue(
 				nodeInfo.offset = offset;
 			}
 
-			// PRE-ORDER LOGIC
 			// block elements prepend a newline
 			if (offset && !hasNewline && isBlocklikeElement(node)) {
 				value += NEWLINE;
@@ -482,6 +474,7 @@ function getValue(
 				nodeInfo.flags &= ~PREPENDS_NEWLINE;
 			}
 
+			descending = false;
 			if (nodeInfo.flags & IS_CLEAN) {
 				// The node and its children are unchanged.
 				const length = nodeInfo.stringLength;
@@ -498,8 +491,6 @@ function getValue(
 				if (length) {
 					hasNewline = oldValue1.endsWith(NEWLINE);
 				}
-
-				break;
 			} else if (node.nodeType === Node.TEXT_NODE) {
 				// TODO: DIFF
 				const value1 = (node as Text).data;
@@ -509,8 +500,6 @@ function getValue(
 				if (value1.length) {
 					hasNewline = value1.endsWith(NEWLINE);
 				}
-
-				break;
 			} else if ((node as Element).hasAttribute("data-content")) {
 				// TODO: DIFF
 				// TODO: merge with the logic for text nodes
@@ -522,62 +511,59 @@ function getValue(
 				if (value1.length) {
 					hasNewline = value1.endsWith(NEWLINE);
 				}
-
-				break;
 			} else if (node.nodeName === "BR") {
 				builder.insert(NEWLINE);
 				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
-				break;
 			} else {
-				// ITERATION LOGIC
-				// MOVE INTO FIRST CHILD
-				const firstChild = walker.firstChild();
-				if (firstChild) {
-					descending = true;
+				descending = !!walker.firstChild();
+				if (descending) {
 					stack.push({nodeInfo, oldIndexRelative});
-					oldIndexRelative = oldIndex;
 					offset = 0;
+					oldIndexRelative = oldIndex;
+				}
+			}
+		} else {
+			if (!stack.length) {
+				// This should never happen
+				throw new Error("Stack is empty");
+			}
+
+			({nodeInfo, oldIndexRelative} = stack.pop()!);
+			offset = nodeInfo.offset + offset;
+		}
+
+		if (!descending) {
+			// POST-ORDER LOGIC
+			if (!(nodeInfo.flags & IS_CLEAN)) {
+				// block elements append a newline
+				if (!hasNewline && isBlocklikeElement(node)) {
+					value += NEWLINE;
+					if (nodeInfo.flags & IS_OLD && nodeInfo.flags & APPENDS_NEWLINE) {
+						builder.retain(NEWLINE.length);
+					} else {
+						builder.insert(NEWLINE);
+					}
+
+					offset += NEWLINE.length;
+					hasNewline = true;
+
+					nodeInfo.flags |= APPENDS_NEWLINE;
 				} else {
+					nodeInfo.flags &= ~APPENDS_NEWLINE;
+				}
+
+				nodeInfo.stringLength = offset - nodeInfo.offset;
+				nodeInfo.flags |= IS_CLEAN;
+			}
+
+			descending = !!walker.nextSibling();
+			if (!descending) {
+				if (walker.currentNode === root) {
 					break;
 				}
-			}
-		}
 
-		// POST-ORDER LOGIC
-		if (!(nodeInfo.flags & IS_CLEAN)) {
-			// block elements append a newline
-			if (!hasNewline && isBlocklikeElement(node)) {
-				value += NEWLINE;
-				if (nodeInfo.flags & IS_OLD && nodeInfo.flags & APPENDS_NEWLINE) {
-					builder.retain(NEWLINE.length);
-				} else {
-					builder.insert(NEWLINE);
-				}
-
-				offset += NEWLINE.length;
-				hasNewline = true;
-
-				nodeInfo.flags |= APPENDS_NEWLINE;
-			} else {
-				nodeInfo.flags &= ~APPENDS_NEWLINE;
-			}
-
-			nodeInfo.stringLength = offset - nodeInfo.offset;
-			nodeInfo.flags |= IS_CLEAN;
-		}
-
-		// ITERATION LOGIC
-		// MOVE TO NEXT SIBLING
-		const nextSibling = walker.nextSibling();
-		if (nextSibling) {
-			descending = true;
-		} else {
-			descending = false;
-			if (walker.currentNode === root) {
-				break;
-			} else {
 				walker.parentNode();
 			}
 		}
