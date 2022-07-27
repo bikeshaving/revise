@@ -341,8 +341,8 @@ export class Edit {
 
 		return Edit.createBuilder(text1)
 			.retain(prefix)
-			.insert(text2.slice(text2.length - suffix))
-			.delete(text1.length - suffix)
+			.insert(text2.slice(prefix, -suffix))
+			.delete(text1.length - prefix - suffix)
 			.retain(suffix)
 			.build();
 	}
