@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import {Edit} from "./edit.js";
+import {Edit, commonPrefixLength, commonSuffixLength} from "./edit.js";
 
 export interface ContentEventDetail {
 	edit: Edit;
@@ -49,8 +49,8 @@ const $slot = Symbol.for("revise$slot");
 const $cache = Symbol.for("revise$cache");
 const $value = Symbol.for("revise$value");
 const $observer = Symbol.for("revise$observer");
-const $selectionStart = Symbol.for("revise$selectionStart");
 const $onselectionchange = Symbol.for("revise$onselectionchange");
+const $startNodeOffset = Symbol.for("revise$startNodeOffset");
 
 const css = `
 	:host {
@@ -65,18 +65,21 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	[$slot]: HTMLSlotElement;
 	[$cache]: NodeInfoCache;
 	[$value]: string;
-	[$selectionStart]: number;
 	[$observer]: MutationObserver;
 	// For the most part, we compute selection info on the fly, because of weird
 	// race conditions. However, we need to retain the previous selectionStart
 	// when building edits so that we can disambiguate edits to runs of the same
 	// character.
 	[$onselectionchange]: () => void;
+	[$startNodeOffset]: [Node | null, number];
 	constructor() {
 		super();
 
 		{
 			// Creating the shadow DOM.
+			// TODO: Not really sure what the value of using the shadow DOM is, when
+			// we get flashes of unstyled content (layout shifts) when we use host
+			// styles.
 			const slot = document.createElement("slot");
 			const shadow = this.attachShadow({mode: "closed"});
 			const style = document.createElement("style");
@@ -89,17 +92,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 		this[$cache] = new Map();
 		this[$value] = "";
-		this[$selectionStart] = 0;
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, null, records);
 		});
 
+		this[$startNodeOffset] = getStartNodeOffset();
 		this[$onselectionchange] = () => {
-			validate(this);
-			this[$selectionStart] = getSelectionRange(
-				this,
-				this[$cache],
-			).selectionStart;
+			this[$startNodeOffset] = getStartNodeOffset();
 		};
 	}
 
@@ -114,20 +113,19 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
-			characterData: true,
 			attributes: true,
 			attributeFilter: [
 				"data-content",
 				"data-contentbefore",
 				"data-contentafter",
 			],
+			attributeOldValue: true,
+			characterData: true,
+			characterDataOldValue: true,
 		});
 
-		this[$value] = getValue(this, this[$cache], "");
-		this[$selectionStart] = getSelectionRange(
-			this,
-			this[$cache],
-		).selectionStart;
+		const edit = diff(this, this[$cache], "");
+		this[$value] = edit.apply("");
 		document.addEventListener(
 			"selectionchange",
 			this[$onselectionchange],
@@ -262,6 +260,16 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 }
 
+function getStartNodeOffset(): [Node | null, number] {
+	const selection = document.getSelection();
+	if (selection && selection.rangeCount) {
+		const range = selection.getRangeAt(0);
+		return [range.startContainer, range.startOffset];
+	}
+
+	return [null, 0];
+}
+
 // TODO: custom newlines?
 const NEWLINE = "\n";
 
@@ -321,23 +329,15 @@ function validate(
 	}
 
 	const oldValue = root[$value];
-	const value = getValue(root, cache, oldValue);
-	root[$value] = value;
-
-	const oldSelectionStart = root[$selectionStart];
-	const selectionStart = getSelectionRange(root, cache).selectionStart;
-	// TODO: This call is expensive. If we have getValue return an edit instead
-	// of a string, we might be able to save a lot in CPU time.
-	const edit = Edit.diff(
-		oldValue,
-		value,
-		Math.min(selectionStart, oldSelectionStart),
-	);
+	const edit = diff(root, cache, oldValue);
+	root[$value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
 	// We use the existence of records to determine whether contentchange events
 	// should be fired synchronously.
 	if (records === undefined) {
-		Promise.resolve().then(() => root.dispatchEvent(ev));
+		Promise.resolve().then(() => {
+			root.dispatchEvent(ev);
+		});
 	} else {
 		root.dispatchEvent(ev);
 	}
@@ -382,9 +382,9 @@ function invalidate(
 				break;
 			}
 
-			const info = cache.get(node);
-			if (info) {
-				info.flags &= ~IS_CLEAN;
+			const nodeInfo = cache.get(node);
+			if (nodeInfo) {
+				nodeInfo.flags &= ~IS_CLEAN;
 			}
 
 			invalid = true;
@@ -392,8 +392,8 @@ function invalidate(
 	}
 
 	if (invalid) {
-		const info = cache.get(root)!;
-		info.flags &= ~IS_CLEAN;
+		const nodeInfo = cache.get(root)!;
+		nodeInfo.flags &= ~IS_CLEAN;
 	}
 
 	return invalid;
@@ -408,12 +408,11 @@ function invalidate(
  * @param cache - The NodeInfo cache associated with the root
  * @param oldValue - The previous content of the root.
  */
-function getValue(
+function diff(
 	root: ContentAreaElement,
 	cache: NodeInfoCache,
 	oldValue: string,
-): string {
-	let value = "";
+): Edit {
 	const builder = Edit.createBuilder(oldValue);
 	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	const walker = document.createTreeWalker(
@@ -457,13 +456,8 @@ function getValue(
 
 			// block elements prepend a newline
 			if (offset && !hasNewline && isBlocklikeElement(node)) {
-				value += NEWLINE;
-				if (nodeInfo.flags & IS_OLD && nodeInfo.flags & PREPENDS_NEWLINE) {
-					builder.retain(NEWLINE.length);
-				} else {
-					builder.insert(NEWLINE);
-				}
-
+				// TODO: retain if element is old
+				builder.insert(NEWLINE);
 				hasNewline = true;
 				offset += NEWLINE.length;
 
@@ -485,35 +479,79 @@ function getValue(
 
 				builder.retain(length);
 				const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
-				value += oldValue1;
 				offset += length;
 				oldIndex += length;
 				if (length) {
 					hasNewline = oldValue1.endsWith(NEWLINE);
 				}
-			} else if (node.nodeType === Node.TEXT_NODE) {
-				// TODO: DIFF
-				const value1 = (node as Text).data;
-				builder.insert(value1);
-				value += value1;
-				offset += value1.length;
-				if (value1.length) {
-					hasNewline = value1.endsWith(NEWLINE);
-				}
-			} else if ((node as Element).hasAttribute("data-content")) {
-				// TODO: DIFF
-				// TODO: merge with the logic for text nodes
-				const value1 = (node as Element).getAttribute("data-content") || "";
-				builder.insert(value1);
-				value += value1;
-				offset += value1.length;
+			} else if (
+				node.nodeType === Node.TEXT_NODE ||
+				(node as Element).hasAttribute("data-content")
+			) {
+				const text =
+					node.nodeType === Node.TEXT_NODE
+						? (node as Text).data
+						: (node as Element).getAttribute("data-content") || "";
+				if (nodeInfo.flags & IS_OLD) {
+					const nodeOffset = getStartNodeOffset();
+					const oldText = oldValue.slice(
+						oldIndex,
+						oldIndex + nodeInfo.stringLength,
+					);
+					const oldStartOffset =
+						node.nodeType === Node.TEXT_NODE &&
+						root[$startNodeOffset][0] === node
+							? root[$startNodeOffset][1]
+							: -1;
+					const startOffset =
+						node.nodeType === Node.TEXT_NODE && nodeOffset[0] === node
+							? nodeOffset[1]
+							: -1;
+					const hint = Math.min(oldStartOffset, startOffset);
+					if (hint > -1) {
+						const oldBefore = oldText.slice(0, hint);
+						const before = text.slice(0, hint);
+						if (oldBefore === before) {
+							builder.retain(before.length);
+							oldIndex += before.length;
+						} else {
+							const prefix = commonPrefixLength(oldBefore, before);
+							builder.retain(prefix);
+							oldIndex += prefix;
+							builder.insert(before.slice(prefix));
+							builder.delete(oldBefore.length - prefix);
+							oldIndex += oldBefore.length - prefix;
+						}
 
-				if (value1.length) {
-					hasNewline = value1.endsWith(NEWLINE);
+						const oldAfter = oldText.slice(hint);
+						const after = text.slice(hint);
+						if (oldAfter === after) {
+							builder.retain(after.length);
+							oldIndex += after.length;
+						} else {
+							const suffix = commonSuffixLength(oldAfter, after);
+							builder.insert(suffix ? after.slice(0, -suffix) : after);
+							builder.delete(oldAfter.length - suffix);
+							oldIndex += oldAfter.length - suffix;
+							builder.retain(suffix);
+							oldIndex += suffix;
+						}
+					} else {
+						builder.insert(text);
+						builder.delete(nodeInfo.stringLength);
+						oldIndex += nodeInfo.stringLength;
+					}
+				} else {
+					// TODO: DO we have to delete the old text?????
+					builder.insert(text);
+					builder.delete(nodeInfo.stringLength);
+				}
+				offset += text.length;
+				if (text.length) {
+					hasNewline = text.endsWith(NEWLINE);
 				}
 			} else if (node.nodeName === "BR") {
 				builder.insert(NEWLINE);
-				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
 			} else {
@@ -536,16 +574,14 @@ function getValue(
 
 		if (!descending) {
 			// POST-ORDER LOGIC
+			// TODO: If a node is clean, does this mean the APPENDS_NEWLINE flag is
+			// constant? It seems like the only edge case is an empty block
+			// element...
 			if (!(nodeInfo.flags & IS_CLEAN)) {
 				// block elements append a newline
 				if (!hasNewline && isBlocklikeElement(node)) {
-					value += NEWLINE;
-					if (nodeInfo.flags & IS_OLD && nodeInfo.flags & APPENDS_NEWLINE) {
-						builder.retain(NEWLINE.length);
-					} else {
-						builder.insert(NEWLINE);
-					}
-
+					// TODO: check inserts and retain
+					builder.insert(NEWLINE);
 					offset += NEWLINE.length;
 					hasNewline = true;
 
@@ -558,6 +594,8 @@ function getValue(
 				nodeInfo.flags |= IS_CLEAN;
 			}
 
+			nodeInfo.flags |= IS_OLD;
+
 			descending = !!walker.nextSibling();
 			if (!descending) {
 				if (walker.currentNode === root) {
@@ -569,19 +607,7 @@ function getValue(
 		}
 	}
 
-	//try {
-	//	const edit = builder.build();
-	//	const ops = edit.operations();
-	//	//console.log("edit ops:", ops);
-	//	const newValue = edit.apply(oldValue);
-	//	if (value !== newValue) {
-	//		console.log({oldValue, newValue, expectedValue: value});
-	//	}
-	//} catch (err) {
-	//	//console.log("edit err:", err);
-	//	throw err;
-	//}
-	return value;
+	return builder.build();
 }
 
 function isBlocklikeElement(node: Node): node is Element {
@@ -628,7 +654,7 @@ export interface SelectionRange {
 
 /**
  * Finds the string index of a node and offset pair provided by a browser API
- * like window.getSelection() for a given root and cache.
+ * like document.getSelection() for a given root and cache.
  */
 function indexAt(
 	root: Element,
@@ -654,18 +680,18 @@ function indexAt(
 
 	let index: number;
 	if (node.nodeType === Node.TEXT_NODE) {
-		const info = cache.get(node)!;
-		index = offset + info.offset;
+		const nodeInfo = cache.get(node)!;
+		index = offset + nodeInfo.offset;
 		node = node.parentNode!;
 	} else {
 		if (offset <= 0) {
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
-			const info = cache.get(node)!;
-			index = info.stringLength;
-			if (info.flags & APPENDS_NEWLINE) {
-				index -= NEWLINE.length;
-			}
+			const nodeInfo = cache.get(node)!;
+			index =
+				nodeInfo.flags & APPENDS_NEWLINE
+					? nodeInfo.stringLength - NEWLINE.length
+					: nodeInfo.stringLength;
 		} else {
 			let child: Node | null = node.childNodes[offset];
 			while (child !== null && !cache.has(child)) {
@@ -676,18 +702,18 @@ function indexAt(
 				index = 0;
 			} else {
 				node = child;
-				const info = cache.get(node)!;
+				const nodeInfo = cache.get(node)!;
 				// If the offset references an element which prepends a newline
 				// ("hello<div>world</div>"), we have to start from -1 because the
 				// element’s info.offset will not account for the newline.
-				index = info.flags & PREPENDS_NEWLINE ? -1 : 0;
+				index = nodeInfo.flags & PREPENDS_NEWLINE ? -1 : 0;
 			}
 		}
 	}
 
 	for (; node !== root; node = node.parentNode!) {
-		const info = cache.get(node)!;
-		index += info.offset;
+		const nodeInfo = cache.get(node)!;
+		index += nodeInfo.offset;
 	}
 
 	return index;
@@ -704,7 +730,7 @@ function nodeOffsetAt(
 ): [Node | null, number] {
 	const [node, offset] = findNodeOffset(root, cache, index);
 	if (node && node.nodeName === "BR") {
-		// Different browsers can have trouble when calling `selection.collapse()`
+		// Some browsers seem to have trouble when calling `selection.collapse()`
 		// with a BR element, so we try to avoid returning them from this function.
 		return nodeOffsetFromChild(node);
 	}
@@ -727,10 +753,10 @@ function findNodeOffset(
 	);
 
 	for (let node: Node | null = root; node !== null; ) {
-		const info = cache.get(node);
-		if (info == null) {
+		const nodeInfo = cache.get(node);
+		if (nodeInfo == null) {
 			return nodeOffsetFromChild(node, index > 0);
-		} else if (info.flags & PREPENDS_NEWLINE) {
+		} else if (nodeInfo.flags & PREPENDS_NEWLINE) {
 			index -= NEWLINE.length;
 		}
 
@@ -744,12 +770,12 @@ function findNodeOffset(
 
 			return [previousSibling, getNodeLength(previousSibling)];
 		} else if (
-			index === info.stringLength &&
+			index === nodeInfo.stringLength &&
 			node.nodeType === Node.TEXT_NODE
 		) {
 			return [node, (node as Text).data.length];
-		} else if (index >= info.stringLength) {
-			index -= info.stringLength;
+		} else if (index >= nodeInfo.stringLength) {
+			index -= nodeInfo.stringLength;
 			const nextSibling = walker.nextSibling();
 			if (nextSibling === null) {
 				// This branch seems necessary mainly when working with data-content
@@ -814,7 +840,7 @@ function getSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
 ): SelectionRange {
-	const selection = window.getSelection();
+	const selection = document.getSelection();
 	if (!selection) {
 		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
 	}
@@ -845,7 +871,7 @@ function setSelectionRange(
 	selectionEnd: number,
 	selectionDirection: SelectionDirection,
 ): void {
-	const selection = window.getSelection();
+	const selection = document.getSelection();
 	if (!selection) {
 		return;
 	}

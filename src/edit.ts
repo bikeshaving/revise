@@ -181,7 +181,7 @@ export class Edit {
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
-		return normalize(Edit.synthesize(insertSeq, inserted, deleteSeq, deleted));
+		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
 	invert(): Edit {
@@ -193,6 +193,67 @@ export class Edit {
 		deleteSeq = deleteSeq.expand(insertSeq);
 		insertSeq = insertSeq.shrink(deleteSeq);
 		return Edit.synthesize(deleteSeq, deleted!, insertSeq, inserted);
+	}
+
+	normalize(): Edit {
+		if (typeof this.deleted === "undefined") {
+			throw new Error("Missing deleted property");
+		}
+
+		const insertSizes: Array<number> = [];
+		const deleteSizes: Array<number> = [];
+		let inserted = "";
+		let deleted = "";
+		let prevInserted: string | undefined;
+		const operations = this.operations();
+		for (let i = 0; i < operations.length; i++) {
+			const op = operations[i];
+			switch (op.type) {
+				case "insert": {
+					prevInserted = op.value;
+					break;
+				}
+
+				case "retain": {
+					if (prevInserted !== undefined) {
+						Subseq.pushSegment(insertSizes, prevInserted.length, true);
+						inserted += prevInserted;
+						prevInserted = undefined;
+					}
+
+					Subseq.pushSegment(insertSizes, op.end - op.start, false);
+					Subseq.pushSegment(deleteSizes, op.end - op.start, false);
+					break;
+				}
+
+				case "delete": {
+					const length = op.end - op.start;
+					let prefix = 0;
+					if (prevInserted !== undefined) {
+						prefix = commonPrefixLength(prevInserted, op.value!);
+						Subseq.pushSegment(insertSizes, prefix, false);
+						Subseq.pushSegment(insertSizes, prevInserted.length - prefix, true);
+						inserted += prevInserted.slice(prefix);
+						prevInserted = undefined;
+					}
+
+					deleted += op.value!.slice(prefix);
+					Subseq.pushSegment(deleteSizes, prefix, false);
+					Subseq.pushSegment(deleteSizes, length - prefix, true);
+					Subseq.pushSegment(insertSizes, length - prefix, false);
+					break;
+				}
+			}
+		}
+
+		if (prevInserted !== undefined) {
+			Subseq.pushSegment(insertSizes, prevInserted.length, true);
+			inserted += prevInserted;
+		}
+
+		const insertSeq = new Subseq(insertSizes);
+		const deleteSeq = new Subseq(deleteSizes);
+		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
 	}
 
 	static createBuilder(value: string) {
@@ -382,68 +443,6 @@ function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
 	return [insertSeq, inserted, deleteSeq, edit.deleted];
 }
 
-// TODO: public or private?
-function normalize(edit: Edit): Edit {
-	if (typeof edit.deleted === "undefined") {
-		throw new Error("Missing deleted property");
-	}
-
-	const insertSizes: Array<number> = [];
-	const deleteSizes: Array<number> = [];
-	let inserted = "";
-	let deleted = "";
-	let prevInserted: string | undefined;
-	const operations = edit.operations();
-	for (let i = 0; i < operations.length; i++) {
-		const op = operations[i];
-		switch (op.type) {
-			case "insert": {
-				prevInserted = op.value;
-				break;
-			}
-
-			case "retain": {
-				if (prevInserted !== undefined) {
-					Subseq.pushSegment(insertSizes, prevInserted.length, true);
-					inserted += prevInserted;
-					prevInserted = undefined;
-				}
-
-				Subseq.pushSegment(insertSizes, op.end - op.start, false);
-				Subseq.pushSegment(deleteSizes, op.end - op.start, false);
-				break;
-			}
-
-			case "delete": {
-				const length = op.end - op.start;
-				let prefix = 0;
-				if (prevInserted !== undefined) {
-					prefix = commonPrefixLength(prevInserted, op.value!);
-					Subseq.pushSegment(insertSizes, prefix, false);
-					Subseq.pushSegment(insertSizes, prevInserted.length - prefix, true);
-					inserted += prevInserted.slice(prefix);
-					prevInserted = undefined;
-				}
-
-				deleted += op.value!.slice(prefix);
-				Subseq.pushSegment(deleteSizes, prefix, false);
-				Subseq.pushSegment(deleteSizes, length - prefix, true);
-				Subseq.pushSegment(insertSizes, length - prefix, false);
-				break;
-			}
-		}
-	}
-
-	if (prevInserted !== undefined) {
-		Subseq.pushSegment(insertSizes, prevInserted.length, true);
-		inserted += prevInserted;
-	}
-
-	const insertSeq = new Subseq(insertSizes);
-	const deleteSeq = new Subseq(deleteSizes);
-	return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
-}
-
 /**
  * Given two subseqs and strings which are represented by the included segments
  * of the subseqs, this function combines the two strings so that they overlap
@@ -503,7 +502,7 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 }
 
 /** @returns The length of the common prefix between two strings. */
-function commonPrefixLength(text1: string, text2: string) {
+export function commonPrefixLength(text1: string, text2: string) {
 	const length = Math.min(text1.length, text2.length);
 	for (let i = 0; i < length; i++) {
 		if (text1[i] !== text2[i]) {
@@ -515,7 +514,7 @@ function commonPrefixLength(text1: string, text2: string) {
 }
 
 /** @returns The length of the common suffix between two strings. */
-function commonSuffixLength(text1: string, text2: string) {
+export function commonSuffixLength(text1: string, text2: string) {
 	const length1 = text1.length;
 	const length2 = text2.length;
 	const length = Math.min(length1, length2);
