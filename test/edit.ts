@@ -267,7 +267,7 @@ test("compose 6", () => {
 	// dc:  =========--=
 	const edit1 = new Edit([0, 5, 11], " world");
 	const edit2 = new Edit([0, 5, " word"], "");
-	const result = new Edit([0, 9, "d", 11], "ld");
+	const result = new Edit([0, 9, 10, 11], "l");
 	Assert.equal(edit1.compose(edit2), result);
 });
 
@@ -351,7 +351,7 @@ test("build 4", () => {
 test("build compose", () => {
 	const edit1 = Edit.build("hello world", "je", 0, 2);
 	const edit2 = Edit.build("jello world", "", 5, 11);
-	Assert.equal(edit1.compose(edit2), new Edit(["je", 2, 5, 11], "he world"));
+	Assert.equal(edit1.compose(edit2), new Edit(["j", 1, 5, 11], "h world"));
 });
 
 test("invert 1", () => {

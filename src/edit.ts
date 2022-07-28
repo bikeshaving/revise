@@ -163,6 +163,7 @@ export class Edit {
 		insertSeq1 = insertSeq1.expand(insertSeq2);
 
 		// Find insertions which have been deleted and remove them.
+		// TODO: Is this necessary???
 		{
 			const toggleSeq = insertSeq1.intersection(deleteSeq2);
 			if (toggleSeq.includedSize) {
@@ -204,21 +205,21 @@ export class Edit {
 		const deleteSizes: Array<number> = [];
 		let inserted = "";
 		let deleted = "";
-		let prevInserted: string | undefined;
+		let insertion: string | undefined;
 		const operations = this.operations();
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i];
 			switch (op.type) {
 				case "insert": {
-					prevInserted = op.value;
+					insertion = op.value;
 					break;
 				}
 
 				case "retain": {
-					if (prevInserted !== undefined) {
-						Subseq.pushSegment(insertSizes, prevInserted.length, true);
-						inserted += prevInserted;
-						prevInserted = undefined;
+					if (insertion !== undefined) {
+						Subseq.pushSegment(insertSizes, insertion.length, true);
+						inserted += insertion;
+						insertion = undefined;
 					}
 
 					Subseq.pushSegment(insertSizes, op.end - op.start, false);
@@ -228,32 +229,53 @@ export class Edit {
 
 				case "delete": {
 					const length = op.end - op.start;
+					const deletion = op.value!;
 					let prefix = 0;
-					if (prevInserted !== undefined) {
-						prefix = commonPrefixLength(prevInserted, op.value!);
+					let suffix = 0;
+					if (insertion !== undefined) {
+						if (insertion === deletion) {
+							prefix = deletion.length;
+						} else {
+							prefix = commonPrefixLength(insertion, deletion);
+							suffix = commonSuffixLength(
+								insertion.slice(prefix),
+								deletion.slice(prefix),
+							);
+						}
+
 						Subseq.pushSegment(insertSizes, prefix, false);
-						Subseq.pushSegment(insertSizes, prevInserted.length - prefix, true);
-						inserted += prevInserted.slice(prefix);
-						prevInserted = undefined;
+						Subseq.pushSegment(
+							insertSizes,
+							insertion.length - prefix - suffix,
+							true,
+						);
+						inserted += insertion.slice(prefix, insertion.length - suffix);
 					}
 
-					deleted += op.value!.slice(prefix);
+					deleted += deletion.slice(prefix, deletion.length - suffix);
 					Subseq.pushSegment(deleteSizes, prefix, false);
-					Subseq.pushSegment(deleteSizes, length - prefix, true);
-					Subseq.pushSegment(insertSizes, length - prefix, false);
+					Subseq.pushSegment(deleteSizes, length - prefix - suffix, true);
+					Subseq.pushSegment(deleteSizes, suffix, false);
+
+					Subseq.pushSegment(insertSizes, length - prefix - suffix, false);
+					Subseq.pushSegment(insertSizes, suffix, false);
+					insertion = undefined;
 					break;
 				}
 			}
 		}
 
-		if (prevInserted !== undefined) {
-			Subseq.pushSegment(insertSizes, prevInserted.length, true);
-			inserted += prevInserted;
+		if (insertion !== undefined) {
+			Subseq.pushSegment(insertSizes, insertion.length, true);
+			inserted += insertion;
 		}
 
-		const insertSeq = new Subseq(insertSizes);
-		const deleteSeq = new Subseq(deleteSizes);
-		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
+		return Edit.synthesize(
+			new Subseq(insertSizes),
+			inserted,
+			new Subseq(deleteSizes),
+			deleted,
+		);
 	}
 
 	static createBuilder(value: string) {
@@ -264,7 +286,6 @@ export class Edit {
 		const deleteSizes: Array<number> = [];
 		return {
 			retain(size: number) {
-				//console.log("retain:", size);
 				size = Math.min(value.length - index, size);
 				Subseq.pushSegment(insertSizes, size, false);
 				Subseq.pushSegment(deleteSizes, size, false);
@@ -276,14 +297,12 @@ export class Edit {
 				size = Math.min(value.length - index, size);
 				Subseq.pushSegment(insertSizes, size, false);
 				Subseq.pushSegment(deleteSizes, size, true);
-				//console.log("delete:", size, [value.slice(index, index + size)]);
 				deleted += value.slice(index, index + size);
 				index += size;
 				return this;
 			},
 
 			insert(value: string) {
-				//console.log("insert:", [value]);
 				Subseq.pushSegment(insertSizes, value.length, true);
 				inserted += value;
 				return this;
@@ -291,7 +310,6 @@ export class Edit {
 
 			build(): Edit {
 				if (index < value.length) {
-					//console.log("delete:", [value.length - index, value.slice(index)]);
 					Subseq.pushSegment(insertSizes, value.length - index, false);
 					Subseq.pushSegment(deleteSizes, value.length - index, true);
 					deleted += value.slice(index);
@@ -332,7 +350,13 @@ export class Edit {
 			.expand(insertSeq)
 			.align(insertSeq)) {
 			if (inserting) {
-				parts.push(inserted.slice(insertIndex, insertIndex + length));
+				const insertion = inserted.slice(insertIndex, insertIndex + length);
+				if (parts.length && typeof parts[parts.length - 1] === "string") {
+					parts[parts.length - 1] += insertion;
+				} else {
+					parts.push(insertion);
+				}
+
 				insertIndex += length;
 			} else {
 				if (!deleting) {
