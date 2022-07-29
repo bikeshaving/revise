@@ -4,10 +4,11 @@ import {ContentAreaElement} from "../src/contentarea";
 
 let area!: ContentAreaElement;
 
-const test = suite("ContentAreaElement");
-
+let test = suite("ContentAreaElement value");
 test.before(() => {
-	window.customElements.define("content-area", ContentAreaElement);
+	if (!window.customElements.get("content-area")) {
+		window.customElements.define("content-area", ContentAreaElement);
+	}
 });
 
 test.before.each(() => {
@@ -314,6 +315,20 @@ test("empty inline element edge-case", () => {
 	br0.remove();
 	(div0 as HTMLElement).prepend(document.createElement("br"));
 	Assert.is(area.value, "\n");
+});
+
+test.run();
+
+test = suite("ContentAreaElement selection logic");
+test.before(() => {
+	if (!window.customElements.get("content-area")) {
+		window.customElements.define("content-area", ContentAreaElement);
+	}
+});
+
+test.before.each(() => {
+	document.body.innerHTML = "<content-area></content-area>";
+	area = document.body.firstChild as ContentAreaElement;
 });
 
 // nodeOffsetAt/indexAt

@@ -1,10 +1,10 @@
 /// <reference lib="dom" />
+// TODO: stop import/exporting prefix/suffix functions
 import {Edit, commonPrefixLength, commonSuffixLength} from "./edit.js";
 
 export interface ContentEventDetail {
 	edit: Edit;
 	source: string | null;
-	// TODO: add information about changed ranges
 }
 
 export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}

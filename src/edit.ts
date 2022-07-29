@@ -21,8 +21,19 @@ export interface DeleteOperation {
 
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
+export interface EditBuilder {
+	retain(length: number): EditBuilder;
+
+	delete(length: number): EditBuilder;
+
+	insert(value: string): EditBuilder;
+
+	build(): Edit;
+}
+
 /** A data structure which represents edits to strings. */
 export class Edit {
+	// TODO: hide parts and deleted from the public interface
 	/**
 	 * An array of strings and integers representing operations.
 	 *
@@ -62,11 +73,13 @@ export class Edit {
 	 */
 	deleted: string | undefined;
 
+	// TODO: Is this the constructor signature we want to use?
 	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
 		this.deleted = deleted;
 	}
 
+	// TODO: Not sure this is a good name or if this should be exposed
 	/** A string which represents a concatenation of all insertions. */
 	get inserted(): string {
 		let text = "";
@@ -187,7 +200,7 @@ export class Edit {
 
 	invert(): Edit {
 		if (typeof this.deleted === "undefined") {
-			throw new Error("Missing deleted property");
+			throw new Error("Edit is not invertible");
 		}
 
 		let [insertSeq, inserted, deleteSeq, deleted] = factor(this);
@@ -278,7 +291,34 @@ export class Edit {
 		);
 	}
 
-	static createBuilder(value: string) {
+	hasChangesBetween(start: number, end: number): boolean {
+		const ops = this.operations();
+		for (const op of ops) {
+			switch (op.type) {
+				case "delete": {
+					if (
+						(start <= op.start && op.start <= end) ||
+						(start <= op.end && op.end <= end)
+					) {
+						return true;
+					}
+
+					break;
+				}
+				case "insert": {
+					if (start <= op.start && op.start <= end) {
+						return true;
+					}
+
+					break;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	static createBuilder(value: string): EditBuilder {
 		let index = 0;
 		let inserted = "";
 		const insertSizes: Array<number> = [];
@@ -325,6 +365,7 @@ export class Edit {
 		};
 	}
 
+	// TODO: Make this private
 	static synthesize(
 		insertSeq: Subseq,
 		inserted: string,
@@ -406,9 +447,8 @@ export class Edit {
 	 *
 	 * @param hint - An optional hint can be provided to disambiguate edits which
 	 * cannot be inferred from the text alone, for example, inserting "a" into
-	 * the string "aaaa" could be an insertion at any point in the string which
-	 * leads to the same result. The hint is usually inferred from the user
-	 * interface.
+	 * the string "aaaa" to make it "aaaaa" could be an insertion at any index in
+	 * the string. The hint is usually inferred from the user interface.
 	 */
 	static diff(text1: string, text2: string, hint?: number): Edit {
 		let prefix = commonPrefixLength(text1, text2);

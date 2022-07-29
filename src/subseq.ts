@@ -1,3 +1,4 @@
+// TODO: if we don’t expose subseqs, we don’t have to have a whole class
 /**
  * A data structure for representing “subsequences.” Subsequences are created
  * by removing zero or more elements from a sequence while preserving the
