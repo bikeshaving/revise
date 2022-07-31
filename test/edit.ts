@@ -319,39 +319,39 @@ test("compose 10", () => {
 	Assert.equal(edit1.compose(edit2), result);
 });
 
-test("build 1", () => {
-	Assert.equal(
-		Edit.build("hello world", "oo", 5),
-		new Edit([0, 5, "oo", 5, 11], ""),
-	);
-});
-
-test("build 2", () => {
-	Assert.equal(
-		Edit.build("hello world", "era", 1, 9),
-		new Edit([0, 1, "era", 9, 11], "ello wor"),
-	);
-});
-
-test("build 3", () => {
-	Assert.equal(
-		Edit.build("hello world", "buddy", 6, 11),
-		new Edit([0, 6, "buddy", 11], "world"),
-	);
-});
-
-test("build 4", () => {
-	Assert.equal(
-		Edit.build("hello world", "", 10, 11),
-		new Edit([0, 10, 11], "d"),
-	);
-});
-
-test("build compose", () => {
-	const edit1 = Edit.build("hello world", "je", 0, 2);
-	const edit2 = Edit.build("jello world", "", 5, 11);
-	Assert.equal(edit1.compose(edit2), new Edit(["j", 1, 5, 11], "h world"));
-});
+//test("build 1", () => {
+//	Assert.equal(
+//		Edit.build("hello world", "oo", 5),
+//		new Edit([0, 5, "oo", 5, 11], ""),
+//	);
+//});
+//
+//test("build 2", () => {
+//	Assert.equal(
+//		Edit.build("hello world", "era", 1, 9),
+//		new Edit([0, 1, "era", 9, 11], "ello wor"),
+//	);
+//});
+//
+//test("build 3", () => {
+//	Assert.equal(
+//		Edit.build("hello world", "buddy", 6, 11),
+//		new Edit([0, 6, "buddy", 11], "world"),
+//	);
+//});
+//
+//test("build 4", () => {
+//	Assert.equal(
+//		Edit.build("hello world", "", 10, 11),
+//		new Edit([0, 10, 11], "d"),
+//	);
+//});
+//
+//test("build compose", () => {
+//	const edit1 = Edit.build("hello world", "je", 0, 2);
+//	const edit2 = Edit.build("jello world", "", 5, 11);
+//	Assert.equal(edit1.compose(edit2), new Edit(["j", 1, 5, 11], "h world"));
+//});
 
 test("invert 1", () => {
 	const text = "hello world";

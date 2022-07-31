@@ -43,9 +43,8 @@ export interface EditBuilder {
 	// TODO: add concat
 }
 
-/** A data structure which represents edits to strings. */
+/** A compact data structure for representing changes to strings. */
 export class Edit {
-	// TODO: hide parts and deleted from the public interface
 	/**
 	 * An array of strings and integers representing operations.
 	 *
@@ -75,23 +74,21 @@ export class Edit {
 	 * An edit that is only retains will contain a single number representing the
 	 * length of the string.
 	 */
-	parts: Array<string | number>;
+	declare parts: Array<string | number>;
 
 	/**
 	 * A string which represents a concatenation of all deletions.
 	 *
-	 * This property is optional, but necessary if you want to call the invert()
-	 * method on an edit.
+	 * This property is optional, but required if you want to invert the edit.
 	 */
-	deleted: string | undefined;
+	declare deleted: string | undefined;
 
-	// TODO: Is this the constructor signature we want to use?
+	// TODO: Is this the constructor signature we want???
 	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
 		this.deleted = deleted;
 	}
 
-	// TODO: Not sure this is a good name or if this should be exposed
 	/** A string which represents a concatenation of all insertions. */
 	get inserted(): string {
 		let text = "";
@@ -207,7 +204,7 @@ export class Edit {
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
 				: undefined;
-		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
+		return synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
 	invert(): Edit {
@@ -218,7 +215,7 @@ export class Edit {
 		let [insertSeq, inserted, deleteSeq, deleted] = factor(this);
 		deleteSeq = expand(deleteSeq, insertSeq);
 		insertSeq = shrink(insertSeq, deleteSeq);
-		return Edit.synthesize(deleteSeq, deleted!, insertSeq, inserted);
+		return synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
 
 	normalize(): Edit {
@@ -291,7 +288,7 @@ export class Edit {
 			inserted += insertion;
 		}
 
-		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
+		return synthesize(insertSeq, inserted, deleteSeq, deleted);
 	}
 
 	hasChangesBetween(start: number, end: number): boolean {
@@ -358,63 +355,9 @@ export class Edit {
 					deleted += value.slice(index);
 				}
 
-				return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
+				return synthesize(insertSeq, inserted, deleteSeq, deleted);
 			},
 		};
-	}
-
-	// TODO: Make this private
-	static synthesize(
-		insertSeq: Subseq,
-		inserted: string,
-		deleteSeq: Subseq,
-		deleted?: string | undefined,
-	): Edit {
-		if (measure(insertSeq).includedLength !== inserted.length) {
-			throw new Error("insertSeq and inserted string do not match in length");
-		} else if (
-			deleted !== undefined &&
-			measure(deleteSeq).includedLength !== deleted.length
-		) {
-			throw new Error("deleteSeq and deleted string do not match in length");
-		} else if (
-			measure(deleteSeq).length !== measure(insertSeq).excludedLength
-		) {
-			throw new Error("deleteSeq and insertSeq do not match in length");
-		}
-
-		const parts: Array<string | number> = [];
-		let insertIndex = 0;
-		let retainIndex = 0;
-		let needsLength = true;
-		for (const [length, deleting, inserting] of align(
-			expand(deleteSeq, insertSeq),
-			insertSeq,
-		)) {
-			if (inserting) {
-				const insertion = inserted.slice(insertIndex, insertIndex + length);
-				if (parts.length && typeof parts[parts.length - 1] === "string") {
-					parts[parts.length - 1] += insertion;
-				} else {
-					parts.push(insertion);
-				}
-
-				insertIndex += length;
-			} else {
-				if (!deleting) {
-					parts.push(retainIndex, retainIndex + length);
-				}
-
-				retainIndex += length;
-				needsLength = deleting;
-			}
-		}
-
-		if (needsLength) {
-			parts.push(retainIndex);
-		}
-
-		return new Edit(parts, deleted);
 	}
 
 	// TODO: DELETE
@@ -434,7 +377,7 @@ export class Edit {
 		pushSegment(deleteSeq, to - from, true);
 		pushSegment(deleteSeq, text.length - to, false);
 		const deleted = text.slice(from, to);
-		return Edit.synthesize(insertSeq, inserted, deleteSeq, deleted);
+		return synthesize(insertSeq, inserted, deleteSeq, deleted);
 	}
 
 	/**
@@ -467,6 +410,59 @@ export class Edit {
 			.retain(suffix)
 			.build();
 	}
+}
+
+function synthesize(
+	insertSeq: Subseq,
+	inserted: string,
+	deleteSeq: Subseq,
+	deleted?: string | undefined,
+): Edit {
+	if (measure(insertSeq).includedLength !== inserted.length) {
+		throw new Error("insertSeq and inserted string do not match in length");
+	} else if (
+		deleted !== undefined &&
+		measure(deleteSeq).includedLength !== deleted.length
+	) {
+		throw new Error("deleteSeq and deleted string do not match in length");
+	} else if (
+		measure(deleteSeq).length !== measure(insertSeq).excludedLength
+	) {
+		throw new Error("deleteSeq and insertSeq do not match in length");
+	}
+
+	const parts: Array<string | number> = [];
+	let insertIndex = 0;
+	let retainIndex = 0;
+	let needsLength = true;
+	for (const [length, deleting, inserting] of align(
+		expand(deleteSeq, insertSeq),
+		insertSeq,
+	)) {
+		if (inserting) {
+			const insertion = inserted.slice(insertIndex, insertIndex + length);
+			if (parts.length && typeof parts[parts.length - 1] === "string") {
+				parts[parts.length - 1] += insertion;
+			} else {
+				parts.push(insertion);
+			}
+
+			insertIndex += length;
+		} else {
+			if (!deleting) {
+				parts.push(retainIndex, retainIndex + length);
+			}
+
+			retainIndex += length;
+			needsLength = deleting;
+		}
+	}
+
+	if (needsLength) {
+		parts.push(retainIndex);
+	}
+
+	return new Edit(parts, deleted);
 }
 
 function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {

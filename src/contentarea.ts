@@ -45,12 +45,12 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 /********************************************/
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
-const $slot = Symbol.for("revise$slot");
-const $cache = Symbol.for("revise$cache");
-const $value = Symbol.for("revise$value");
-const $observer = Symbol.for("revise$observer");
-const $onselectionchange = Symbol.for("revise$onselectionchange");
-const $startNodeOffset = Symbol.for("revise$startNodeOffset");
+const $slot = Symbol.for("ContentArea.slot");
+const $cache = Symbol.for("ContentArea.cache");
+const $value = Symbol.for("ContentArea.value");
+const $observer = Symbol.for("ContentArea.observer");
+const $onselectionchange = Symbol.for("ContentArea.onselectionchange");
+const $startNodeOffset = Symbol.for("ContentArea.startNodeOffset");
 
 const css = `
 	:host {
@@ -62,16 +62,12 @@ const css = `
 `;
 
 export class ContentAreaElement extends HTMLElement implements SelectionRange {
-	[$slot]: HTMLSlotElement;
-	[$cache]: NodeInfoCache;
-	[$value]: string;
-	[$observer]: MutationObserver;
-	// For the most part, we compute selection info on the fly, because of weird
-	// race conditions. However, we need to retain the previous selectionStart
-	// when building edits so that we can disambiguate edits to runs of the same
-	// character.
-	[$onselectionchange]: () => void;
-	[$startNodeOffset]: [Node | null, number];
+	declare [$slot]: HTMLSlotElement;
+	declare [$cache]: NodeInfoCache;
+	declare [$value]: string;
+	declare [$observer]: MutationObserver;
+	declare [$onselectionchange]: () => void;
+	declare [$startNodeOffset]: [Node | null, number];
 	constructor() {
 		super();
 
@@ -168,12 +164,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	get value(): string {
 		validate(this);
 		return this[$value];
-	}
-
-	// TODO: Delete this method from the public API probably.
-	get selectionStart(): number {
-		validate(this);
-		return getSelectionRange(this, this[$cache]).selectionStart;
 	}
 
 	set selectionStart(selectionStart: number) {
@@ -400,9 +390,9 @@ function invalidate(
 }
 
 /**
- * This function both returns the content of the root (always a content-area
- * element, and populates the cache with info about the contents of nodes for
- * future reads.
+ * This function both returns an edit which represents changes to the
+ * ContentAreaElement, and populates the cache with info about the contents of
+ * nodes for future reads.
  *
  * @param root - The root element
  * @param cache - The NodeInfo cache associated with the root
