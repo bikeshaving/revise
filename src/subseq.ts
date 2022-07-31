@@ -1,331 +1,316 @@
-// TODO: if we don’t expose subseqs, we don’t have to have a whole class
-/**
- * A data structure for representing “subsequences.” Subsequences are created
- * by removing zero or more elements from a sequence while preserving the
- * order of the remaining elements.
+/*
+ * This module provides utility functions for building and operating on
+ * “subsequences.” Subsequences are created by removing zero or more elements
+ * from a sequence while preserving the order of the remaining elements. While
+ * this specific module does not care about what these sequences actually are,
+ * for the purposes of this library, sequences are always strings, measured in
+ * UTF-16 code units, and subsequences can be used to represent operations on
+ * these strings like insertions and deletions.
  *
- * Subseqs are used to represent things like deletions and into insertions into
- * a sequence, usually a string. Methods like shrink(), expand() and
- * interleave() allow us to describe the way edits to strings can be
- * transformed.
+ * We define subsequences as arrays of numbers, where each number represents
+ * the length of a continguous segment from the original sequence. These number
+ * alternate between representing excluded and included segments from the
+ * original sequence, with the first number representing the length of an
+ * excluded segment. In other words, the first segment represents an excluded
+ * segment, the second included, the third excluded, etc.
+ *
+ * Given the string sequence "abcdefgh", the following subsequence arrays
+ * represent the indicated strings.
+ *
+ *   [0, 4, 4] = "abcd"
+ *   [4, 4] = "efgh"
+ *   [0, 2, 2, 2, 2] = "abef"
+ *   [2, 2, 2, 2] = "cdgh"
+ *   [0, 1, 6, 1] = "ah"
+ *   [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
+ *
+ * Because the first segment is always excluded, a subsequence array will start
+ * with a 0 if the subsequence includes the first element of the sequence. No
+ * other 0s will appear in a well-constructed subsequence array.
+ *
+ * This module is private to the revise package and separated from "./edit.js"
+ * for testing purposes.
  */
-export class Subseq {
-	/**
-	 * The sum of the sizes of segments of the subsequence.
-	 */
-	size: number;
+export type Subseq = Array<number>;
 
-	/**
-	 * The sum of the sizes of the included segments of the subsequence.
-	 */
-	includedSize: number;
-
-	/**
-	 * The sum of the sizes of the excluded segments of the subsequence.
-	 */
-	excludedSize: number;
-
-	/**
-	 * An array of numbers, where each number represents the size of a
-	 * continguous segment from the original sequence. The subsequence “contains”
-	 * a segment based on its position in this array. Segments alternate between
-	 * excluded and included, with the first number representing the size of an
-	 * excluded segment. In other words, the first segment is excluded, the second
-	 * included, the third excluded and so on.
-	 *
-	 * Because the first segment is always an excluded segment, a subsequence
-	 * array will start with a 0 when the subsequence includes the first element
-	 * of the sequence. No other segments will be of size 0 in the array.
-	 *
-	 * @example
-	 * Given the following string sequence: "abcdefgh"
-	 * The following size arrays represent the following subsequences:
-	 *
-	 * [0, 4, 4]                = "abcd"
-	 * [4, 4]                   = "efgh"
-	 * [0, 2, 2, 2, 2]          = "abef"
-	 * [2, 2, 2, 2]             = "cdgh"
-	 * [0, 1, 6, 1]             = "ah"
-	 * [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
-	 */
-	sizes: Array<number>;
-
-	constructor(sizes: Array<number>) {
-		const [size, includedSize, excludedSize] = measure(sizes);
-		this.size = size;
-		this.includedSize = includedSize;
-		this.excludedSize = excludedSize;
-		this.sizes = sizes;
+export function measure(
+	subseq: Subseq,
+): {length: number; includedLength: number; excludedLength: number} {
+	let length = 0,
+		includedLength = 0,
+		excludedLength = 0;
+	for (let i = 0; i < subseq.length; i++) {
+		const s = subseq[i];
+		length += s;
+		if (i % 2 === 0) {
+			excludedLength += s;
+		} else {
+			includedLength += s;
+		}
 	}
 
-	/** A utility method to debug subseqs. */
-	print(): string {
-		let result = "";
-		for (let i = 0; i < this.sizes.length; i++) {
-			if (i % 2 === 0) {
-				result += "=".repeat(this.sizes[i]);
-			} else {
-				result += "+".repeat(this.sizes[i]);
-			}
-		}
+	return {length, includedLength, excludedLength};
+}
 
-		return result;
+export function pushSegment(
+	subseq: Subseq,
+	length: number,
+	included: boolean,
+): void {
+	if (length < 0) {
+		throw new RangeError("Negative length");
+	} else if (length === 0) {
+		return;
+	} else if (!subseq.length) {
+		if (included) {
+			subseq.push(0, length);
+		} else {
+			subseq.push(length);
+		}
+	} else {
+		const included1 = subseq.length % 2 === 0;
+		if (included === included1) {
+			subseq[subseq.length - 1] += length;
+		} else {
+			subseq.push(length);
+		}
 	}
+}
 
-	contains(offset: number): boolean {
-		if (offset < 0) {
-			return false;
-		}
+///** A utility method to debug subseqs. */
+//function print(subseq: Subseq): string {
+//	let result = "";
+//	for (let i = 0; i < subseq.length; i++) {
+//		if (i % 2 === 0) {
+//			result += "=".repeat(subseq[i]);
+//		} else {
+//			result += "+".repeat(subseq[i]);
+//		}
+//	}
+//
+//	return result;
+//}
 
-		for (let i = 0; i < this.sizes.length; i++) {
-			offset -= this.sizes[i];
-			if (offset < 0) {
-				return i % 2 === 1;
-			}
-		}
-
+export function contains(subseq: Subseq, index: number): boolean {
+	if (index < 0) {
 		return false;
 	}
 
-	clear(): Subseq {
-		return new Subseq(this.size ? [this.size] : []);
-	}
-
-	fill(): Subseq {
-		return new Subseq(this.size ? [0, this.size] : []);
-	}
-
-	complement(): Subseq {
-		const sizes =
-			this.sizes[0] === 0 ? this.sizes.slice(1) : [0, ...this.sizes];
-		return new Subseq(sizes);
-	}
-
-	align(that: Subseq): Array<[number, boolean, boolean]> {
-		if (this.size !== that.size) {
-			throw new Error("Size mismatch");
+	for (let i = 0; i < subseq.length; i++) {
+		index -= subseq[i];
+		if (index < 0) {
+			return i % 2 === 1;
 		}
+	}
 
-		const result: Array<[number, boolean, boolean]> = [];
-		const length1 = this.sizes.length;
-		const length2 = that.sizes.length;
-		for (
-			let i1 = 0, i2 = 0, size1 = 0, size2 = 0, flag1 = true, flag2 = true;
-			i1 < length1 || i2 < length2;
+	return false;
+}
 
-		) {
-			if (size1 === 0) {
-				if (i1 >= length1) {
-					throw new Error("Size mismatch");
-				}
+export function clear(subseq: Subseq): Subseq {
+	const {length} = measure(subseq);
+	return length ? [length] : [];
+}
 
-				size1 = this.sizes[i1++];
-				flag1 = !flag1;
+export function fill(subseq: Subseq): Subseq {
+	const {length} = measure(subseq);
+	return length ? [0, length] : [];
+}
+
+export function complement(subseq: Subseq): Subseq {
+	return subseq[0] === 0 ? subseq.slice(1) : [0, ...subseq];
+}
+
+export function align(
+	subseq1: Subseq,
+	subseq2: Subseq,
+): Array<[number, boolean, boolean]> {
+	if (measure(subseq1).length !== measure(subseq2).length) {
+		throw new Error("Length mismatch");
+	}
+
+	const result: Array<[number, boolean, boolean]> = [];
+	for (
+		let i1 = 0,
+			i2 = 0,
+			length1 = 0,
+			length2 = 0,
+			included1 = true,
+			included2 = true;
+		i1 < subseq1.length || i2 < subseq2.length;
+
+	) {
+		if (length1 === 0) {
+			if (i1 >= subseq1.length) {
+				throw new Error("Length mismatch");
 			}
 
-			if (size2 === 0) {
-				if (i2 >= length2) {
-					throw new Error("Size mismatch");
-				}
+			length1 = subseq1[i1++];
+			included1 = !included1;
+		}
 
-				size2 = that.sizes[i2++];
-				flag2 = !flag2;
+		if (length2 === 0) {
+			if (i2 >= subseq2.length) {
+				throw new Error("Size mismatch");
 			}
 
-			if (size1 < size2) {
-				if (size1) {
-					result.push([size1, flag1, flag2]);
-				}
+			length2 = subseq2[i2++];
+			included2 = !included2;
+		}
 
-				size2 = size2 - size1;
-				size1 = 0;
-			} else if (size1 > size2) {
-				if (size2) {
-					result.push([size2, flag1, flag2]);
-				}
-
-				size1 = size1 - size2;
-				size2 = 0;
-			} else {
-				if (size1) {
-					result.push([size1, flag1, flag2]);
-				}
-
-				size1 = size2 = 0;
+		if (length1 < length2) {
+			if (length1) {
+				result.push([length1, included1, included2]);
 			}
-		}
 
-		return result;
-	}
-
-	union(that: Subseq): Subseq {
-		const sizes: Array<number> = [];
-		for (const [size, flag1, flag2] of this.align(that)) {
-			pushSegment(sizes, size, flag1 || flag2);
-		}
-
-		return new Subseq(sizes);
-	}
-
-	intersection(that: Subseq): Subseq {
-		const sizes: Array<number> = [];
-		for (const [size, flag1, flag2] of this.align(that)) {
-			pushSegment(sizes, size, flag1 && flag2);
-		}
-
-		return new Subseq(sizes);
-	}
-
-	difference(that: Subseq): Subseq {
-		const sizes: Array<number> = [];
-		for (const [size, flag1, flag2] of this.align(that)) {
-			pushSegment(sizes, size, flag1 && !flag2);
-		}
-
-		return new Subseq(sizes);
-	}
-
-	shrink(that: Subseq): Subseq {
-		if (this.size !== that.size) {
-			throw new Error("Size mismatch");
-		}
-
-		const sizes: Array<number> = [];
-		for (const [size, flag1, flag2] of this.align(that)) {
-			if (!flag2) {
-				pushSegment(sizes, size, flag1);
+			length2 = length2 - length1;
+			length1 = 0;
+		} else if (length1 > length2) {
+			if (length2) {
+				result.push([length2, included1, included2]);
 			}
-		}
 
-		return new Subseq(sizes);
+			length1 = length1 - length2;
+			length2 = 0;
+		} else {
+			if (length1) {
+				result.push([length1, included1, included2]);
+			}
+
+			length1 = length2 = 0;
+		}
 	}
 
-	expand(that: Subseq): Subseq {
-		if (this.size !== that.excludedSize) {
-			throw new Error("Size mismatch");
+	return result;
+}
+
+export function union(subseq1: Subseq, subseq2: Subseq): Subseq {
+	const result: Subseq = [];
+	for (const [length, included1, included2] of align(subseq1, subseq2)) {
+		pushSegment(result, length, included1 || included2);
+	}
+
+	return result;
+}
+
+export function intersection(subseq1: Subseq, subseq2: Subseq): Subseq {
+	const result: Subseq = [];
+	for (const [length, included1, included2] of align(subseq1, subseq2)) {
+		pushSegment(result, length, included1 && included2);
+	}
+
+	return result;
+}
+
+export function difference(subseq1: Subseq, subseq2: Subseq): Subseq {
+	const result: Array<number> = [];
+	for (const [length, included1, included2] of align(subseq1, subseq2)) {
+		pushSegment(result, length, included1 && !included2);
+	}
+
+	return result;
+}
+
+export function shrink(subseq1: Subseq, subseq2: Subseq): Subseq {
+	if (measure(subseq1).length !== measure(subseq2).length) {
+		throw new Error("Length mismatch");
+	}
+
+	const result: Subseq = [];
+	for (const [length, included1, included2] of align(subseq1, subseq2)) {
+		if (!included2) {
+			pushSegment(result, length, included1);
 		}
+	}
 
-		const sizes: Array<number> = [];
-		const length1 = this.sizes.length;
-		const length2 = that.sizes.length;
-		for (
-			let i1 = 0, i2 = 0, size1 = 0, flag1 = true, flag2 = true;
-			i2 < length2;
-			i2++
-		) {
-			let size2 = that.sizes[i2];
-			flag2 = !flag2;
-			if (flag2) {
-				pushSegment(sizes, size2, false);
-			} else {
-				while (size2) {
-					if (size1 === 0) {
-						if (i1 >= length1) {
-							throw new Error("Size mismatch");
-						}
+	return result;
+}
 
-						size1 = this.sizes[i1++];
-						flag1 = !flag1;
+export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
+	if (measure(subseq1).length !== measure(subseq2).excludedLength) {
+		throw new Error("Length mismatch");
+	}
+
+	const result: Array<number> = [];
+	for (
+		let i1 = 0, i2 = 0, length1 = 0, included1 = true, included2 = true;
+		i2 < subseq2.length;
+		i2++
+	) {
+		let length2 = subseq2[i2];
+		included2 = !included2;
+		if (included2) {
+			pushSegment(result, length2, false);
+		} else {
+			while (length2) {
+				if (length1 === 0) {
+					if (i1 >= subseq1.length) {
+						throw new Error("Size mismatch");
 					}
 
-					const size = Math.min(size1, size2);
-					pushSegment(sizes, size, flag1);
-					size1 -= size;
-					size2 -= size;
+					length1 = subseq1[i1++];
+					included1 = !included1;
 				}
+
+				const minLength = Math.min(length1, length2);
+				pushSegment(result, minLength, included1);
+				length1 -= minLength;
+				length2 -= minLength;
 			}
 		}
-
-		return new Subseq(sizes);
 	}
 
-	interleave(that: Subseq): [Subseq, Subseq] {
-		if (this.excludedSize !== that.excludedSize) {
-			throw new Error("Size mismatch");
-		}
-
-		const sizes1: Array<number> = [];
-		const sizes2: Array<number> = [];
-		const length1 = this.sizes.length;
-		const length2 = that.sizes.length;
-		for (
-			let i1 = 0, i2 = 0, size1 = 0, size2 = 0, flag1 = true, flag2 = true;
-			i1 < length1 || i2 < length2;
-
-		) {
-			if (size1 === 0 && i1 < length1) {
-				size1 = this.sizes[i1++];
-				flag1 = !flag1;
-			}
-
-			if (size2 === 0 && i2 < length2) {
-				size2 = that.sizes[i2++];
-				flag2 = !flag2;
-			}
-
-			if (flag1 && flag2) {
-				pushSegment(sizes1, size1, true);
-				pushSegment(sizes1, size2, false);
-				pushSegment(sizes2, size1, false);
-				pushSegment(sizes2, size2, true);
-				size1 = size2 = 0;
-			} else if (flag1) {
-				pushSegment(sizes1, size1, true);
-				pushSegment(sizes2, size1, false);
-				size1 = 0;
-			} else if (flag2) {
-				pushSegment(sizes1, size2, false);
-				pushSegment(sizes2, size2, true);
-				size2 = 0;
-			} else {
-				const size = Math.min(size1, size2);
-				pushSegment(sizes1, size, false);
-				pushSegment(sizes2, size, false);
-				size1 -= size;
-				size2 -= size;
-			}
-		}
-
-		return [new Subseq(sizes1), new Subseq(sizes2)];
-	}
-
-	static pushSegment = pushSegment;
+	return result;
 }
 
-function measure(sizes: Array<number>): [number, number, number] {
-	let size = 0,
-		includedSize = 0,
-		excludedSize = 0;
-	for (let i = 0; i < sizes.length; i++) {
-		const s = sizes[i];
-		size += s;
-		if (i % 2 === 0) {
-			excludedSize += s;
+export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
+	if (measure(subseq1).excludedLength !== measure(subseq2).excludedLength) {
+		throw new Error("Length mismatch");
+	}
+
+	const result1: Array<number> = [];
+	const result2: Array<number> = [];
+	for (
+		let i1 = 0,
+			i2 = 0,
+			length1 = 0,
+			length2 = 0,
+			included1 = true,
+			included2 = true;
+		i1 < subseq1.length || i2 < subseq2.length;
+
+	) {
+		if (length1 === 0 && i1 < subseq1.length) {
+			length1 = subseq1[i1++];
+			included1 = !included1;
+		}
+
+		if (length2 === 0 && i2 < subseq2.length) {
+			length2 = subseq2[i2++];
+			included2 = !included2;
+		}
+
+		if (included1 && included2) {
+			pushSegment(result1, length1, true);
+			pushSegment(result1, length2, false);
+			pushSegment(result2, length1, false);
+			pushSegment(result2, length2, true);
+			length1 = length2 = 0;
+		} else if (included1) {
+			pushSegment(result1, length1, true);
+			pushSegment(result2, length1, false);
+			length1 = 0;
+		} else if (included2) {
+			pushSegment(result1, length2, false);
+			pushSegment(result2, length2, true);
+			length2 = 0;
 		} else {
-			includedSize += s;
+			const minLength = Math.min(length1, length2);
+			pushSegment(result1, minLength, false);
+			pushSegment(result2, minLength, false);
+			length1 -= minLength;
+			length2 -= minLength;
 		}
 	}
 
-	return [size, includedSize, excludedSize];
-}
-
-function pushSegment(sizes: Array<number>, size: number, flag: boolean): void {
-	if (size < 0) {
-		throw new RangeError("Negative size");
-	} else if (size === 0) {
-		return;
-	} else if (!sizes.length) {
-		if (flag) {
-			sizes.push(0, size);
-		} else {
-			sizes.push(size);
-		}
-	} else {
-		const flag1 = sizes.length % 2 === 0;
-		if (flag === flag1) {
-			sizes[sizes.length - 1] += size;
-		} else {
-			sizes.push(size);
-		}
-	}
+	return [result1, result2];
 }

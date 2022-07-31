@@ -1,7 +1,6 @@
 import {suite} from "uvu";
 import * as Assert from "uvu/assert";
 
-import {Subseq} from "../src/subseq";
 import {Edit} from "../src/edit";
 
 const test = suite("Edit");
@@ -67,104 +66,104 @@ test("operations 7", () => {
 	]);
 });
 
-test("synthesize empty", () => {
-	Assert.equal(
-		Edit.synthesize(new Subseq([]), "", new Subseq([])),
-		new Edit([0]),
-	);
-});
-
-test("synthesize 1", () => {
-	const insertSeq = new Subseq([5, 2, 6]);
-	const inserted = "oo";
-	const deleteSeq = new Subseq([11]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([0, 5, "oo", 5, 11]),
-	);
-});
-
-test("synthesize 2", () => {
-	const insertSeq = new Subseq([1, 3, 10]);
-	const inserted = "era";
-	const deleteSeq = new Subseq([1, 8, 2]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([0, 1, "era", 9, 11]),
-	);
-});
-
-test("synthesize 3", () => {
-	const insertSeq = new Subseq([0, 2, 11]);
-	const inserted = "je";
-	const deleteSeq = new Subseq([0, 2, 3, 6]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit(["je", 2, 5, 11]),
-	);
-});
-
-test("synthesize 4", () => {
-	const insertSeq = new Subseq([4, 1, 1, 7, 6]);
-	const inserted = " n Earth";
-	const deleteSeq = new Subseq([5, 6]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([0, 4, " ", 4, 5, "n Earth", 11]),
-	);
-});
-
-test("synthesize 5", () => {
-	const insertSeq = new Subseq([6, 5, 5]);
-	const inserted = "buddy";
-	const deleteSeq = new Subseq([6, 5]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([0, 6, "buddy", 11]),
-	);
-});
-
-test("synthesize 6", () => {
-	const insertSeq = new Subseq([11, 4]);
-	const inserted = "star";
-	const deleteSeq = new Subseq([0, 6, 5]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([6, 11, "star"]),
-	);
-});
-
-test("synthesize 7", () => {
-	// ======+++====
-	const insertSeq = new Subseq([3, 3, 7]);
-	const inserted = "foo";
-	// ===+++===+
-	const deleteSeq = new Subseq([3, 3, 3, 1]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([0, 3, "foo", 6, 9, 10]),
-	);
-});
-
-test("synthesize mismatched inserted and insertSeq throws", () => {
-	try {
-		Edit.synthesize(new Subseq([2, 2]), "foo", new Subseq([2]));
-		Assert.unreachable();
-	} catch (err) {
-		Assert.ok(err instanceof Error);
-		// TODO: test message
-	}
-});
-
-test("synthesize insertions after deletions", () => {
-	const insertSeq = new Subseq([6, 3, 5]);
-	const inserted = "bro";
-	const deleteSeq = new Subseq([6, 5]);
-	Assert.equal(
-		Edit.synthesize(insertSeq, inserted, deleteSeq),
-		new Edit([0, 6, "bro", 11]),
-	);
-});
+//test("synthesize empty", () => {
+//	Assert.equal(
+//		Edit.synthesize(new Subseq([]), "", new Subseq([])),
+//		new Edit([0]),
+//	);
+//});
+//
+//test("synthesize 1", () => {
+//	const insertSeq = new Subseq([5, 2, 6]);
+//	const inserted = "oo";
+//	const deleteSeq = new Subseq([11]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([0, 5, "oo", 5, 11]),
+//	);
+//});
+//
+//test("synthesize 2", () => {
+//	const insertSeq = new Subseq([1, 3, 10]);
+//	const inserted = "era";
+//	const deleteSeq = new Subseq([1, 8, 2]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([0, 1, "era", 9, 11]),
+//	);
+//});
+//
+//test("synthesize 3", () => {
+//	const insertSeq = new Subseq([0, 2, 11]);
+//	const inserted = "je";
+//	const deleteSeq = new Subseq([0, 2, 3, 6]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit(["je", 2, 5, 11]),
+//	);
+//});
+//
+//test("synthesize 4", () => {
+//	const insertSeq = new Subseq([4, 1, 1, 7, 6]);
+//	const inserted = " n Earth";
+//	const deleteSeq = new Subseq([5, 6]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([0, 4, " ", 4, 5, "n Earth", 11]),
+//	);
+//});
+//
+//test("synthesize 5", () => {
+//	const insertSeq = new Subseq([6, 5, 5]);
+//	const inserted = "buddy";
+//	const deleteSeq = new Subseq([6, 5]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([0, 6, "buddy", 11]),
+//	);
+//});
+//
+//test("synthesize 6", () => {
+//	const insertSeq = new Subseq([11, 4]);
+//	const inserted = "star";
+//	const deleteSeq = new Subseq([0, 6, 5]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([6, 11, "star"]),
+//	);
+//});
+//
+//test("synthesize 7", () => {
+//	// ======+++====
+//	const insertSeq = new Subseq([3, 3, 7]);
+//	const inserted = "foo";
+//	// ===+++===+
+//	const deleteSeq = new Subseq([3, 3, 3, 1]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([0, 3, "foo", 6, 9, 10]),
+//	);
+//});
+//
+//test("synthesize mismatched inserted and insertSeq throws", () => {
+//	try {
+//		Edit.synthesize(new Subseq([2, 2]), "foo", new Subseq([2]));
+//		Assert.unreachable();
+//	} catch (err) {
+//		Assert.ok(err instanceof Error);
+//		// TODO: test message
+//	}
+//});
+//
+//test("synthesize insertions after deletions", () => {
+//	const insertSeq = new Subseq([6, 3, 5]);
+//	const inserted = "bro";
+//	const deleteSeq = new Subseq([6, 5]);
+//	Assert.equal(
+//		Edit.synthesize(insertSeq, inserted, deleteSeq),
+//		new Edit([0, 6, "bro", 11]),
+//	);
+//});
 
 test("compose 1", () => {
 	// s0: "hello world"
