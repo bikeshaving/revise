@@ -8,15 +8,19 @@ test("empty operations", () => {
 	Assert.equal(new Edit([0]).operations(), []);
 });
 
-test("operations 1", () => {
-	Assert.equal(new Edit([0, 5, "oo", 5, 11]).operations(), [
+test("edit 1", () => {
+	const edit = new Edit([0, 5, "oo", 5, 11]);
+	Assert.is(edit.apply("hello world"), "hellooo world");
+	Assert.equal(edit.operations(), [
 		{type: "retain", start: 0, end: 5},
 		{type: "insert", start: 5, value: "oo"},
 		{type: "retain", start: 5, end: 11},
 	]);
 });
 
-test("operations 2", () => {
+test("edit 2", () => {
+	const edit = new Edit([0, 1, "era", 9, 11]);
+	Assert.is(edit.apply("hello world"), "herald");
 	Assert.equal(new Edit([0, 1, "era", 9, 11]).operations(), [
 		{type: "retain", start: 0, end: 1},
 		{type: "insert", start: 1, value: "era"},
@@ -25,8 +29,10 @@ test("operations 2", () => {
 	]);
 });
 
-test("operations 3", () => {
-	Assert.equal(new Edit(["je", 2, 5, 11]).operations(), [
+test("edit 3", () => {
+	const edit = new Edit(["je", 2, 5, 11]);
+	Assert.is(edit.apply("hello world"), "jello");
+	Assert.equal(edit.operations(), [
 		{type: "insert", start: 0, value: "je"},
 		{type: "delete", start: 0, end: 2, value: undefined},
 		{type: "retain", start: 2, end: 5},
@@ -34,8 +40,10 @@ test("operations 3", () => {
 	]);
 });
 
-test("operations 4", () => {
-	Assert.equal(new Edit([0, 4, " ", 4, 5, "n Earth", 11]).operations(), [
+test("edit 4", () => {
+	const edit = new Edit([0, 4, " ", 4, 5, "n Earth", 11]);
+	Assert.is(edit.apply("hello world"), "hell on Earth");
+	Assert.equal(edit.operations(), [
 		{type: "retain", start: 0, end: 4},
 		{type: "insert", start: 4, value: " "},
 		{type: "retain", start: 4, end: 5},
@@ -44,126 +52,33 @@ test("operations 4", () => {
 	]);
 });
 
-test("operations 5", () => {
-	Assert.equal(new Edit([0, 6, "buddy", 11]).operations(), [
+test("edit 5", () => {
+	const edit = new Edit([0, 6, "buddy", 11]);
+	Assert.is(edit.apply("hello world"), "hello buddy");
+	Assert.equal(edit.operations(), [
 		{type: "retain", start: 0, end: 6},
 		{type: "insert", start: 6, value: "buddy"},
 		{type: "delete", start: 6, end: 11, value: undefined},
 	]);
 });
 
-test("operations 6", () => {
-	Assert.equal(new Edit([0, 10, 11]).operations(), [
+test("edit 6", () => {
+	const edit = new Edit([0, 10, 11]);
+	Assert.is(edit.apply("hello world"), "hello worl");
+	Assert.equal(edit.operations(), [
 		{type: "retain", start: 0, end: 10},
 		{type: "delete", start: 10, end: 11, value: undefined},
 	]);
 });
 
-test("operations 7", () => {
-	Assert.equal(new Edit([0, 11, "s"]).operations(), [
+test("edit 7", () => {
+	const edit = new Edit([0, 11, "s"]);
+	Assert.is(edit.apply("hello world"), "hello worlds");
+	Assert.equal(edit.operations(), [
 		{type: "retain", start: 0, end: 11},
 		{type: "insert", start: 11, value: "s"},
 	]);
 });
-
-//test("synthesize empty", () => {
-//	Assert.equal(
-//		Edit.synthesize(new Subseq([]), "", new Subseq([])),
-//		new Edit([0]),
-//	);
-//});
-//
-//test("synthesize 1", () => {
-//	const insertSeq = new Subseq([5, 2, 6]);
-//	const inserted = "oo";
-//	const deleteSeq = new Subseq([11]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([0, 5, "oo", 5, 11]),
-//	);
-//});
-//
-//test("synthesize 2", () => {
-//	const insertSeq = new Subseq([1, 3, 10]);
-//	const inserted = "era";
-//	const deleteSeq = new Subseq([1, 8, 2]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([0, 1, "era", 9, 11]),
-//	);
-//});
-//
-//test("synthesize 3", () => {
-//	const insertSeq = new Subseq([0, 2, 11]);
-//	const inserted = "je";
-//	const deleteSeq = new Subseq([0, 2, 3, 6]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit(["je", 2, 5, 11]),
-//	);
-//});
-//
-//test("synthesize 4", () => {
-//	const insertSeq = new Subseq([4, 1, 1, 7, 6]);
-//	const inserted = " n Earth";
-//	const deleteSeq = new Subseq([5, 6]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([0, 4, " ", 4, 5, "n Earth", 11]),
-//	);
-//});
-//
-//test("synthesize 5", () => {
-//	const insertSeq = new Subseq([6, 5, 5]);
-//	const inserted = "buddy";
-//	const deleteSeq = new Subseq([6, 5]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([0, 6, "buddy", 11]),
-//	);
-//});
-//
-//test("synthesize 6", () => {
-//	const insertSeq = new Subseq([11, 4]);
-//	const inserted = "star";
-//	const deleteSeq = new Subseq([0, 6, 5]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([6, 11, "star"]),
-//	);
-//});
-//
-//test("synthesize 7", () => {
-//	// ======+++====
-//	const insertSeq = new Subseq([3, 3, 7]);
-//	const inserted = "foo";
-//	// ===+++===+
-//	const deleteSeq = new Subseq([3, 3, 3, 1]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([0, 3, "foo", 6, 9, 10]),
-//	);
-//});
-//
-//test("synthesize mismatched inserted and insertSeq throws", () => {
-//	try {
-//		Edit.synthesize(new Subseq([2, 2]), "foo", new Subseq([2]));
-//		Assert.unreachable();
-//	} catch (err) {
-//		Assert.ok(err instanceof Error);
-//		// TODO: test message
-//	}
-//});
-//
-//test("synthesize insertions after deletions", () => {
-//	const insertSeq = new Subseq([6, 3, 5]);
-//	const inserted = "bro";
-//	const deleteSeq = new Subseq([6, 5]);
-//	Assert.equal(
-//		Edit.synthesize(insertSeq, inserted, deleteSeq),
-//		new Edit([0, 6, "bro", 11]),
-//	);
-//});
 
 test("compose 1", () => {
 	// s0: "hello world"
@@ -319,40 +234,6 @@ test("compose 10", () => {
 	Assert.equal(edit1.compose(edit2), result);
 });
 
-//test("build 1", () => {
-//	Assert.equal(
-//		Edit.build("hello world", "oo", 5),
-//		new Edit([0, 5, "oo", 5, 11], ""),
-//	);
-//});
-//
-//test("build 2", () => {
-//	Assert.equal(
-//		Edit.build("hello world", "era", 1, 9),
-//		new Edit([0, 1, "era", 9, 11], "ello wor"),
-//	);
-//});
-//
-//test("build 3", () => {
-//	Assert.equal(
-//		Edit.build("hello world", "buddy", 6, 11),
-//		new Edit([0, 6, "buddy", 11], "world"),
-//	);
-//});
-//
-//test("build 4", () => {
-//	Assert.equal(
-//		Edit.build("hello world", "", 10, 11),
-//		new Edit([0, 10, 11], "d"),
-//	);
-//});
-//
-//test("build compose", () => {
-//	const edit1 = Edit.build("hello world", "je", 0, 2);
-//	const edit2 = Edit.build("jello world", "", 5, 11);
-//	Assert.equal(edit1.compose(edit2), new Edit(["j", 1, 5, 11], "h world"));
-//});
-
 test("invert 1", () => {
 	const text = "hello world";
 	const edit = Edit.build(text, "oo", 5);
@@ -383,6 +264,46 @@ test("invert 4", () => {
 	const inverted = edit.invert();
 	Assert.equal(inverted, new Edit([0, 10, "d"], ""));
 	Assert.equal(inverted.apply(edit.apply(text)), text);
+});
+
+test("createBuilder empty", () => {
+	Assert.equal(
+		Edit.createBuilder("hello world").build(),
+		new Edit([0, 11], ""),
+	);
+});
+
+test("createBuilder 1", () => {
+	const builder = Edit.createBuilder("hello world");
+	builder.retain(5).insert("oo");
+	Assert.equal(builder.build(), new Edit([0, 5, "oo", 5, 11], ""));
+});
+
+test("createBuilder 2", () => {
+	const builder = Edit.createBuilder("hello world");
+	builder.retain(1).insert("era").delete(8);
+	Assert.equal(builder.build(), new Edit([0, 1, "era", 9, 11], "ello wor"));
+});
+
+test("createBuilder 3", () => {
+	const builder = Edit.createBuilder("hello world");
+	builder.retain(1).insert("era").delete(8);
+	Assert.equal(builder.build(), new Edit([0, 1, "era", 9, 11], "ello wor"));
+});
+
+test("createBuilder 4", () => {
+	const builder = Edit.createBuilder("hello world");
+	builder.retain(10).delete(1);
+	Assert.equal(builder.build(), new Edit([0, 10, 11], "d"));
+});
+
+test("createBuilder compose", () => {
+	const edit1 = Edit.createBuilder("hello world")
+		.insert("je")
+		.delete(2)
+		.build();
+	const edit2 = Edit.createBuilder("jello world").retain(5).delete(6).build();
+	Assert.equal(edit1.compose(edit2), new Edit(["j", 1, 5, 11], "h world"));
 });
 
 test.run();

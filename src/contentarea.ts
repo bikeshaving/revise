@@ -27,11 +27,11 @@ const APPENDS_NEWLINE = 1 << 3;
 
 class NodeInfo {
 	/** A bitmask (see flags above) */
-	flags: number;
+	declare flags: number;
 	/** The string length of this node’s contents. */
-	stringLength: number;
+	declare stringLength: number;
 	/** The start of this node’s contents relative to the start of the parent. */
-	offset: number;
+	declare offset: number;
 
 	constructor(offset: number) {
 		this.flags = 0;
@@ -597,6 +597,7 @@ function diff(
 		}
 	}
 
+	builder.delete(Infinity);
 	return builder.build();
 }
 

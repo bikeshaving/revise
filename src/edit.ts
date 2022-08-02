@@ -38,9 +38,9 @@ export interface EditBuilder {
 
 	insert(value: string): EditBuilder;
 
-	build(): Edit;
+	concat(edit: Edit): EditBuilder;
 
-	// TODO: add concat
+	build(): Edit;
 }
 
 /** A compact data structure for representing changes to strings. */
@@ -220,7 +220,7 @@ export class Edit {
 
 	normalize(): Edit {
 		if (typeof this.deleted === "undefined") {
-			throw new Error("Missing deleted property");
+			throw new Error("Edit is not normalizable");
 		}
 
 		const insertSeq: Array<number> = [];
@@ -318,27 +318,34 @@ export class Edit {
 		return false;
 	}
 
-	static createBuilder(value: string): EditBuilder {
+	static createBuilder(value?: string | undefined): EditBuilder {
 		let index = 0;
 		let inserted = "";
-		const insertSeq: Array<number> = [];
-		let deleted = "";
-		const deleteSeq: Array<number> = [];
+		let deleted: string | undefined = undefined;
+		const insertSeq: Subseq = [];
+		const deleteSeq: Subseq = [];
+
 		return {
 			retain(length: number) {
-				length = Math.min(value.length - index, length);
+				if (value != null) {
+					length = Math.min(value.length - index, length);
+				}
+
+				index += length;
 				pushSegment(insertSeq, length, false);
 				pushSegment(deleteSeq, length, false);
-				index += length;
 				return this;
 			},
 
 			delete(length: number) {
-				length = Math.min(value.length - index, length);
+				if (value != null) {
+					length = Math.min(value.length - index, length);
+					deleted = (deleted || "") + value.slice(index, index + length);
+				}
+
+				index += length;
 				pushSegment(insertSeq, length, false);
 				pushSegment(deleteSeq, length, true);
-				deleted += value.slice(index, index + length);
-				index += length;
 				return this;
 			},
 
@@ -348,11 +355,17 @@ export class Edit {
 				return this;
 			},
 
+			concat(_edit: Edit) {
+				throw new Error("TODO");
+			},
+
 			build(): Edit {
-				if (index < value.length) {
-					pushSegment(insertSeq, value.length - index, false);
-					pushSegment(deleteSeq, value.length - index, true);
-					deleted += value.slice(index);
+				if (value != null) {
+					deleted = deleted || "";
+					if (index < value.length) {
+						pushSegment(insertSeq, value.length - index, false);
+						pushSegment(deleteSeq, value.length - index, false);
+					}
 				}
 
 				return synthesize(insertSeq, inserted, deleteSeq, deleted);
@@ -425,10 +438,6 @@ function synthesize(
 		measure(deleteSeq).includedLength !== deleted.length
 	) {
 		throw new Error("deleteSeq and deleted string do not match in length");
-	} else if (
-		measure(deleteSeq).length !== measure(insertSeq).excludedLength
-	) {
-		throw new Error("deleteSeq and insertSeq do not match in length");
 	}
 
 	const parts: Array<string | number> = [];
@@ -489,8 +498,6 @@ function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
 				pushSegment(insertSeq, op.value.length, true);
 				inserted += op.value;
 				break;
-			default:
-				throw new TypeError("Invalid operation type");
 		}
 	}
 
