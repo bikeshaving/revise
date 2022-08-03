@@ -376,7 +376,7 @@ function getEdit(
 	cache: NodeInfoCache,
 	oldValue: string,
 ): Edit {
-	const builder = Edit.createBuilder(oldValue);
+	const builder = Edit.builder(oldValue);
 	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	const walker = document.createTreeWalker(
 		root,

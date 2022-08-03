@@ -318,7 +318,7 @@ export class Edit {
 		return false;
 	}
 
-	static createBuilder(value?: string | undefined): EditBuilder {
+	static builder(value?: string | undefined): EditBuilder {
 		let index = 0;
 		let inserted = "";
 		let deleted: string | undefined = undefined;
@@ -392,42 +392,23 @@ export class Edit {
 		};
 	}
 
-	// TODO: DELETE
-	static build(
-		text: string,
-		inserted: string,
-		from: number,
-		to: number = from,
-	): Edit {
-		const insertSeq: Array<number> = [];
-		pushSegment(insertSeq, from, false);
-		pushSegment(insertSeq, inserted.length, true);
-		pushSegment(insertSeq, to - from, false);
-		pushSegment(insertSeq, text.length - to, false);
-		const deleteSeq: Array<number> = [];
-		pushSegment(deleteSeq, from, false);
-		pushSegment(deleteSeq, to - from, true);
-		pushSegment(deleteSeq, text.length - to, false);
-		const deleted = text.slice(from, to);
-		return synthesize(insertSeq, inserted, deleteSeq, deleted);
-	}
-
 	/**
 	 * Given two strings, this method finds an edit which can be applied to the
 	 * first string to result in the second.
 	 *
-	 * @param hint - An optional hint can be provided to disambiguate edits which
-	 * cannot be inferred from the text alone, for example, inserting "a" into
-	 * the string "aaaa" to make it "aaaaa" could be an insertion at any index in
-	 * the string. The hint is usually inferred from the user interface.
+	 * @param startHint - An optional hint can be provided to disambiguate edits
+	 * which cannot be inferred by comparing the text alone. For example,
+	 * inserting "a" into the string "aaaa" to make it "aaaaa" could be an
+	 * insertion at any index in the string. This value should be the smaller of
+	 * the start indices of the selection from before and after the edit.
 	 */
-	static diff(text1: string, text2: string, hint?: number): Edit {
+	static diff(text1: string, text2: string, startHint?: number): Edit {
 		let prefix = commonPrefixLength(text1, text2);
 		let suffix = commonSuffixLength(text1, text2);
 		// prefix and suffix overlap when edits are in runs of the same character.
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {
-			if (hint != null && hint >= 0) {
-				prefix = Math.min(prefix, hint);
+			if (startHint != null && startHint >= 0) {
+				prefix = Math.min(prefix, startHint);
 			}
 
 			// TODO: We can probably avoid the commonSuffixLength() call here in
@@ -435,7 +416,7 @@ export class Edit {
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
-		return Edit.createBuilder(text1)
+		return Edit.builder(text1)
 			.retain(prefix)
 			.insert(text2.slice(prefix, text2.length - suffix))
 			.delete(text1.length - prefix - suffix)
@@ -582,7 +563,7 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 }
 
 /** @returns The length of the common prefix between two strings. */
-export function commonPrefixLength(text1: string, text2: string) {
+function commonPrefixLength(text1: string, text2: string) {
 	const length = Math.min(text1.length, text2.length);
 	for (let i = 0; i < length; i++) {
 		if (text1[i] !== text2[i]) {
@@ -594,7 +575,7 @@ export function commonPrefixLength(text1: string, text2: string) {
 }
 
 /** @returns The length of the common suffix between two strings. */
-export function commonSuffixLength(text1: string, text2: string) {
+function commonSuffixLength(text1: string, text2: string) {
 	const length1 = text1.length;
 	const length2 = text2.length;
 	const length = Math.min(length1, length2);
