@@ -166,6 +166,11 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		return this[$value];
 	}
 
+	get selectionStart(): number {
+		validate(this);
+		return getSelectionRange(this, this[$cache]).selectionStart;
+	}
+
 	set selectionStart(selectionStart: number) {
 		validate(this);
 
