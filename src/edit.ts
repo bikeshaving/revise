@@ -355,8 +355,27 @@ export class Edit {
 				return this;
 			},
 
-			concat(_edit: Edit) {
-				throw new Error("TODO");
+			concat(edit: Edit) {
+				const ops = edit.operations();
+				for (const op of ops) {
+					switch (op.type) {
+						case "delete":
+							this.delete(op.end - op.start);
+							break;
+						case "insert":
+							this.insert(op.value);
+							break;
+						case "retain":
+							this.retain(op.end - op.start);
+							break;
+					}
+				}
+
+				if (value != null && index > value.length) {
+					throw new RangeError("Edit is longer than original value");
+				}
+
+				return this;
 			},
 
 			build(): Edit {
@@ -418,7 +437,7 @@ export class Edit {
 
 		return Edit.createBuilder(text1)
 			.retain(prefix)
-			.insert(text2.slice(prefix, -suffix))
+			.insert(text2.slice(prefix, text2.length - suffix))
 			.delete(text1.length - prefix - suffix)
 			.retain(suffix)
 			.build();

@@ -1,6 +1,5 @@
 /// <reference lib="dom" />
-// TODO: stop import/exporting prefix/suffix functions
-import {Edit, commonPrefixLength, commonSuffixLength} from "./edit.js";
+import {Edit} from "./edit.js";
 
 export interface ContentEventDetail {
 	edit: Edit;
@@ -448,65 +447,33 @@ function getEdit(
 				if (length) {
 					hasNewline = oldValue1.endsWith(NEWLINE);
 				}
-			} else if (
-				node.nodeType === Node.TEXT_NODE ||
-				(node as Element).hasAttribute("data-content")
-			) {
-				const text =
-					node.nodeType === Node.TEXT_NODE
-						? (node as Text).data
-						: (node as Element).getAttribute("data-content") || "";
+			} else if (node.nodeType === Node.TEXT_NODE) {
+				const text = (node as Text).data;
 				if (nodeInfo.flags & IS_OLD) {
 					const nodeOffset = getStartNodeOffset();
 					const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
 					const oldStartOffset =
-						node.nodeType === Node.TEXT_NODE &&
-						root[$startNodeOffset][0] === node
-							? root[$startNodeOffset][1]
-							: -1;
-					const startOffset =
-						node.nodeType === Node.TEXT_NODE && nodeOffset[0] === node
-							? nodeOffset[1]
-							: -1;
+						root[$startNodeOffset][0] === node ? root[$startNodeOffset][1] : -1;
+					const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
 					const hint = Math.min(oldStartOffset, startOffset);
 					if (hint > -1) {
-						const oldBefore = oldText.slice(0, hint);
-						const before = text.slice(0, hint);
-						if (oldBefore === before) {
-							builder.retain(before.length);
-							oldIndex += before.length;
-						} else {
-							const prefix = commonPrefixLength(oldBefore, before);
-							builder.retain(prefix);
-							oldIndex += prefix;
-							builder.insert(before.slice(prefix));
-							builder.delete(oldBefore.length - prefix);
-							oldIndex += oldBefore.length - prefix;
-						}
-
-						const oldAfter = oldText.slice(hint);
-						const after = text.slice(hint);
-						if (oldAfter === after) {
-							builder.retain(after.length);
-							oldIndex += after.length;
-						} else {
-							const suffix = commonSuffixLength(oldAfter, after);
-							builder.insert(suffix ? after.slice(0, -suffix) : after);
-							builder.delete(oldAfter.length - suffix);
-							oldIndex += oldAfter.length - suffix;
-							builder.retain(suffix);
-							oldIndex += suffix;
-						}
+						const edit = Edit.diff(oldText, text, hint);
+						builder.concat(edit);
+						oldIndex += nodeInfo.length;
 					} else {
 						builder.insert(text);
-						builder.delete(nodeInfo.length);
-						oldIndex += nodeInfo.length;
 					}
 				} else {
-					// TODO: Do we have to delete the old text?????
 					builder.insert(text);
-					builder.delete(nodeInfo.length);
 				}
+
+				offset += text.length;
+				if (text.length) {
+					hasNewline = text.endsWith(NEWLINE);
+				}
+			} else if ((node as Element).hasAttribute("data-content")) {
+				const text = (node as Element).getAttribute("data-content") || "";
+				builder.insert(text);
 				offset += text.length;
 				if (text.length) {
 					hasNewline = text.endsWith(NEWLINE);
