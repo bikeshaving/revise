@@ -16,6 +16,7 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
+// NodeInfo flags
 /** Whether the node is old. */
 const IS_OLD = 1 << 0;
 /** Whether the node’s info is up to date. */
@@ -29,13 +30,13 @@ class NodeInfo {
 	/** A bitmask (see flags above) */
 	declare flags: number;
 	/** The string length of this node’s contents. */
-	declare stringLength: number;
+	declare length: number;
 	/** The start of this node’s contents relative to the start of the parent. */
 	declare offset: number;
 
 	constructor(offset: number) {
 		this.flags = 0;
-		this.stringLength = 0;
+		this.length = 0;
 		this.offset = offset;
 	}
 }
@@ -45,54 +46,68 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 /********************************************/
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
-const $slot = Symbol.for("ContentArea.slot");
-const $cache = Symbol.for("ContentArea.cache");
-const $value = Symbol.for("ContentArea.value");
-const $observer = Symbol.for("ContentArea.observer");
-const $onselectionchange = Symbol.for("ContentArea.onselectionchange");
-const $startNodeOffset = Symbol.for("ContentArea.startNodeOffset");
+const $cache = Symbol("ContentArea.cache");
+const $value = Symbol("ContentArea.value");
+const $observer = Symbol("ContentArea.observer");
+const $startNodeOffset = Symbol("ContentArea.startNodeOffset");
+const $onselectionchange = Symbol("ContentArea.onselectionchange");
 
-const css = `
-	:host {
-		display: contents;
-		white-space: pre-wrap;
-		white-space: break-spaces;
-		overflow-wrap: break-word;
-	}
-`;
+// TODO: custom newlines?
+const NEWLINE = "\n";
+
+// TODO: Try using getComputedStyle
+const BLOCKLIKE_ELEMENTS = new Set([
+	"ADDRESS",
+	"ARTICLE",
+	"ASIDE",
+	"BLOCKQUOTE",
+	"CAPTION",
+	"DETAILS",
+	"DIALOG",
+	"DD",
+	"DIV",
+	"DL",
+	"DT",
+	"FIELDSET",
+	"FIGCAPTION",
+	"FIGURE",
+	"FOOTER",
+	"FORM",
+	"H1",
+	"H2",
+	"H3",
+	"H4",
+	"H5",
+	"H6",
+	"HEADER",
+	"HGROUP",
+	"HR",
+	"LI",
+	"MAIN",
+	"NAV",
+	"OL",
+	"P",
+	"PRE",
+	"SECTION",
+	"TABLE",
+	"TR",
+	"UL",
+]);
 
 export class ContentAreaElement extends HTMLElement implements SelectionRange {
-	declare [$slot]: HTMLSlotElement;
 	declare [$cache]: NodeInfoCache;
 	declare [$value]: string;
 	declare [$observer]: MutationObserver;
-	declare [$onselectionchange]: () => void;
 	declare [$startNodeOffset]: [Node | null, number];
+	declare [$onselectionchange]: () => void;
 	constructor() {
 		super();
-
-		{
-			// Creating the shadow DOM.
-			// TODO: Not really sure what the value of using the shadow DOM is, when
-			// we get flashes of unstyled content (layout shifts) when we use host
-			// styles.
-			const slot = document.createElement("slot");
-			const shadow = this.attachShadow({mode: "closed"});
-			const style = document.createElement("style");
-			style.textContent = css;
-			shadow.appendChild(style);
-			slot.contentEditable = this.contentEditable;
-			shadow.appendChild(slot);
-			this[$slot] = slot;
-		}
 
 		this[$cache] = new Map();
 		this[$value] = "";
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, null, records);
 		});
-
-		this[$startNodeOffset] = getStartNodeOffset();
 		this[$onselectionchange] = () => {
 			this[$startNodeOffset] = getStartNodeOffset();
 		};
@@ -101,10 +116,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	/******************************/
 	/*** Custom Element methods ***/
 	/******************************/
-	static get observedAttributes(): Array<string> {
-		return ["contenteditable"];
-	}
-
 	connectedCallback() {
 		this[$observer].observe(this, {
 			subtree: true,
@@ -112,6 +123,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			attributes: true,
 			attributeFilter: [
 				"data-content",
+				// TODO: implement these attributes
 				"data-contentbefore",
 				"data-contentafter",
 			],
@@ -120,8 +132,9 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			characterDataOldValue: true,
 		});
 
-		const edit = diff(this, this[$cache], "");
+		const edit = getEdit(this, this[$cache], "");
 		this[$value] = edit.apply("");
+		this[$startNodeOffset] = getStartNodeOffset();
 		document.addEventListener(
 			"selectionchange",
 			this[$onselectionchange],
@@ -142,22 +155,6 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 				this[$onselectionchange],
 				true,
 			);
-		}
-	}
-
-	attributeChangedCallback(name: string) {
-		switch (name) {
-			case "contenteditable": {
-				const slot = this[$slot];
-				// We have to set slot.contentEditable to this.contentEditable because
-				// Chrome has trouble selecting elements across shadow DOM boundaries.
-				// See https://bugs.chromium.org/p/chromium/issues/detail?id=1175930
-
-				// Chrome has additional issues with using the host element as a
-				// contenteditable element but this normalizes some of the behavior.
-				slot.contentEditable = this.contentEditable;
-				break;
-			}
 		}
 	}
 
@@ -260,48 +257,6 @@ function getStartNodeOffset(): [Node | null, number] {
 	return [null, 0];
 }
 
-// TODO: custom newlines?
-const NEWLINE = "\n";
-
-// TODO: Try using getComputedStyle
-const BLOCKLIKE_ELEMENTS = new Set([
-	"ADDRESS",
-	"ARTICLE",
-	"ASIDE",
-	"BLOCKQUOTE",
-	"CAPTION",
-	"DETAILS",
-	"DIALOG",
-	"DD",
-	"DIV",
-	"DL",
-	"DT",
-	"FIELDSET",
-	"FIGCAPTION",
-	"FIGURE",
-	"FOOTER",
-	"FORM",
-	"H1",
-	"H2",
-	"H3",
-	"H4",
-	"H5",
-	"H6",
-	"HEADER",
-	"HGROUP",
-	"HR",
-	"LI",
-	"MAIN",
-	"NAV",
-	"OL",
-	"P",
-	"PRE",
-	"SECTION",
-	"TABLE",
-	"TR",
-	"UL",
-]);
-
 /**
  * Should be pre-emptively called before we read from the cache. Dispatches
  * "contentchange" events, and makes sure the cache is up to date.
@@ -319,7 +274,7 @@ function validate(
 	}
 
 	const oldValue = root[$value];
-	const edit = diff(root, cache, oldValue);
+	const edit = getEdit(root, cache, oldValue);
 	root[$value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
 	// We use the existence of records to determine whether contentchange events
@@ -390,6 +345,25 @@ function invalidate(
 }
 
 /**
+ * For a given parent node and node info cache, clear info for the node and all
+ * child nodes from the cache.
+ */
+function clear(parent: Node, cache: NodeInfoCache): void {
+	const walker = document.createTreeWalker(
+		parent,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+
+	for (
+		let node: Node | null = parent;
+		node !== null;
+		node = walker.nextNode()
+	) {
+		cache.delete(node);
+	}
+}
+
+/**
  * This function both returns an edit which represents changes to the
  * ContentAreaElement, and populates the cache with info about the contents of
  * nodes for future reads.
@@ -398,7 +372,7 @@ function invalidate(
  * @param cache - The NodeInfo cache associated with the root
  * @param oldValue - The previous content of the root.
  */
-function diff(
+function getEdit(
 	root: ContentAreaElement,
 	cache: NodeInfoCache,
 	oldValue: string,
@@ -461,10 +435,10 @@ function diff(
 			descending = false;
 			if (nodeInfo.flags & IS_CLEAN) {
 				// The node and its children are unchanged.
-				const length = nodeInfo.stringLength;
-				if (oldIndex + nodeInfo.stringLength > oldValue.length) {
+				const length = nodeInfo.length;
+				if (oldIndex + nodeInfo.length > oldValue.length) {
 					// This should never happen
-					throw new Error("cache stringLength error");
+					throw new Error("cache length error");
 				}
 
 				builder.retain(length);
@@ -484,10 +458,7 @@ function diff(
 						: (node as Element).getAttribute("data-content") || "";
 				if (nodeInfo.flags & IS_OLD) {
 					const nodeOffset = getStartNodeOffset();
-					const oldText = oldValue.slice(
-						oldIndex,
-						oldIndex + nodeInfo.stringLength,
-					);
+					const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
 					const oldStartOffset =
 						node.nodeType === Node.TEXT_NODE &&
 						root[$startNodeOffset][0] === node
@@ -528,13 +499,13 @@ function diff(
 						}
 					} else {
 						builder.insert(text);
-						builder.delete(nodeInfo.stringLength);
-						oldIndex += nodeInfo.stringLength;
+						builder.delete(nodeInfo.length);
+						oldIndex += nodeInfo.length;
 					}
 				} else {
-					// TODO: DO we have to delete the old text?????
+					// TODO: Do we have to delete the old text?????
 					builder.insert(text);
-					builder.delete(nodeInfo.stringLength);
+					builder.delete(nodeInfo.length);
 				}
 				offset += text.length;
 				if (text.length) {
@@ -580,7 +551,7 @@ function diff(
 					nodeInfo.flags &= ~APPENDS_NEWLINE;
 				}
 
-				nodeInfo.stringLength = offset - nodeInfo.offset;
+				nodeInfo.length = offset - nodeInfo.offset;
 				nodeInfo.flags |= IS_CLEAN;
 			}
 
@@ -597,6 +568,7 @@ function diff(
 		}
 	}
 
+	// Make sure the rest of the old value is deleted
 	builder.delete(Infinity);
 	return builder.build();
 }
@@ -607,27 +579,6 @@ function isBlocklikeElement(node: Node): node is Element {
 	);
 }
 
-/**
- * For a given parent node and node info cache, clear info for the node and all
- * child nodes from the cache.
- */
-function clear(parent: Node, cache: NodeInfoCache): void {
-	const walker = document.createTreeWalker(
-		parent,
-		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-	);
-
-	for (
-		let node: Node | null = parent;
-		node !== null;
-		node = walker.nextNode()
-	) {
-		cache.delete(node);
-	}
-}
-
-// All of the following functions expect validate to have been called and the
-// cache to be accurate
 /***********************/
 /*** Selection Logic ***/
 /***********************/
@@ -681,8 +632,8 @@ function indexAt(
 			const nodeInfo = cache.get(node)!;
 			index =
 				nodeInfo.flags & APPENDS_NEWLINE
-					? nodeInfo.stringLength - NEWLINE.length
-					: nodeInfo.stringLength;
+					? nodeInfo.length - NEWLINE.length
+					: nodeInfo.length;
 		} else {
 			let child: Node | null = node.childNodes[offset];
 			while (child !== null && !cache.has(child)) {
@@ -760,13 +711,10 @@ function findNodeOffset(
 			}
 
 			return [previousSibling, getNodeLength(previousSibling)];
-		} else if (
-			index === nodeInfo.stringLength &&
-			node.nodeType === Node.TEXT_NODE
-		) {
+		} else if (index === nodeInfo.length && node.nodeType === Node.TEXT_NODE) {
 			return [node, (node as Text).data.length];
-		} else if (index >= nodeInfo.stringLength) {
-			index -= nodeInfo.stringLength;
+		} else if (index >= nodeInfo.length) {
+			index -= nodeInfo.length;
 			const nextSibling = walker.nextSibling();
 			if (nextSibling === null) {
 				// This branch seems necessary mainly when working with data-content
