@@ -7,8 +7,8 @@ import {
 	pushSegment,
 	shrink,
 	union,
-} from "./subseq";
-import type {Subseq} from "./subseq.js";
+} from "./_subseq.js";
+import type {Subseq} from "./_subseq.js";
 
 export interface InsertOperation {
 	type: "insert";

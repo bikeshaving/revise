@@ -1,7 +1,7 @@
 import {suite} from "uvu";
 import * as Assert from "uvu/assert";
 
-import * as Subseq from "../src/subseq.js";
+import * as Subseq from "../src/_subseq.js";
 const test = suite("Subseq");
 
 test("measure", () => {
