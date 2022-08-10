@@ -20,10 +20,12 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 const IS_OLD = 1 << 0;
 /** Whether the node’s info is up to date. */
 const IS_CLEAN = 1 << 1;
+/** Whether the node inserts newlines before/after the node */
+const IS_BLOCKLIKE = 1 << 2;
 /** Whether the node is responsible for the newline before it. */
-const PREPENDS_NEWLINE = 1 << 2;
+const PREPENDS_NEWLINE = 1 << 3;
 /** Whether the node is responsible for the newline after it. */
-const APPENDS_NEWLINE = 1 << 3;
+const APPENDS_NEWLINE = 1 << 4;
 
 class NodeInfo {
 	/** A bitmask (see flags above) */
@@ -45,53 +47,13 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 /********************************************/
 /*** ContentAreaElement symbol properties ***/
 /********************************************/
-const $cache = Symbol("ContentArea.cache");
-const $value = Symbol("ContentArea.value");
-const $observer = Symbol("ContentArea.observer");
-const $startNodeOffset = Symbol("ContentArea.startNodeOffset");
-const $onselectionchange = Symbol("ContentArea.onselectionchange");
+const $cache = Symbol.for("ContentAreaElement.cache");
+const $value = Symbol.for("ContentAreaElement.value");
+const $observer = Symbol.for("ContentAreaElement.observer");
+const $startNodeOffset = Symbol.for("ContentAreaElement.startNodeOffset");
+const $onselectionchange = Symbol.for("ContentAreaElement.onselectionchange");
 
-// TODO: custom newlines?
 const NEWLINE = "\n";
-
-// TODO: Try using getComputedStyle
-const BLOCKLIKE_ELEMENTS = new Set([
-	"ADDRESS",
-	"ARTICLE",
-	"ASIDE",
-	"BLOCKQUOTE",
-	"CAPTION",
-	"DETAILS",
-	"DIALOG",
-	"DD",
-	"DIV",
-	"DL",
-	"DT",
-	"FIELDSET",
-	"FIGCAPTION",
-	"FIGURE",
-	"FOOTER",
-	"FORM",
-	"H1",
-	"H2",
-	"H3",
-	"H4",
-	"H5",
-	"H6",
-	"HEADER",
-	"HGROUP",
-	"HR",
-	"LI",
-	"MAIN",
-	"NAV",
-	"OL",
-	"P",
-	"PRE",
-	"SECTION",
-	"TABLE",
-	"TR",
-	"UL",
-]);
 
 export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	declare [$cache]: NodeInfoCache;
@@ -107,6 +69,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		this[$observer] = new MutationObserver((records) => {
 			validate(this, null, records);
 		});
+
 		this[$onselectionchange] = () => {
 			this[$startNodeOffset] = getStartNodeOffset();
 		};
@@ -131,8 +94,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			characterDataOldValue: true,
 		});
 
-		const edit = getEdit(this, this[$cache], "");
-		this[$value] = edit.apply("");
+		validate(this, null, this[$observer].takeRecords());
 		this[$startNodeOffset] = getStartNodeOffset();
 		document.addEventListener(
 			"selectionchange",
@@ -278,6 +240,7 @@ function validate(
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
 	// We use the existence of records to determine whether contentchange events
 	// should be fired synchronously.
+	// TODO: is this still necessary???
 	if (records === undefined) {
 		Promise.resolve().then(() => {
 			root.dispatchEvent(ev);
@@ -311,7 +274,6 @@ function invalidate(
 			clear(record.removedNodes[j], cache);
 		}
 
-		// TODO: invalidate data-content nodes correctly.
 		let node = record.target;
 		if (node === root) {
 			invalid = true;
@@ -403,6 +365,9 @@ function getEdit(
 			nodeInfo = cache.get(node)!;
 			if (nodeInfo === undefined) {
 				cache.set(node, (nodeInfo = new NodeInfo(offset)));
+				if (isBlocklikeElement(node)) {
+					nodeInfo.flags |= IS_BLOCKLIKE;
+				}
 			} else {
 				const expectedIndex = oldIndex - oldIndexRelative;
 				if (nodeInfo.offset > expectedIndex) {
@@ -418,7 +383,7 @@ function getEdit(
 			}
 
 			// block elements prepend a newline
-			if (offset && !hasNewline && isBlocklikeElement(node)) {
+			if (offset && !hasNewline && (nodeInfo.flags & IS_BLOCKLIKE)) {
 				// TODO: retain if element is old
 				builder.insert(NEWLINE);
 				hasNewline = true;
@@ -507,7 +472,7 @@ function getEdit(
 			// element...
 			if (!(nodeInfo.flags & IS_CLEAN)) {
 				// block elements append a newline
-				if (!hasNewline && isBlocklikeElement(node)) {
+				if (!hasNewline && (nodeInfo.flags & IS_BLOCKLIKE)) {
 					// TODO: check inserts and retain
 					builder.insert(NEWLINE);
 					offset += NEWLINE.length;
@@ -540,9 +505,27 @@ function getEdit(
 	return builder.build();
 }
 
+const BLOCKLIKE_DISPLAYS = new Set([
+	"block",
+	"flex",
+	"grid",
+	"flow-root",
+	"list-item",
+	"table",
+	"table-row-group",
+	"table-header-group",
+	"table-footer-group",
+	"table-row",
+	"table-caption",
+]);
+
 function isBlocklikeElement(node: Node): node is Element {
 	return (
-		node.nodeType === Node.ELEMENT_NODE && BLOCKLIKE_ELEMENTS.has(node.nodeName)
+		node.nodeType === Node.ELEMENT_NODE &&
+		BLOCKLIKE_DISPLAYS.has(
+			// handle two-value display syntax like `display: block flex`
+			getComputedStyle(node as Element).display.split(" ")[0],
+		)
 	);
 }
 
@@ -579,8 +562,6 @@ function indexAt(
 		// If the node is not found in the cache but is contained in the root,
 		// then it is probably the child of an element with a data-content
 		// attribute.
-		// TODO: Maybe a non-zero offset should put the index at the end of the
-		// data-content node.
 		offset = 0;
 		while (!cache.has(node)) {
 			node = node.parentNode!;

@@ -83,7 +83,6 @@ export class Edit {
 	 */
 	declare deleted: string | undefined;
 
-	// TODO: Is this the constructor signature we want???
 	constructor(parts: Array<string | number>, deleted?: string) {
 		this.parts = parts;
 		this.deleted = deleted;
@@ -153,8 +152,6 @@ export class Edit {
 		return operations;
 	}
 
-	// TODO: I’m not too happy about the name of this method, insofar as it might
-	// imply that this object is callable.
 	apply(text: string): string {
 		let text1 = "";
 		const operations = this.operations();
@@ -184,9 +181,8 @@ export class Edit {
 		deleteSeq2 = expand(deleteSeq2, insertSeq2);
 		insertSeq1 = expand(insertSeq1, insertSeq2);
 
-		// Find insertions which have been deleted and remove them.
-		// TODO: Is this necessary???
 		{
+			// Find insertions which have been deleted and remove them.
 			const toggleSeq = intersection(insertSeq1, deleteSeq2);
 			if (measure(toggleSeq).includedLength) {
 				deleteSeq1 = shrink(deleteSeq1, toggleSeq);
