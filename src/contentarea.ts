@@ -70,6 +70,13 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			validate(this, null, records);
 		});
 
+		this.addEventListener("input", (ev) => {
+			// We call validate on input events because Safari seems to fire the
+			// mutation observer callback too late when the main thread is blocked,
+			// causing incorrect edits to the old DOM.
+			validate(this);
+		}, true);
+
 		this[$onselectionchange] = () => {
 			this[$startNodeOffset] = getStartNodeOffset();
 		};
@@ -219,18 +226,18 @@ function getStartNodeOffset(): [Node | null, number] {
 }
 
 /**
- * Should be pre-emptively called before we read from the cache. Dispatches
- * "contentchange" events, and makes sure the cache is up to date.
+ * Should be called before we read the cache. Dispatches "contentchange"
+ * events, and ensures the cache is up to date.
  *
- * @returns whether there was a change detected
+ * @returns whether a change was detected
  */
 function validate(
 	root: ContentAreaElement,
 	source: string | null = null,
-	records?: Array<MutationRecord> | undefined,
+	records: Array<MutationRecord> = root[$observer].takeRecords(),
 ): boolean {
 	const cache = root[$cache];
-	if (!invalidate(root, cache, records || root[$observer].takeRecords())) {
+	if (!invalidate(root, cache, records)) {
 		return false;
 	}
 
@@ -238,17 +245,7 @@ function validate(
 	const edit = getEdit(root, cache, oldValue);
 	root[$value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
-	// We use the existence of records to determine whether contentchange events
-	// should be fired synchronously.
-	// TODO: is this still necessary???
-	if (records === undefined) {
-		Promise.resolve().then(() => {
-			root.dispatchEvent(ev);
-		});
-	} else {
-		root.dispatchEvent(ev);
-	}
-
+	root.dispatchEvent(ev);
 	return true;
 }
 
