@@ -53,6 +53,7 @@ const $observer = Symbol.for("ContentAreaElement.observer");
 const $startNodeOffset = Symbol.for("ContentAreaElement.startNodeOffset");
 const $onselectionchange = Symbol.for("ContentAreaElement.onselectionchange");
 
+// TODO: custom newlines?
 const NEWLINE = "\n";
 
 export class ContentAreaElement extends HTMLElement implements SelectionRange {
@@ -67,7 +68,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		this[$cache] = new Map();
 		this[$value] = "";
 		this[$observer] = new MutationObserver((records) => {
-			validate(this, null, records);
+			validate(this, records);
 		});
 
 		this.addEventListener("input", (ev) => {
@@ -75,7 +76,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			// mutation observer callback too late when the main thread is blocked,
 			// causing incorrect edits to the old DOM.
 			validate(this);
-		}, true);
+		});
 
 		this[$onselectionchange] = () => {
 			this[$startNodeOffset] = getStartNodeOffset();
@@ -101,7 +102,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 			characterDataOldValue: true,
 		});
 
-		validate(this, null, this[$observer].takeRecords());
+		validate(this);
 		this[$startNodeOffset] = getStartNodeOffset();
 		document.addEventListener(
 			"selectionchange",
@@ -211,7 +212,7 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 
 	source(source: string): boolean {
-		return validate(this, source, this[$observer].takeRecords());
+		return validate(this, this[$observer].takeRecords(), source);
 	}
 }
 
@@ -233,8 +234,8 @@ function getStartNodeOffset(): [Node | null, number] {
  */
 function validate(
 	root: ContentAreaElement,
-	source: string | null = null,
 	records: Array<MutationRecord> = root[$observer].takeRecords(),
+	source: string | null = null,
 ): boolean {
 	const cache = root[$cache];
 	if (!invalidate(root, cache, records)) {
@@ -323,12 +324,12 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 
 /**
  * This function both returns an edit which represents changes to the
- * ContentAreaElement, and populates the cache with info about the contents of
- * nodes for future reads.
+ * ContentAreaElement, and populates the cache with info about nodes for future
+ * reads.
  *
  * @param root - The root element
  * @param cache - The NodeInfo cache associated with the root
- * @param oldValue - The previous content of the root.
+ * @param oldValue - The previous value of the element
  */
 function getEdit(
 	root: ContentAreaElement,
@@ -368,9 +369,10 @@ function getEdit(
 			} else {
 				const expectedIndex = oldIndex - oldIndexRelative;
 				if (nodeInfo.offset > expectedIndex) {
+					const length = nodeInfo.offset - expectedIndex;
 					// deletion detected
-					builder.delete(nodeInfo.offset - expectedIndex);
-					oldIndex += nodeInfo.offset - expectedIndex;
+					builder.delete(length);
+					oldIndex += length;
 				} else if (nodeInfo.offset < expectedIndex) {
 					// This should never happen
 					throw new Error("cache offset error");
@@ -385,8 +387,7 @@ function getEdit(
 				builder.insert(NEWLINE);
 				hasNewline = true;
 				offset += NEWLINE.length;
-
-				// TODO: We advance the nodeInfo offset. Is that sound logic? I can’t tell.
+				// TODO: We advance the nodeInfo offset. Is this logic sound?
 				nodeInfo.offset += NEWLINE.length;
 				nodeInfo.flags |= PREPENDS_NEWLINE;
 			} else {
@@ -402,13 +403,14 @@ function getEdit(
 					throw new Error("cache length error");
 				}
 
-				builder.retain(length);
-				const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
-				offset += length;
-				oldIndex += length;
 				if (length) {
+					const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
 					hasNewline = oldValue1.endsWith(NEWLINE);
 				}
+
+				builder.retain(length);
+				offset += length;
+				oldIndex += length;
 			} else if (node.nodeType === Node.TEXT_NODE) {
 				const text = (node as Text).data;
 				if (nodeInfo.flags & IS_OLD) {
