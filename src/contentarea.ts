@@ -177,10 +177,12 @@ const APPENDS_NEWLINE = 1 << 4;
 class NodeInfo {
 	/** A bitmask (see flags above) */
 	declare flags: number;
-	/** The string length of this node’s contents. */
-	declare length: number;
+	// TODO: explain the relationship of these numbers to PREPENDS_NEWLINE and
+	// APPENDS_NEWLINE
 	/** The start of this node’s contents relative to the start of the parent. */
 	declare offset: number;
+	/** The string length of this node’s contents. */
+	declare length: number;
 
 	constructor(offset: number) {
 		this.flags = 0;
@@ -317,15 +319,15 @@ function diff(
 	let nodeInfo: NodeInfo;
 	for (
 		let node: Node = _this,
-			// The current offset relative to the current node
+			descending = true,
+			// the current offset relative to the current node
 			offset = 0,
-			// The index into the old string
+			// the index into the old string
 			oldIndex = 0,
-			// The index into the old string of the current node
+			// the index into the old string of the current node
 			oldIndexRelative = 0,
-			// Whether or not the previous element ends with a newline
-			hasNewline = false,
-			descending = true;
+			// whether or not the previous element ends with a newline
+			hasNewline = false;
 		;
 		node = walker.currentNode
 	) {
@@ -338,13 +340,16 @@ function diff(
 					nodeInfo.flags |= IS_BLOCKLIKE;
 				}
 			} else {
-				const expected = oldIndex - oldIndexRelative;
-				if (nodeInfo.offset < expected) {
-					// This should never happen
+				// TODO: I still have the sneaking suspicion that we can detect
+				// deletions by checking nodeInfo.offset against offset, but that
+				// there’s some logic error that is making this more complicated.
+				const expectedOffset = oldIndex - oldIndexRelative;
+				if (nodeInfo.offset < expectedOffset) {
+					// this should never happen
 					throw new Error("cache offset error");
-				} else if (nodeInfo.offset > expected) {
+				} else if (nodeInfo.offset > expectedOffset) {
 					// deletion detected
-					const length = nodeInfo.offset - expected;
+					const length = nodeInfo.offset - expectedOffset;
 					builder.delete(length);
 					oldIndex += length;
 				}
@@ -353,7 +358,7 @@ function diff(
 			}
 
 			// block elements prepend a newline when they appear after text or inline
-			// elements.
+			// elements
 			if (offset && !hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
 				if (nodeInfo.flags & PREPENDS_NEWLINE) {
 					builder.retain(NEWLINE.length);
@@ -378,20 +383,21 @@ function diff(
 			descending = false;
 			if (nodeInfo.flags & IS_VALID) {
 				// The node and its children are unchanged.
-				const length = nodeInfo.length;
 				if (oldIndex + nodeInfo.length > oldValue.length) {
-					// This should never happen
+					// This should never happen.
 					throw new Error("cache length error");
 				}
 
-				if (length) {
-					const oldValue1 = oldValue.slice(oldIndex, oldIndex + length);
+				if (nodeInfo.length) {
+					const oldValue1 = oldValue.slice(
+						oldIndex,
+						oldIndex + nodeInfo.length,
+					);
 					hasNewline = oldValue1.endsWith(NEWLINE);
+					builder.retain(nodeInfo.length);
+					oldIndex += nodeInfo.length;
+					offset += nodeInfo.length;
 				}
-
-				builder.retain(length);
-				oldIndex += length;
-				offset += length;
 			} else if (node.nodeType === Node.TEXT_NODE) {
 				const text = (node as Text).data;
 				if (nodeInfo.flags & IS_OLD) {
@@ -409,6 +415,7 @@ function diff(
 						oldIndex += nodeInfo.length;
 					} else {
 						builder.insert(text);
+						// TODO: the text is only deleted because we don’t update the old index
 					}
 				} else {
 					builder.insert(text);
@@ -420,9 +427,9 @@ function diff(
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
 				const text = (node as Element).getAttribute("data-content") || "";
-				builder.insert(text);
-				offset += text.length;
 				if (text.length) {
+					builder.insert(text);
+					offset += text.length;
 					hasNewline = text.endsWith(NEWLINE);
 				}
 			} else if (node.nodeName === "BR") {
@@ -439,10 +446,12 @@ function diff(
 			}
 		} else {
 			if (!stack.length) {
-				// This should never happen
+				// This should never happen.
 				throw new Error("Stack is empty");
 			}
 
+			// If the child node prepends a newline, add to offset to increase the
+			// length of the parent node.
 			if (nodeInfo!.flags & PREPENDS_NEWLINE) {
 				offset += NEWLINE.length;
 			}
@@ -453,11 +462,9 @@ function diff(
 
 		if (!descending) {
 			// POST-ORDER LOGIC
-			// TODO: If a node is clean, does this mean the APPENDS_NEWLINE flag is
-			// constant? It seems like the only edge case is an empty block
-			// element...
+			// TODO: always recalculate APPENDS_NEWLINE
 			if (!(nodeInfo.flags & IS_VALID)) {
-				// block elements append a newline
+				// Block-like elements append a newline.
 				if (!hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
 					// TODO: check inserts and retain
 					builder.insert(NEWLINE);
@@ -491,6 +498,16 @@ function diff(
 	return builder.build();
 }
 
+function getStartNodeOffset(): [Node | null, number] {
+	const selection = document.getSelection();
+	if (selection && selection.rangeCount) {
+		const range = selection.getRangeAt(0);
+		return [range.startContainer, range.startOffset];
+	}
+
+	return [null, 0];
+}
+
 const BLOCKLIKE_DISPLAYS = new Set([
 	"block",
 	"flex",
@@ -518,16 +535,6 @@ function isBlocklikeElement(node: Node): node is Element {
 /***********************/
 /*** Selection Logic ***/
 /***********************/
-function getStartNodeOffset(): [Node | null, number] {
-	const selection = document.getSelection();
-	if (selection && selection.rangeCount) {
-		const range = selection.getRangeAt(0);
-		return [range.startContainer, range.startOffset];
-	}
-
-	return [null, 0];
-}
-
 /**
  * Finds the string index of a node and offset pair provided by a browser API
  * like document.getSelection() for a given root and cache.
@@ -600,7 +607,7 @@ function indexAt(
  * selection.collapse() from a given string index.
  */
 function nodeOffsetAt(
-	root: Element,
+	_this: Element,
 	cache: NodeInfoCache,
 	index: number,
 ): [Node | null, number] {
@@ -608,7 +615,7 @@ function nodeOffsetAt(
 		return [null, 0];
 	}
 
-	const [node, offset] = findNodeOffset(root, cache, Math.max(0, index));
+	const [node, offset] = findNodeOffset(_this, cache, Math.max(0, index));
 	if (node && node.nodeName === "BR") {
 		// Some browsers seem to have trouble when calling `selection.collapse()`
 		// with a BR element, so we try to avoid returning them from this function.
@@ -618,17 +625,18 @@ function nodeOffsetAt(
 	return [node, offset];
 }
 
+// TODO: Is this function necessary?
 function findNodeOffset(
-	root: Element,
+	_this: Element,
 	cache: NodeInfoCache,
 	index: number,
 ): [Node | null, number] {
 	const walker = document.createTreeWalker(
-		root,
+		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	for (let node: Node | null = root; node !== null; ) {
+	for (let node: Node | null = _this; node !== null; ) {
 		const nodeInfo = cache.get(node);
 		if (nodeInfo == null) {
 			return nodeOffsetFromChild(node, index > 0);
@@ -646,7 +654,7 @@ function findNodeOffset(
 			if (nextSibling === null) {
 				// This branch seems necessary mainly when working with data-content
 				// nodes.
-				if (node === root) {
+				if (node === _this) {
 					return [node, getNodeLength(node)];
 				}
 
@@ -754,7 +762,7 @@ function setSelectionRange(
 		start = end;
 	}
 
-	// Focus is the end of the selection where the pointer is released.
+	// Focus is the side of the selection where the pointer is released.
 	const [focus, anchor] =
 		direction === "backward" ? [start, end] : [end, start];
 
