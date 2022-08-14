@@ -17,6 +17,9 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 		super(typeArg, {bubbles: true, ...eventInit});
 	}
 }
+
+export type SelectionDirection = "forward" | "backward" | "none";
+
 /********************************************/
 /*** ContentAreaElement private property symbols ***/
 /********************************************/
@@ -43,7 +46,8 @@ export class ContentAreaElement extends HTMLElement {
 
 		this.addEventListener("input", () => {
 			// This is necessary for Safari bugs where edits which cause >40ms of
-			// execution cause strange logical bugs which mess with the selection.
+			// execution cause strange logical bugs which mess with the
+			// selection/where pending edits to the DOM appear.
 			validate(this);
 		});
 
@@ -103,36 +107,36 @@ export class ContentAreaElement extends HTMLElement {
 
 	get selectionStart(): number {
 		validate(this);
-		return getSelectionRange(this, this[$cache]).start;
+		return getSelectionRange(this).start;
 	}
 
 	set selectionStart(start: number) {
 		validate(this);
 
-		const {end, direction} = getSelectionRange(this, this[$cache]);
-		setSelectionRange(this, this[$cache], {start, end, direction});
+		const {end, direction} = getSelectionRange(this);
+		setSelectionRange(this, {start, end, direction});
 	}
 
 	get selectionEnd(): number {
 		validate(this);
-		return getSelectionRange(this, this[$cache]).end;
+		return getSelectionRange(this).end;
 	}
 
 	set selectionEnd(end: number) {
 		validate(this);
-		const {start, direction} = getSelectionRange(this, this[$cache]);
-		setSelectionRange(this, this[$cache], {start, end, direction});
+		const {start, direction} = getSelectionRange(this);
+		setSelectionRange(this, {start, end, direction});
 	}
 
 	get selectionDirection(): SelectionDirection {
 		validate(this);
-		return getSelectionRange(this, this[$cache]).direction;
+		return getSelectionRange(this).direction;
 	}
 
 	set selectionDirection(direction: SelectionDirection) {
 		validate(this);
-		const {start, end} = getSelectionRange(this, this[$cache]);
-		setSelectionRange(this, this[$cache], {start, end, direction});
+		const {start, end} = getSelectionRange(this);
+		setSelectionRange(this, {start, end, direction});
 	}
 
 	setSelectionRange(
@@ -141,19 +145,17 @@ export class ContentAreaElement extends HTMLElement {
 		direction: SelectionDirection = "none",
 	): void {
 		validate(this);
-		setSelectionRange(this, this[$cache], {start, end, direction});
+		setSelectionRange(this, {start, end, direction});
 	}
 
 	indexAt(node: Node | null, offset: number): number {
 		validate(this);
-		const cache = this[$cache];
-		return indexAt(this, cache, node, offset);
+		return indexAt(this, node, offset);
 	}
 
 	nodeOffsetAt(index: number): [Node | null, number] {
 		validate(this);
-		const cache = this[$cache];
-		return nodeOffsetAt(this, cache, index);
+		return nodeOffsetAt(this, index);
 	}
 
 	source(source: string): boolean {
@@ -212,13 +214,12 @@ function validate(
 		throw new TypeError("this is not a ContentAreaElement");
 	}
 
-	const cache = _this[$cache];
-	if (!invalidate(_this, cache, records)) {
+	if (!invalidate(_this, records)) {
 		return false;
 	}
 
 	const oldValue = _this[$value];
-	const edit = diff(_this, cache, oldValue);
+	const edit = diff(_this, oldValue);
 	_this[$value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
 	_this.dispatchEvent(ev);
@@ -227,19 +228,21 @@ function validate(
 
 function invalidate(
 	_this: ContentAreaElement,
-	cache: NodeInfoCache,
 	records: Array<MutationRecord>,
 ): boolean {
+	const cache = _this[$cache];
 	if (!cache.get(_this)) {
-		// the root ContentAreaElement will never be cleared from the cache.
+		// The root ContentAreaElement will not be deleted from the cache until the
+		// element is removed from the DOM, so this is the first time the
+		// ContentAreaElement is being validated.
 		return true;
 	}
 
 	let invalid = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
-		// We make sure all added and removed nodes are cleared from the cache in
-		// case of any MutationObserver weirdness.
+		// We make sure all added and removed nodes and their children are deleted
+		// from the cache in case of any weirdness where nodes have been moved.
 		for (let j = 0; j < record.addedNodes.length; j++) {
 			clear(record.addedNodes[j], cache);
 		}
@@ -306,16 +309,16 @@ function clear(parent: Node, cache: NodeInfoCache): void {
  */
 function diff(
 	_this: ContentAreaElement,
-	cache: NodeInfoCache,
 	oldValue: string,
 ): Edit {
-	const builder = Edit.builder(oldValue);
-	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	const walker = document.createTreeWalker(
 		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
+	const cache = _this[$cache];
+	const builder = Edit.builder(oldValue);
+	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	let nodeInfo: NodeInfo;
 	for (
 		let node: Node = _this,
@@ -540,12 +543,12 @@ function isBlocklikeElement(node: Node): node is Element {
  * like document.getSelection() for a given root and cache.
  */
 function indexAt(
-	root: Element,
-	cache: NodeInfoCache,
+	_this: ContentAreaElement,
 	node: Node | null,
 	offset: number,
 ): number {
-	if (node == null || !root.contains(node)) {
+	const cache = _this[$cache];
+	if (node == null || !_this.contains(node)) {
 		return -1;
 	}
 
@@ -591,7 +594,7 @@ function indexAt(
 		}
 	}
 
-	for (; node !== root; node = node.parentNode!) {
+	for (; node !== _this; node = node.parentNode!) {
 		const nodeInfo = cache.get(node)!;
 		index += nodeInfo.offset;
 		if (nodeInfo.flags & PREPENDS_NEWLINE) {
@@ -607,15 +610,14 @@ function indexAt(
  * selection.collapse() from a given string index.
  */
 function nodeOffsetAt(
-	_this: Element,
-	cache: NodeInfoCache,
+	_this: ContentAreaElement,
 	index: number,
 ): [Node | null, number] {
 	if (index < 0) {
 		return [null, 0];
 	}
 
-	const [node, offset] = findNodeOffset(_this, cache, Math.max(0, index));
+	const [node, offset] = findNodeOffset(_this, Math.max(0, index));
 	if (node && node.nodeName === "BR") {
 		// Some browsers seem to have trouble when calling `selection.collapse()`
 		// with a BR element, so we try to avoid returning them from this function.
@@ -625,12 +627,12 @@ function nodeOffsetAt(
 	return [node, offset];
 }
 
-// TODO: Is this function necessary?
+// TODO: Can this function be inlined?
 function findNodeOffset(
-	_this: Element,
-	cache: NodeInfoCache,
+	_this: ContentAreaElement,
 	index: number,
 ): [Node | null, number] {
+	const cache = _this[$cache];
 	const walker = document.createTreeWalker(
 		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -710,8 +712,6 @@ function nodeOffsetFromChild(
 	return [parentNode, offset];
 }
 
-export type SelectionDirection = "forward" | "backward" | "none";
-
 interface SelectionRange {
 	start: number;
 	end: number;
@@ -719,8 +719,7 @@ interface SelectionRange {
 }
 
 function getSelectionRange(
-	root: Element,
-	cache: NodeInfoCache,
+	_this: ContentAreaElement,
 ): SelectionRange {
 	const selection = document.getSelection();
 	if (!selection) {
@@ -734,10 +733,10 @@ function getSelectionRange(
 		anchorOffset,
 		isCollapsed,
 	} = selection;
-	const focus = Math.max(0, indexAt(root, cache, focusNode, focusOffset));
+	const focus = Math.max(0, indexAt(_this, focusNode, focusOffset));
 	const anchor = isCollapsed
 		? focus
-		: Math.max(0, indexAt(root, cache, anchorNode, anchorOffset));
+		: Math.max(0, indexAt(_this, anchorNode, anchorOffset));
 	return {
 		start: Math.min(focus, anchor),
 		end: Math.max(focus, anchor),
@@ -747,8 +746,7 @@ function getSelectionRange(
 }
 
 function setSelectionRange(
-	root: Element,
-	cache: NodeInfoCache,
+	_this: ContentAreaElement,
 	{start, end, direction}: SelectionRange,
 ): void {
 	const selection = document.getSelection();
@@ -767,11 +765,11 @@ function setSelectionRange(
 		direction === "backward" ? [start, end] : [end, start];
 
 	if (focus === anchor) {
-		const [node, offset] = nodeOffsetAt(root, cache, focus);
+		const [node, offset] = nodeOffsetAt(_this, focus);
 		selection.collapse(node, offset);
 	} else {
-		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchor);
-		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focus);
+		const [anchorNode, anchorOffset] = nodeOffsetAt(_this, anchor);
+		const [focusNode, focusOffset] = nodeOffsetAt(_this, focus);
 		if (anchorNode === null && focusNode === null) {
 			selection.collapse(null);
 		} else if (anchorNode === null) {
