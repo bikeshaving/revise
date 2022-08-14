@@ -41,7 +41,7 @@ export class ContentAreaElement extends HTMLElement {
 			validate(this, records);
 		});
 
-		this.addEventListener("input", (ev) => {
+		this.addEventListener("input", () => {
 			// This is necessary for Safari bugs where edits which cause >40ms of
 			// execution cause strange logical bugs which mess with the selection.
 			validate(this);
@@ -314,6 +314,7 @@ function diff(
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
+	let nodeInfo: NodeInfo;
 	for (
 		let node: Node = _this,
 			// The current offset relative to the current node
@@ -328,7 +329,6 @@ function diff(
 		;
 		node = walker.currentNode
 	) {
-		let nodeInfo: NodeInfo;
 		if (descending) {
 			// PRE-ORDER LOGIC
 			nodeInfo = cache.get(node)!;
@@ -354,15 +354,24 @@ function diff(
 
 			// block elements prepend a newline when they appear after text or inline
 			// elements.
-			if (offset && !hasNewline && (nodeInfo.flags & IS_BLOCKLIKE)) {
-				// TODO: retain if element is old
-				builder.insert(NEWLINE);
-				hasNewline = true;
-				offset += NEWLINE.length;
-				// TODO: We advance the nodeInfo offset. Is this logic sound?
-				nodeInfo.offset += NEWLINE.length;
+			if (offset && !hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
+				if (nodeInfo.flags & PREPENDS_NEWLINE) {
+					builder.retain(NEWLINE.length);
+					oldIndex += NEWLINE.length;
+					offset += NEWLINE.length;
+				} else {
+					builder.insert(NEWLINE);
+					offset += NEWLINE.length;
+					hasNewline = true;
+				}
+
 				nodeInfo.flags |= PREPENDS_NEWLINE;
 			} else {
+				if (nodeInfo.flags & PREPENDS_NEWLINE) {
+					builder.delete(NEWLINE.length);
+					oldIndex += NEWLINE.length;
+				}
+
 				nodeInfo.flags &= ~PREPENDS_NEWLINE;
 			}
 
@@ -381,15 +390,17 @@ function diff(
 				}
 
 				builder.retain(length);
-				offset += length;
 				oldIndex += length;
+				offset += length;
 			} else if (node.nodeType === Node.TEXT_NODE) {
 				const text = (node as Text).data;
 				if (nodeInfo.flags & IS_OLD) {
 					const nodeOffset = getStartNodeOffset();
 					const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
 					const oldStartOffset =
-						_this[$startNodeOffset][0] === node ? _this[$startNodeOffset][1] : -1;
+						_this[$startNodeOffset][0] === node
+							? _this[$startNodeOffset][1]
+							: -1;
 					const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
 					const hint = Math.min(oldStartOffset, startOffset);
 					if (hint > -1) {
@@ -432,6 +443,10 @@ function diff(
 				throw new Error("Stack is empty");
 			}
 
+			if (nodeInfo!.flags & PREPENDS_NEWLINE) {
+				offset += NEWLINE.length;
+			}
+
 			({nodeInfo, oldIndexRelative} = stack.pop()!);
 			offset = nodeInfo.offset + offset;
 		}
@@ -443,7 +458,7 @@ function diff(
 			// element...
 			if (!(nodeInfo.flags & IS_VALID)) {
 				// block elements append a newline
-				if (!hasNewline && (nodeInfo.flags & IS_BLOCKLIKE)) {
+				if (!hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
 					// TODO: check inserts and retain
 					builder.insert(NEWLINE);
 					offset += NEWLINE.length;
@@ -528,9 +543,8 @@ function indexAt(
 	}
 
 	if (!cache.has(node)) {
-		// If the node is not found in the cache but is contained in the root,
-		// then it is probably the child of an element with a data-content
-		// attribute.
+		// If the node is not found in the cache but is contained in the root, then
+		// it is the child of an element with a data-content attribute.
 		offset = 0;
 		while (!cache.has(node)) {
 			node = node.parentNode!;
@@ -573,6 +587,9 @@ function indexAt(
 	for (; node !== root; node = node.parentNode!) {
 		const nodeInfo = cache.get(node)!;
 		index += nodeInfo.offset;
+		if (nodeInfo.flags & PREPENDS_NEWLINE) {
+			index += NEWLINE.length;
+		}
 	}
 
 	return index;
@@ -587,7 +604,11 @@ function nodeOffsetAt(
 	cache: NodeInfoCache,
 	index: number,
 ): [Node | null, number] {
-	const [node, offset] = findNodeOffset(root, cache, index);
+	if (index < 0) {
+		return [null, 0];
+	}
+
+	const [node, offset] = findNodeOffset(root, cache, Math.max(0, index));
 	if (node && node.nodeName === "BR") {
 		// Some browsers seem to have trouble when calling `selection.collapse()`
 		// with a BR element, so we try to avoid returning them from this function.
@@ -602,10 +623,6 @@ function findNodeOffset(
 	cache: NodeInfoCache,
 	index: number,
 ): [Node | null, number] {
-	if (index < 0) {
-		return [null, 0];
-	}
-
 	const walker = document.createTreeWalker(
 		root,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -615,20 +632,13 @@ function findNodeOffset(
 		const nodeInfo = cache.get(node);
 		if (nodeInfo == null) {
 			return nodeOffsetFromChild(node, index > 0);
-		} else if (nodeInfo.flags & PREPENDS_NEWLINE) {
-			index -= NEWLINE.length;
 		}
 
-		if (index < 0) {
-			// This branch should only run when an element prepends an newline
-			const previousSibling = walker.previousSibling();
-			if (!previousSibling) {
-				// This should never happen
-				throw new Error("Previous sibling missing");
-			}
+		if (nodeInfo.flags & PREPENDS_NEWLINE) {
+			index -= 1;
+		}
 
-			return [previousSibling, getNodeLength(previousSibling)];
-		} else if (index === nodeInfo.length && node.nodeType === Node.TEXT_NODE) {
+		if (index === nodeInfo.length && node.nodeType === Node.TEXT_NODE) {
 			return [node, (node as Text).data.length];
 		} else if (index >= nodeInfo.length) {
 			index -= nodeInfo.length;
