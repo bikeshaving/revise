@@ -179,8 +179,7 @@ const APPENDS_NEWLINE = 1 << 4;
 class NodeInfo {
 	/** A bitmask (see flags above) */
 	declare flags: number;
-	// TODO: explain the relationship of these numbers to PREPENDS_NEWLINE and
-	// APPENDS_NEWLINE
+	// TODO: explain the relationship of these numbers to newline stuff
 	/** The start of this node’s contents relative to the start of the parent. */
 	declare offset: number;
 	/** The string length of this node’s contents. */
@@ -323,13 +322,13 @@ function diff(
 	for (
 		let node: Node = _this,
 			descending = true,
-			// the current offset relative to the current node
+			/** the current offset relative to the parent */
 			offset = 0,
-			// the index into the old string
+			/** the index into the old string */
 			oldIndex = 0,
-			// the index into the old string of the current node
+			/** the index into the old string of the parent */
 			oldIndexRelative = 0,
-			// whether or not the previous element ends with a newline
+			/** whether or not the value being built currently ends with a newline */
 			hasNewline = false;
 		;
 		node = walker.currentNode
@@ -357,9 +356,9 @@ function diff(
 				nodeInfo.offset = offset;
 			}
 
-			// block elements prepend a newline when they appear after text or inline
-			// elements
 			if (offset && !hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
+				// Block-like elements prepend a newline when they appear after text or
+				// inline elements.
 				if (nodeInfo.flags & PREPENDS_NEWLINE) {
 					builder.retain(NEWLINE.length);
 					oldIndex += NEWLINE.length;
@@ -457,15 +456,13 @@ function diff(
 
 		if (!descending) {
 			// POST-ORDER LOGIC
-			// TODO: always recalculate APPENDS_NEWLINE
 			if (!(nodeInfo.flags & IS_VALID)) {
-				// Block-like elements append a newline.
+				// TODO: Figure out if we should always recalculate APPENDS_NEWLINE???
 				if (!hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
-					// TODO: check inserts and retain
+					// Block-like elements append a newline when their contents do not.
 					builder.insert(NEWLINE);
 					offset += NEWLINE.length;
 					hasNewline = true;
-
 					nodeInfo.flags |= APPENDS_NEWLINE;
 				} else {
 					nodeInfo.flags &= ~APPENDS_NEWLINE;
