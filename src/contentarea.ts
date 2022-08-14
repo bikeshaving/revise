@@ -23,46 +23,47 @@ export type SelectionDirection = "forward" | "backward" | "none";
 /********************************************/
 /*** ContentAreaElement private property symbols ***/
 /********************************************/
-const $cache = Symbol.for("ContentAreaElement.cache");
-const $value = Symbol.for("ContentAreaElement.value");
-const $observer = Symbol.for("ContentAreaElement.observer");
-const $startNodeOffset = Symbol.for("ContentAreaElement.startNodeOffset");
-const $onselectionchange = Symbol.for("ContentAreaElement.onselectionchange");
+const _cache = Symbol.for("ContentAreaElement._cache");
+const _value = Symbol.for("ContentAreaElement._value");
+const _observer = Symbol.for("ContentAreaElement._observer");
+const _startNodeOffset = Symbol.for("ContentAreaElement._startNodeOffset");
+const _onselectionchange = Symbol.for("ContentAreaElement._onselectionchange");
 
 export class ContentAreaElement extends HTMLElement {
-	declare [$cache]: NodeInfoCache;
-	declare [$value]: string;
-	declare [$observer]: MutationObserver;
-	declare [$startNodeOffset]: [Node | null, number];
-	declare [$onselectionchange]: () => void;
+	declare [_cache]: NodeInfoCache;
+	declare [_value]: string;
+	declare [_observer]: MutationObserver;
+	declare [_startNodeOffset]: [Node | null, number];
+	declare [_onselectionchange]: () => void;
 	constructor() {
 		super();
 
-		this[$cache] = new Map();
-		this[$value] = "";
-		this[$observer] = new MutationObserver((records) => {
+		this[_cache] = new Map();
+		this[_value] = "";
+		this[_observer] = new MutationObserver((records) => {
 			validate(this, records);
 		});
 
-		this.addEventListener("input", () => {
-			// This is necessary for Safari bugs where edits which cause >40ms of
-			// execution cause strange logical bugs which mess with the
-			// selection/where pending edits to the DOM appear.
-			validate(this);
-		});
-
-		this[$onselectionchange] = () => {
+		this[_startNodeOffset] = getStartNodeOffset();
+		this[_onselectionchange] = () => {
 			// We keep track of the starting node offset pair to accurately diff
 			// edits to text nodes.
-			this[$startNodeOffset] = getStartNodeOffset();
+			this[_startNodeOffset] = getStartNodeOffset();
 		};
+
+		this.addEventListener("input", () => {
+			// This is necessary for Safari bugs where edits which cause >40ms of
+			// execution cause strange logical bugs which mess with the selection or
+			// where pending edits appear in the DOM.
+			validate(this);
+		});
 	}
 
 	/******************************/
 	/*** Custom Element methods ***/
 	/******************************/
 	connectedCallback() {
-		this[$observer].observe(this, {
+		this[_observer].observe(this, {
 			subtree: true,
 			childList: true,
 			characterData: true,
@@ -76,25 +77,25 @@ export class ContentAreaElement extends HTMLElement {
 		});
 
 		validate(this);
-		this[$startNodeOffset] = getStartNodeOffset();
+		this[_startNodeOffset] = getStartNodeOffset();
 		document.addEventListener(
 			"selectionchange",
-			this[$onselectionchange],
+			this[_onselectionchange],
 			// We use capture in an attempt to run before other event listeners.
 			true,
 		);
 	}
 
 	disconnectedCallback() {
-		this[$cache].clear();
-		this[$value] = "";
-		this[$observer].disconnect();
+		this[_cache].clear();
+		this[_value] = "";
+		this[_observer].disconnect();
 		// JSDOM-based environments like Jest sometimes make the global document
 		// null before calling the disconnectedCallback for some reason.
 		if (document) {
 			document.removeEventListener(
 				"selectionchange",
-				this[$onselectionchange],
+				this[_onselectionchange],
 				true,
 			);
 		}
@@ -102,7 +103,7 @@ export class ContentAreaElement extends HTMLElement {
 
 	get value(): string {
 		validate(this);
-		return this[$value];
+		return this[_value];
 	}
 
 	get selectionStart(): number {
@@ -159,7 +160,7 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	source(source: string): boolean {
-		return validate(this, this[$observer].takeRecords(), source);
+		return validate(this, this[_observer].takeRecords(), source);
 	}
 }
 
@@ -177,18 +178,18 @@ const APPENDS_NEWLINE = 1 << 4;
 
 /** Data associated with the child nodes of a ContentAreaElement. */
 class NodeInfo {
-	/** A bitmask (see flags above) */
-	declare flags: number;
 	// TODO: explain the relationship of these numbers to newline stuff
 	/** The start of this node’s contents relative to the start of the parent. */
 	declare offset: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
+	/** A bitmask (see flags above) */
+	declare flags: number;
 
 	constructor(offset: number) {
-		this.flags = 0;
-		this.length = 0;
 		this.offset = offset;
+		this.length = 0;
+		this.flags = 0;
 	}
 }
 
@@ -206,10 +207,10 @@ type NodeInfoCache = Map<Node, NodeInfo>;
  */
 function validate(
 	_this: ContentAreaElement,
-	records: Array<MutationRecord> = _this[$observer].takeRecords(),
+	records: Array<MutationRecord> = _this[_observer].takeRecords(),
 	source: string | null = null,
 ): boolean {
-	if (typeof _this !== "object" || _this[$cache] == null) {
+	if (typeof _this !== "object" || _this[_cache] == null) {
 		throw new TypeError("this is not a ContentAreaElement");
 	}
 
@@ -217,11 +218,11 @@ function validate(
 		return false;
 	}
 
-	const oldValue = _this[$value];
+	const oldValue = _this[_value];
 	const edit = diff(_this, oldValue);
-	_this[$value] = edit.apply(oldValue);
+	_this[_value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
-	_this.dispatchEvent(ev);
+	Promise.resolve().then(() => _this.dispatchEvent(ev));
 	return true;
 }
 
@@ -229,7 +230,7 @@ function invalidate(
 	_this: ContentAreaElement,
 	records: Array<MutationRecord>,
 ): boolean {
-	const cache = _this[$cache];
+	const cache = _this[_cache];
 	if (!cache.get(_this)) {
 		// The root ContentAreaElement will not be deleted from the cache until the
 		// element is removed from the DOM, so this is the first time the
@@ -315,7 +316,7 @@ function diff(
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
-	const cache = _this[$cache];
+	const cache = _this[_cache];
 	const builder = Edit.builder(oldValue);
 	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	let nodeInfo: NodeInfo;
@@ -397,8 +398,8 @@ function diff(
 						const nodeOffset = getStartNodeOffset();
 						const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
 						const oldStartOffset =
-							_this[$startNodeOffset][0] === node
-								? _this[$startNodeOffset][1]
+							_this[_startNodeOffset][0] === node
+								? _this[_startNodeOffset][1]
 								: -1;
 						const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
 						const hint = Math.min(oldStartOffset, startOffset);
@@ -541,7 +542,7 @@ function indexAt(
 	node: Node | null,
 	offset: number,
 ): number {
-	const cache = _this[$cache];
+	const cache = _this[_cache];
 	if (node == null || !_this.contains(node)) {
 		return -1;
 	}
@@ -611,7 +612,7 @@ function nodeOffsetAt(
 		return [null, 0];
 	}
 
-	const [node, offset] = findNodeOffset(_this, Math.max(0, index));
+	const [node, offset] = findNodeOffset(_this, index);
 	if (node && node.nodeName === "BR") {
 		// Some browsers seem to have trouble when calling `selection.collapse()`
 		// with a BR element, so we try to avoid returning them from this function.
@@ -626,7 +627,7 @@ function findNodeOffset(
 	_this: ContentAreaElement,
 	index: number,
 ): [Node | null, number] {
-	const cache = _this[$cache];
+	const cache = _this[_cache];
 	const walker = document.createTreeWalker(
 		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
