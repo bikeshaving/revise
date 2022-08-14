@@ -307,10 +307,7 @@ function clear(parent: Node, cache: NodeInfoCache): void {
  * ContentAreaElement, and populates the cache with info about nodes for future
  * reads.
  */
-function diff(
-	_this: ContentAreaElement,
-	oldValue: string,
-): Edit {
+function diff(_this: ContentAreaElement, oldValue: string): Edit {
 	const walker = document.createTreeWalker(
 		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -396,7 +393,10 @@ function diff(
 				if (text.length) {
 					if (nodeInfo.flags & IS_OLD) {
 						const nodeOffset = getStartNodeOffset();
-						const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
+						const oldText = oldValue.slice(
+							oldIndex,
+							oldIndex + nodeInfo.length,
+						);
 						const oldStartOffset =
 							_this[_startNodeOffset][0] === node
 								? _this[_startNodeOffset][1]
@@ -713,9 +713,7 @@ interface SelectionRange {
 	direction: SelectionDirection;
 }
 
-function getSelectionRange(
-	_this: ContentAreaElement,
-): SelectionRange {
+function getSelectionRange(_this: ContentAreaElement): SelectionRange {
 	const selection = document.getSelection();
 	if (!selection) {
 		return {start: 0, end: 0, direction: "none"};
