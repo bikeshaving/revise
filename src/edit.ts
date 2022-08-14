@@ -1,13 +1,4 @@
-import {
-	align,
-	expand,
-	interleave,
-	intersection,
-	measure,
-	pushSegment,
-	shrink,
-	union,
-} from "./_subseq.js";
+import * as S from "./_subseq.js";
 import type {Subseq} from "./_subseq.js";
 
 export interface InsertOperation {
@@ -175,27 +166,27 @@ export class Edit {
 		let [insertSeq1, inserted1, deleteSeq1, deleted1] = factor(this);
 		let [insertSeq2, inserted2, deleteSeq2, deleted2] = factor(that);
 		// Expand all subseqs so that they share the same coordinate space.
-		deleteSeq1 = expand(deleteSeq1, insertSeq1);
-		deleteSeq2 = expand(deleteSeq2, deleteSeq1);
-		[deleteSeq1, insertSeq2] = interleave(deleteSeq1, insertSeq2);
-		deleteSeq2 = expand(deleteSeq2, insertSeq2);
-		insertSeq1 = expand(insertSeq1, insertSeq2);
+		deleteSeq1 = S.expand(deleteSeq1, insertSeq1);
+		deleteSeq2 = S.expand(deleteSeq2, deleteSeq1);
+		[deleteSeq1, insertSeq2] = S.interleave(deleteSeq1, insertSeq2);
+		deleteSeq2 = S.expand(deleteSeq2, insertSeq2);
+		insertSeq1 = S.expand(insertSeq1, insertSeq2);
 
 		{
 			// Find insertions which have been deleted and remove them.
-			const toggleSeq = intersection(insertSeq1, deleteSeq2);
-			if (measure(toggleSeq).includedLength) {
-				deleteSeq1 = shrink(deleteSeq1, toggleSeq);
+			const toggleSeq = S.intersection(insertSeq1, deleteSeq2);
+			if (S.measure(toggleSeq).includedLength) {
+				deleteSeq1 = S.shrink(deleteSeq1, toggleSeq);
 				inserted1 = erase(insertSeq1, inserted1, toggleSeq);
-				insertSeq1 = shrink(insertSeq1, toggleSeq);
-				deleteSeq2 = shrink(deleteSeq2, toggleSeq);
-				insertSeq2 = shrink(insertSeq2, toggleSeq);
+				insertSeq1 = S.shrink(insertSeq1, toggleSeq);
+				deleteSeq2 = S.shrink(deleteSeq2, toggleSeq);
+				insertSeq2 = S.shrink(insertSeq2, toggleSeq);
 			}
 		}
 
-		const insertSeq = union(insertSeq1, insertSeq2);
+		const insertSeq = S.union(insertSeq1, insertSeq2);
 		const inserted = consolidate(insertSeq1, inserted1, insertSeq2, inserted2);
-		const deleteSeq = shrink(union(deleteSeq1, deleteSeq2), insertSeq);
+		const deleteSeq = S.shrink(S.union(deleteSeq1, deleteSeq2), insertSeq);
 		const deleted =
 			deleted1 != null && deleted2 != null
 				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
@@ -209,8 +200,8 @@ export class Edit {
 		}
 
 		let [insertSeq, inserted, deleteSeq, deleted] = factor(this);
-		deleteSeq = expand(deleteSeq, insertSeq);
-		insertSeq = shrink(insertSeq, deleteSeq);
+		deleteSeq = S.expand(deleteSeq, insertSeq);
+		insertSeq = S.shrink(insertSeq, deleteSeq);
 		return synthesize(deleteSeq, deleted!, insertSeq, inserted);
 	}
 
@@ -235,13 +226,13 @@ export class Edit {
 
 				case "retain": {
 					if (insertion !== undefined) {
-						pushSegment(insertSeq, insertion.length, true);
+						S.pushSegment(insertSeq, insertion.length, true);
 						inserted += insertion;
 						insertion = undefined;
 					}
 
-					pushSegment(insertSeq, op.end - op.start, false);
-					pushSegment(deleteSeq, op.end - op.start, false);
+					S.pushSegment(insertSeq, op.end - op.start, false);
+					S.pushSegment(deleteSeq, op.end - op.start, false);
 					break;
 				}
 
@@ -261,18 +252,18 @@ export class Edit {
 							);
 						}
 
-						pushSegment(insertSeq, prefix, false);
-						pushSegment(insertSeq, insertion.length - prefix - suffix, true);
+						S.pushSegment(insertSeq, prefix, false);
+						S.pushSegment(insertSeq, insertion.length - prefix - suffix, true);
 						inserted += insertion.slice(prefix, insertion.length - suffix);
 					}
 
 					deleted += deletion.slice(prefix, deletion.length - suffix);
-					pushSegment(deleteSeq, prefix, false);
-					pushSegment(deleteSeq, length - prefix - suffix, true);
-					pushSegment(deleteSeq, suffix, false);
+					S.pushSegment(deleteSeq, prefix, false);
+					S.pushSegment(deleteSeq, length - prefix - suffix, true);
+					S.pushSegment(deleteSeq, suffix, false);
 
-					pushSegment(insertSeq, length - prefix - suffix, false);
-					pushSegment(insertSeq, suffix, false);
+					S.pushSegment(insertSeq, length - prefix - suffix, false);
+					S.pushSegment(insertSeq, suffix, false);
 					insertion = undefined;
 					break;
 				}
@@ -280,7 +271,7 @@ export class Edit {
 		}
 
 		if (insertion !== undefined) {
-			pushSegment(insertSeq, insertion.length, true);
+			S.pushSegment(insertSeq, insertion.length, true);
 			inserted += insertion;
 		}
 
@@ -328,8 +319,8 @@ export class Edit {
 				}
 
 				index += length;
-				pushSegment(insertSeq, length, false);
-				pushSegment(deleteSeq, length, false);
+				S.pushSegment(insertSeq, length, false);
+				S.pushSegment(deleteSeq, length, false);
 				return this;
 			},
 
@@ -340,13 +331,13 @@ export class Edit {
 				}
 
 				index += length;
-				pushSegment(insertSeq, length, false);
-				pushSegment(deleteSeq, length, true);
+				S.pushSegment(insertSeq, length, false);
+				S.pushSegment(deleteSeq, length, true);
 				return this;
 			},
 
 			insert(value: string) {
-				pushSegment(insertSeq, value.length, true);
+				S.pushSegment(insertSeq, value.length, true);
 				inserted += value;
 				return this;
 			},
@@ -378,8 +369,8 @@ export class Edit {
 				if (value != null) {
 					deleted = deleted || "";
 					if (index < value.length) {
-						pushSegment(insertSeq, value.length - index, false);
-						pushSegment(deleteSeq, value.length - index, false);
+						S.pushSegment(insertSeq, value.length - index, false);
+						S.pushSegment(deleteSeq, value.length - index, false);
 					}
 				}
 
@@ -427,11 +418,11 @@ function synthesize(
 	deleteSeq: Subseq,
 	deleted?: string | undefined,
 ): Edit {
-	if (measure(insertSeq).includedLength !== inserted.length) {
+	if (S.measure(insertSeq).includedLength !== inserted.length) {
 		throw new Error("insertSeq and inserted string do not match in length");
 	} else if (
 		deleted !== undefined &&
-		measure(deleteSeq).includedLength !== deleted.length
+		S.measure(deleteSeq).includedLength !== deleted.length
 	) {
 		throw new Error("deleteSeq and deleted string do not match in length");
 	}
@@ -440,8 +431,8 @@ function synthesize(
 	let insertIndex = 0;
 	let retainIndex = 0;
 	let needsLength = true;
-	for (const [length, deleting, inserting] of align(
-		expand(deleteSeq, insertSeq),
+	for (const [length, deleting, inserting] of S.align(
+		S.expand(deleteSeq, insertSeq),
 		insertSeq,
 	)) {
 		if (inserting) {
@@ -480,18 +471,18 @@ function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
 		switch (op.type) {
 			case "retain": {
 				const length = op.end - op.start;
-				pushSegment(insertSeq, length, false);
-				pushSegment(deleteSeq, length, false);
+				S.pushSegment(insertSeq, length, false);
+				S.pushSegment(deleteSeq, length, false);
 				break;
 			}
 			case "delete": {
 				const length = op.end - op.start;
-				pushSegment(insertSeq, length, false);
-				pushSegment(deleteSeq, length, true);
+				S.pushSegment(insertSeq, length, false);
+				S.pushSegment(deleteSeq, length, true);
 				break;
 			}
 			case "insert":
-				pushSegment(insertSeq, op.value.length, true);
+				S.pushSegment(insertSeq, op.value.length, true);
 				inserted += op.value;
 				break;
 		}
@@ -517,7 +508,7 @@ function consolidate(
 	let i1 = 0;
 	let i2 = 0;
 	let result = "";
-	for (const [length, included1, included2] of align(subseq1, subseq2)) {
+	for (const [length, included1, included2] of S.align(subseq1, subseq2)) {
 		if (included1 && included2) {
 			throw new Error("Overlapping subseqs");
 		} else if (included1) {
@@ -543,7 +534,7 @@ function consolidate(
 function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 	let i = 0;
 	let result = "";
-	for (const [length, included1, included2] of align(subseq1, subseq2)) {
+	for (const [length, included1, included2] of S.align(subseq1, subseq2)) {
 		if (included1) {
 			if (!included2) {
 				result += str.slice(i, i + length);

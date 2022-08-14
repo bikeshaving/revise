@@ -1,11 +1,11 @@
 /*
  * This module provides utility functions for building and operating on
- * “subsequences.” Subsequences are created by removing zero or more elements
+ * “subsequences.” Subsequences are created by taking zero or more elements
  * from a sequence while preserving the order of the remaining elements. While
- * this specific module does not care about what these sequences actually are,
+ * this specific module does not care about what those sequences actually are,
  * for the purposes of this library, sequences are always strings, measured in
- * UTF-16 code units, and subsequences can be used to represent operations on
- * these strings like insertions and deletions.
+ * UTF-16 code units, and subsequences can be used to represent operations over
+ * the entire string like insertions and deletions.
  *
  * We define subsequences as arrays of numbers, where each number represents
  * the length of a continguous segment from the original sequence. These number
@@ -19,16 +19,17 @@
  *
  *   [0, 4, 4] = "abcd"
  *   [4, 4] = "efgh"
- *   [0, 2, 2, 2, 2] = "abef"
- *   [2, 2, 2, 2] = "cdgh"
- *   [0, 1, 6, 1] = "ah"
- *   [1, 1, 1, 1, 1, 1, 1, 1] = "bdfh"
+ *   [0, 2, 2, 2, 2] = "ab" "ef"
+ *   [2, 2, 2, 2] = "cd" "gh"
+ *   [0, 1, 6, 1] = "a" "h"
+ *   [1, 1, 1, 1, 1, 1, 1, 1] = "b" "d" "f" "h"
  *
  * Because the first segment is always excluded, a subsequence array will start
- * with a 0 if the subsequence includes the first element of the sequence. No
- * other 0s will appear in a well-constructed subsequence array.
+ * with a 0 if the subsequence to indicate that the first element of the
+ * sequence is included. No other 0s will appear in a well-constructed
+ * subsequence array.
  *
- * This module is private to the revise package and separated from "./edit.js"
+ * This module is private to the revise package and separate from "./edit.js"
  * for testing purposes.
  */
 export type Subseq = Array<number>;
@@ -243,10 +244,6 @@ export function expand(subseq1: Subseq, subseq2: Subseq): Subseq {
 		} else {
 			while (length2) {
 				if (length1 === 0) {
-					if (i1 >= subseq1.length) {
-						throw new Error("Size mismatch");
-					}
-
 					length1 = subseq1[i1++];
 					included1 = !included1;
 				}

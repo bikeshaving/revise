@@ -15,20 +15,12 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 }
 
-// NodeInfo flags
-/** Whether the node is old. */
-const IS_OLD = 1 << 0;
-/** Whether the node’s info is up to date. */
-const IS_CLEAN = 1 << 1;
-/** Whether the node inserts newlines before/after the node */
-const IS_BLOCKLIKE = 1 << 2;
-/** Whether the node is responsible for the newline before it. */
-const PREPENDS_NEWLINE = 1 << 3;
-/** Whether the node is responsible for the newline after it. */
-const APPENDS_NEWLINE = 1 << 4;
-
+/**
+ * Data associated with the element and text children of the
+ * ContentAreaElement.
+ */
 class NodeInfo {
-	/** A bitmask (see flags above) */
+	/** A bitmask (see flags below) */
 	declare flags: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
@@ -42,10 +34,22 @@ class NodeInfo {
 	}
 }
 
+// NodeInfo.flags
+/** Whether the node is old. */
+const IS_OLD = 1 << 0;
+/** Whether the node’s info is still up-to-date. */
+const IS_VALID = 1 << 1;
+/** Whether the node has a styling of type display: block or similar. */
+const IS_BLOCKLIKE = 1 << 2;
+/** Whether the node is responsible for the newline before it. */
+const PREPENDS_NEWLINE = 1 << 3;
+/** Whether the node is responsible for the newline after it. */
+const APPENDS_NEWLINE = 1 << 4;
+
 type NodeInfoCache = Map<Node, NodeInfo>;
 
 /********************************************/
-/*** ContentAreaElement symbol properties ***/
+/*** ContentAreaElement private property symbols ***/
 /********************************************/
 const $cache = Symbol.for("ContentAreaElement.cache");
 const $value = Symbol.for("ContentAreaElement.value");
@@ -72,13 +76,14 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		});
 
 		this.addEventListener("input", (ev) => {
-			// We call validate on input events because Safari seems to fire the
-			// mutation observer callback too late when the main thread is blocked,
-			// causing incorrect edits to the old DOM.
+			// This is necessary for Safari bugs where edits which cause >40ms of
+			// execution cause strange logical bugs which mess with the selection.
 			validate(this);
 		});
 
 		this[$onselectionchange] = () => {
+			// We keep track of the starting node offset pair to accurately diff
+			// edits to text nodes.
 			this[$startNodeOffset] = getStartNodeOffset();
 		};
 	}
@@ -90,16 +95,14 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		this[$observer].observe(this, {
 			subtree: true,
 			childList: true,
+			characterData: true,
 			attributes: true,
 			attributeFilter: [
 				"data-content",
 				// TODO: implement these attributes
-				"data-contentbefore",
-				"data-contentafter",
+				//"data-contentbefore",
+				//"data-contentafter",
 			],
-			attributeOldValue: true,
-			characterData: true,
-			characterDataOldValue: true,
 		});
 
 		validate(this);
@@ -116,8 +119,8 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 		this[$cache].clear();
 		this[$value] = "";
 		this[$observer].disconnect();
-		// JSDOM-based environments like Jest will make the global document null
-		// before calling the disconnectedCallback for some reason.
+		// JSDOM-based environments like Jest sometimes make the global document
+		// null before calling the disconnectedCallback for some reason.
 		if (document) {
 			document.removeEventListener(
 				"selectionchange",
@@ -288,7 +291,7 @@ function invalidate(
 
 			const nodeInfo = cache.get(node);
 			if (nodeInfo) {
-				nodeInfo.flags &= ~IS_CLEAN;
+				nodeInfo.flags &= ~IS_VALID;
 			}
 
 			invalid = true;
@@ -297,7 +300,7 @@ function invalidate(
 
 	if (invalid) {
 		const nodeInfo = cache.get(root)!;
-		nodeInfo.flags &= ~IS_CLEAN;
+		nodeInfo.flags &= ~IS_VALID;
 	}
 
 	return invalid;
@@ -395,7 +398,7 @@ function getEdit(
 			}
 
 			descending = false;
-			if (nodeInfo.flags & IS_CLEAN) {
+			if (nodeInfo.flags & IS_VALID) {
 				// The node and its children are unchanged.
 				const length = nodeInfo.length;
 				if (oldIndex + nodeInfo.length > oldValue.length) {
@@ -469,7 +472,7 @@ function getEdit(
 			// TODO: If a node is clean, does this mean the APPENDS_NEWLINE flag is
 			// constant? It seems like the only edge case is an empty block
 			// element...
-			if (!(nodeInfo.flags & IS_CLEAN)) {
+			if (!(nodeInfo.flags & IS_VALID)) {
 				// block elements append a newline
 				if (!hasNewline && (nodeInfo.flags & IS_BLOCKLIKE)) {
 					// TODO: check inserts and retain
@@ -483,7 +486,7 @@ function getEdit(
 				}
 
 				nodeInfo.length = offset - nodeInfo.offset;
-				nodeInfo.flags |= IS_CLEAN;
+				nodeInfo.flags |= IS_VALID;
 			}
 
 			nodeInfo.flags |= IS_OLD;
