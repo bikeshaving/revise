@@ -343,18 +343,15 @@ function diff(
 					nodeInfo.flags |= IS_BLOCKLIKE;
 				}
 			} else {
-				// TODO: I still have the sneaking suspicion that we can detect
-				// deletions by checking nodeInfo.offset against offset, but that
-				// there’s some logic error that is making this more complicated.
 				const expectedOffset = oldIndex - oldIndexRelative;
-				if (nodeInfo.offset < expectedOffset) {
+				const deleteLength = nodeInfo.offset - expectedOffset;
+				if (deleteLength < 0) {
 					// this should never happen
 					throw new Error("cache offset error");
-				} else if (nodeInfo.offset > expectedOffset) {
+				} else if (deleteLength > 0) {
 					// deletion detected
-					const length = nodeInfo.offset - expectedOffset;
-					builder.delete(length);
-					oldIndex += length;
+					builder.delete(deleteLength);
+					oldIndex += deleteLength;
 				}
 
 				nodeInfo.offset = offset;
@@ -385,47 +382,42 @@ function diff(
 
 			descending = false;
 			if (nodeInfo.flags & IS_VALID) {
-				// The node and its children are unchanged.
-				if (oldIndex + nodeInfo.length > oldValue.length) {
-					// This should never happen.
-					throw new Error("cache length error");
-				}
-
+				// The node and its children are unchanged, so we read from the length.
 				if (nodeInfo.length) {
-					const oldValue1 = oldValue.slice(
-						oldIndex,
-						oldIndex + nodeInfo.length,
-					);
-					hasNewline = oldValue1.endsWith(NEWLINE);
 					builder.retain(nodeInfo.length);
 					oldIndex += nodeInfo.length;
 					offset += nodeInfo.length;
+					hasNewline =
+						oldValue.slice(Math.max(0, oldIndex - NEWLINE.length), oldIndex) ===
+						NEWLINE;
 				}
 			} else if (node.nodeType === Node.TEXT_NODE) {
 				const text = (node as Text).data;
-				if (nodeInfo.flags & IS_OLD) {
-					const nodeOffset = getStartNodeOffset();
-					const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
-					const oldStartOffset =
-						_this[$startNodeOffset][0] === node
-							? _this[$startNodeOffset][1]
-							: -1;
-					const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
-					const hint = Math.min(oldStartOffset, startOffset);
-					if (hint > -1) {
-						const edit = Edit.diff(oldText, text, hint);
-						builder.concat(edit);
+				if (text.length) {
+					if (nodeInfo.flags & IS_OLD) {
+						const nodeOffset = getStartNodeOffset();
+						const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
+						const oldStartOffset =
+							_this[$startNodeOffset][0] === node
+								? _this[$startNodeOffset][1]
+								: -1;
+						const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
+						const hint = Math.min(oldStartOffset, startOffset);
+						if (hint > -1) {
+							const edit = Edit.diff(oldText, text, hint);
+							builder.concat(edit);
+						} else {
+							builder.insert(text);
+							builder.delete(nodeInfo.length);
+						}
+
 						oldIndex += nodeInfo.length;
 					} else {
+						// The node is new.
 						builder.insert(text);
-						// TODO: the text is only deleted because we don’t update the old index
 					}
-				} else {
-					builder.insert(text);
-				}
 
-				offset += text.length;
-				if (text.length) {
+					offset += text.length;
 					hasNewline = text.endsWith(NEWLINE);
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
@@ -493,6 +485,11 @@ function diff(
 
 				walker.parentNode();
 			}
+		}
+
+		if (oldIndex > oldValue.length) {
+			// This should never happen.
+			throw new Error("cache length error");
 		}
 	}
 
