@@ -46,7 +46,10 @@ function rewriteExports(exports) {
 		if (typeof exports[key] === "object") {
 			rewriteExports(exports[key]);
 		} else {
-			exports[key] = exports[key].replace(new RegExp(`^.${path.sep}dist${path.sep}`), `.${path.sep}`);
+			exports[key] = exports[key].replace(
+				new RegExp(`^.${path.sep}dist${path.sep}`),
+				`.${path.sep}`,
+			);
 		}
 	}
 }
