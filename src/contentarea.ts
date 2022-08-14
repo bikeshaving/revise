@@ -1,6 +1,9 @@
 /// <reference lib="dom" />
 import {Edit} from "./edit.js";
 
+// TODO: custom newlines?
+const NEWLINE = "\n";
+
 export interface ContentEventDetail {
 	edit: Edit;
 	source: string | null;
@@ -14,40 +17,6 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 		super(typeArg, {bubbles: true, ...eventInit});
 	}
 }
-
-/**
- * Data associated with the element and text children of the
- * ContentAreaElement.
- */
-class NodeInfo {
-	/** A bitmask (see flags below) */
-	declare flags: number;
-	/** The string length of this node’s contents. */
-	declare length: number;
-	/** The start of this node’s contents relative to the start of the parent. */
-	declare offset: number;
-
-	constructor(offset: number) {
-		this.flags = 0;
-		this.length = 0;
-		this.offset = offset;
-	}
-}
-
-// NodeInfo.flags
-/** Whether the node is old. */
-const IS_OLD = 1 << 0;
-/** Whether the node’s info is still up-to-date. */
-const IS_VALID = 1 << 1;
-/** Whether the node has a styling of type display: block or similar. */
-const IS_BLOCKLIKE = 1 << 2;
-/** Whether the node is responsible for the newline before it. */
-const PREPENDS_NEWLINE = 1 << 3;
-/** Whether the node is responsible for the newline after it. */
-const APPENDS_NEWLINE = 1 << 4;
-
-type NodeInfoCache = Map<Node, NodeInfo>;
-
 /********************************************/
 /*** ContentAreaElement private property symbols ***/
 /********************************************/
@@ -57,10 +26,7 @@ const $observer = Symbol.for("ContentAreaElement.observer");
 const $startNodeOffset = Symbol.for("ContentAreaElement.startNodeOffset");
 const $onselectionchange = Symbol.for("ContentAreaElement.onselectionchange");
 
-// TODO: custom newlines?
-const NEWLINE = "\n";
-
-export class ContentAreaElement extends HTMLElement implements SelectionRange {
+export class ContentAreaElement extends HTMLElement {
 	declare [$cache]: NodeInfoCache;
 	declare [$value]: string;
 	declare [$observer]: MutationObserver;
@@ -137,69 +103,45 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 
 	get selectionStart(): number {
 		validate(this);
-		return getSelectionRange(this, this[$cache]).selectionStart;
+		return getSelectionRange(this, this[$cache]).start;
 	}
 
-	set selectionStart(selectionStart: number) {
+	set selectionStart(start: number) {
 		validate(this);
 
-		const selectionRange = getSelectionRange(this, this[$cache]);
-		setSelectionRange(
-			this,
-			this[$cache],
-			selectionStart,
-			selectionRange.selectionEnd,
-			selectionRange.selectionDirection,
-		);
+		const {end, direction} = getSelectionRange(this, this[$cache]);
+		setSelectionRange(this, this[$cache], {start, end, direction});
 	}
 
 	get selectionEnd(): number {
 		validate(this);
-		return getSelectionRange(this, this[$cache]).selectionEnd;
+		return getSelectionRange(this, this[$cache]).end;
 	}
 
-	set selectionEnd(selectionEnd: number) {
+	set selectionEnd(end: number) {
 		validate(this);
-		const selectionRange = getSelectionRange(this, this[$cache]);
-		setSelectionRange(
-			this,
-			this[$cache],
-			selectionRange.selectionStart,
-			selectionEnd,
-			selectionRange.selectionDirection,
-		);
+		const {start, direction} = getSelectionRange(this, this[$cache]);
+		setSelectionRange(this, this[$cache], {start, end, direction});
 	}
 
 	get selectionDirection(): SelectionDirection {
 		validate(this);
-		return getSelectionRange(this, this[$cache]).selectionDirection;
+		return getSelectionRange(this, this[$cache]).direction;
 	}
 
-	set selectionDirection(selectionDirection: SelectionDirection) {
+	set selectionDirection(direction: SelectionDirection) {
 		validate(this);
-		const selectionRange = getSelectionRange(this, this[$cache]);
-		setSelectionRange(
-			this,
-			this[$cache],
-			selectionRange.selectionStart,
-			selectionRange.selectionEnd,
-			selectionDirection,
-		);
+		const {start, end} = getSelectionRange(this, this[$cache]);
+		setSelectionRange(this, this[$cache], {start, end, direction});
 	}
 
 	setSelectionRange(
-		selectionStart: number,
-		selectionEnd: number,
-		selectionDirection: SelectionDirection = "none",
+		start: number,
+		end: number,
+		direction: SelectionDirection = "none",
 	): void {
 		validate(this);
-		setSelectionRange(
-			this,
-			this[$cache],
-			selectionStart,
-			selectionEnd,
-			selectionDirection,
-		);
+		setSelectionRange(this, this[$cache], {start, end, direction});
 	}
 
 	indexAt(node: Node | null, offset: number): number {
@@ -219,54 +161,83 @@ export class ContentAreaElement extends HTMLElement implements SelectionRange {
 	}
 }
 
-function getStartNodeOffset(): [Node | null, number] {
-	const selection = document.getSelection();
-	if (selection && selection.rangeCount) {
-		const range = selection.getRangeAt(0);
-		return [range.startContainer, range.startOffset];
-	}
+/*** NodeInfo.flags ***/
+/** Whether the node is old. */
+const IS_OLD = 1 << 0;
+/** Whether the node’s info is still up-to-date. */
+const IS_VALID = 1 << 1;
+/** Whether the node has a styling of type display: block or similar. */
+const IS_BLOCKLIKE = 1 << 2;
+/** Whether the node is responsible for the newline before it. */
+const PREPENDS_NEWLINE = 1 << 3;
+/** Whether the node is responsible for the newline after it. */
+const APPENDS_NEWLINE = 1 << 4;
 
-	return [null, 0];
+/** Data associated with the child nodes of a ContentAreaElement. */
+class NodeInfo {
+	/** A bitmask (see flags above) */
+	declare flags: number;
+	/** The string length of this node’s contents. */
+	declare length: number;
+	/** The start of this node’s contents relative to the start of the parent. */
+	declare offset: number;
+
+	constructor(offset: number) {
+		this.flags = 0;
+		this.length = 0;
+		this.offset = offset;
+	}
 }
 
+/** Each ContentAreaElement is associated with its own private cache. */
+type NodeInfoCache = Map<Node, NodeInfo>;
+
 /**
- * Should be called before we read the cache. Dispatches "contentchange"
- * events, and ensures the cache is up to date.
+ * Should be called before calling any ContentAreaElement methods.
+ *
+ * This function ensures the cache is up to date.
+ *
+ * Dispatches "contentchange" events.
  *
  * @returns whether a change was detected
  */
 function validate(
-	root: ContentAreaElement,
-	records: Array<MutationRecord> = root[$observer].takeRecords(),
+	_this: ContentAreaElement,
+	records: Array<MutationRecord> = _this[$observer].takeRecords(),
 	source: string | null = null,
 ): boolean {
-	const cache = root[$cache];
-	if (!invalidate(root, cache, records)) {
+	if (typeof _this !== "object" || _this[$cache] == null) {
+		throw new TypeError("this is not a ContentAreaElement");
+	}
+
+	const cache = _this[$cache];
+	if (!invalidate(_this, cache, records)) {
 		return false;
 	}
 
-	const oldValue = root[$value];
-	const edit = getEdit(root, cache, oldValue);
-	root[$value] = edit.apply(oldValue);
+	const oldValue = _this[$value];
+	const edit = diff(_this, cache, oldValue);
+	_this[$value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
-	root.dispatchEvent(ev);
+	_this.dispatchEvent(ev);
 	return true;
 }
 
 function invalidate(
-	root: ContentAreaElement,
+	_this: ContentAreaElement,
 	cache: NodeInfoCache,
 	records: Array<MutationRecord>,
 ): boolean {
-	if (!cache.get(root)) {
+	if (!cache.get(_this)) {
+		// the root ContentAreaElement will never be cleared from the cache.
 		return true;
 	}
 
 	let invalid = false;
 	for (let i = 0; i < records.length; i++) {
 		const record = records[i];
-		// We make sure all added and removed nodes are cleared from the cache just
-		// in case of any MutationObserver weirdness.
+		// We make sure all added and removed nodes are cleared from the cache in
+		// case of any MutationObserver weirdness.
 		for (let j = 0; j < record.addedNodes.length; j++) {
 			clear(record.addedNodes[j], cache);
 		}
@@ -276,15 +247,15 @@ function invalidate(
 		}
 
 		let node = record.target;
-		if (node === root) {
+		if (node === _this) {
 			invalid = true;
 			continue;
-		} else if (!root.contains(node)) {
+		} else if (!_this.contains(node)) {
 			clear(node, cache);
 			continue;
 		}
 
-		for (; node !== root; node = node.parentNode!) {
+		for (; node !== _this; node = node.parentNode!) {
 			if (!cache.has(node)) {
 				break;
 			}
@@ -299,7 +270,7 @@ function invalidate(
 	}
 
 	if (invalid) {
-		const nodeInfo = cache.get(root)!;
+		const nodeInfo = cache.get(_this)!;
 		nodeInfo.flags &= ~IS_VALID;
 	}
 
@@ -307,8 +278,8 @@ function invalidate(
 }
 
 /**
- * For a given parent node and node info cache, clear info for the node and all
- * child nodes from the cache.
+ * For a given parent node and node info cache, clear the info for the node and
+ * all of its child nodes from the cache.
  */
 function clear(parent: Node, cache: NodeInfoCache): void {
 	const walker = document.createTreeWalker(
@@ -325,29 +296,26 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 	}
 }
 
+// THIS IS THE MOST COMPLICATED FUNCTION IN THE LIBRARY!
 /**
  * This function both returns an edit which represents changes to the
  * ContentAreaElement, and populates the cache with info about nodes for future
  * reads.
- *
- * @param root - The root element
- * @param cache - The NodeInfo cache associated with the root
- * @param oldValue - The previous value of the element
  */
-function getEdit(
-	root: ContentAreaElement,
+function diff(
+	_this: ContentAreaElement,
 	cache: NodeInfoCache,
 	oldValue: string,
 ): Edit {
 	const builder = Edit.builder(oldValue);
 	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	const walker = document.createTreeWalker(
-		root,
+		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
 	for (
-		let node: Node = root,
+		let node: Node = _this,
 			// The current offset relative to the current node
 			offset = 0,
 			// The index into the old string
@@ -370,21 +338,22 @@ function getEdit(
 					nodeInfo.flags |= IS_BLOCKLIKE;
 				}
 			} else {
-				const expectedIndex = oldIndex - oldIndexRelative;
-				if (nodeInfo.offset > expectedIndex) {
-					const length = nodeInfo.offset - expectedIndex;
-					// deletion detected
-					builder.delete(length);
-					oldIndex += length;
-				} else if (nodeInfo.offset < expectedIndex) {
+				const expected = oldIndex - oldIndexRelative;
+				if (nodeInfo.offset < expected) {
 					// This should never happen
 					throw new Error("cache offset error");
+				} else if (nodeInfo.offset > expected) {
+					// deletion detected
+					const length = nodeInfo.offset - expected;
+					builder.delete(length);
+					oldIndex += length;
 				}
 
 				nodeInfo.offset = offset;
 			}
 
-			// block elements prepend a newline
+			// block elements prepend a newline when they appear after text or inline
+			// elements.
 			if (offset && !hasNewline && (nodeInfo.flags & IS_BLOCKLIKE)) {
 				// TODO: retain if element is old
 				builder.insert(NEWLINE);
@@ -420,7 +389,7 @@ function getEdit(
 					const nodeOffset = getStartNodeOffset();
 					const oldText = oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
 					const oldStartOffset =
-						root[$startNodeOffset][0] === node ? root[$startNodeOffset][1] : -1;
+						_this[$startNodeOffset][0] === node ? _this[$startNodeOffset][1] : -1;
 					const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
 					const hint = Math.min(oldStartOffset, startOffset);
 					if (hint > -1) {
@@ -493,7 +462,7 @@ function getEdit(
 
 			descending = !!walker.nextSibling();
 			if (!descending) {
-				if (walker.currentNode === root) {
+				if (walker.currentNode === _this) {
 					break;
 				}
 
@@ -534,16 +503,14 @@ function isBlocklikeElement(node: Node): node is Element {
 /***********************/
 /*** Selection Logic ***/
 /***********************/
-export type SelectionDirection = "forward" | "backward" | "none";
+function getStartNodeOffset(): [Node | null, number] {
+	const selection = document.getSelection();
+	if (selection && selection.rangeCount) {
+		const range = selection.getRangeAt(0);
+		return [range.startContainer, range.startOffset];
+	}
 
-/**
- * Properties which mirror the API provided by HTMLInputElement and
- * HTMLTextAreaElement.
- */
-export interface SelectionRange {
-	selectionStart: number;
-	selectionEnd: number;
-	selectionDirection: SelectionDirection;
+	return [null, 0];
 }
 
 /**
@@ -725,13 +692,21 @@ function nodeOffsetFromChild(
 	return [parentNode, offset];
 }
 
+export type SelectionDirection = "forward" | "backward" | "none";
+
+interface SelectionRange {
+	start: number;
+	end: number;
+	direction: SelectionDirection;
+}
+
 function getSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
 ): SelectionRange {
 	const selection = document.getSelection();
 	if (!selection) {
-		return {selectionStart: 0, selectionEnd: 0, selectionDirection: "none"};
+		return {start: 0, end: 0, direction: "none"};
 	}
 
 	const {
@@ -746,9 +721,9 @@ function getSelectionRange(
 		? focus
 		: Math.max(0, indexAt(root, cache, anchorNode, anchorOffset));
 	return {
-		selectionStart: Math.min(focus, anchor),
-		selectionEnd: Math.max(focus, anchor),
-		selectionDirection:
+		start: Math.min(focus, anchor),
+		end: Math.max(focus, anchor),
+		direction:
 			focus < anchor ? "backward" : focus > anchor ? "forward" : "none",
 	};
 }
@@ -756,32 +731,29 @@ function getSelectionRange(
 function setSelectionRange(
 	root: Element,
 	cache: NodeInfoCache,
-	selectionStart: number,
-	selectionEnd: number,
-	selectionDirection: SelectionDirection,
+	{start, end, direction}: SelectionRange,
 ): void {
 	const selection = document.getSelection();
 	if (!selection) {
 		return;
 	}
 
-	selectionStart = Math.max(0, selectionStart || 0);
-	selectionEnd = Math.max(0, selectionEnd || 0);
-	if (selectionEnd < selectionStart) {
-		selectionStart = selectionEnd;
+	start = Math.max(0, start || 0);
+	end = Math.max(0, end || 0);
+	if (end < start) {
+		start = end;
 	}
 
-	const [focusIndex, anchorIndex] =
-		selectionDirection === "backward"
-			? [selectionStart, selectionEnd]
-			: [selectionEnd, selectionStart];
+	// Focus is the end of the selection where the pointer is released.
+	const [focus, anchor] =
+		direction === "backward" ? [start, end] : [end, start];
 
-	if (focusIndex === anchorIndex) {
-		const [node, offset] = nodeOffsetAt(root, cache, focusIndex);
+	if (focus === anchor) {
+		const [node, offset] = nodeOffsetAt(root, cache, focus);
 		selection.collapse(node, offset);
 	} else {
-		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchorIndex);
-		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focusIndex);
+		const [anchorNode, anchorOffset] = nodeOffsetAt(root, cache, anchor);
+		const [focusNode, focusOffset] = nodeOffsetAt(root, cache, focus);
 		if (anchorNode === null && focusNode === null) {
 			selection.collapse(null);
 		} else if (anchorNode === null) {
