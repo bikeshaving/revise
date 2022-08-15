@@ -52,9 +52,9 @@ export class ContentAreaElement extends HTMLElement {
 		};
 
 		this.addEventListener("input", () => {
-			// This is necessary for Safari bugs where edits which cause >40ms of
-			// execution cause strange logical bugs which mess with the selection or
-			// where pending edits appear in the DOM.
+			// This is necessary for Safari bugs where fast-repeating edits which
+			// cause >40ms of execution cause the selection to lag and make pending
+			// edits appear elsewhere in the DOM.
 			validate(this);
 		});
 	}
@@ -424,6 +424,11 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 				const text = (node as Element).getAttribute("data-content") || "";
 				if (text.length) {
 					builder.insert(text);
+					if (nodeInfo.flags & IS_OLD) {
+						builder.delete(nodeInfo.length);
+						oldIndex += nodeInfo.length;
+					}
+
 					offset += text.length;
 					hasNewline = text.endsWith(NEWLINE);
 				}
