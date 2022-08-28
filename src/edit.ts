@@ -259,6 +259,7 @@ export class Edit {
 
 					deleted += deletion.slice(prefix, deletion.length - suffix);
 					S.pushSegment(deleteSeq, prefix, false);
+					// TODO: This line is throwing for some reason
 					S.pushSegment(deleteSeq, length - prefix - suffix, true);
 					S.pushSegment(deleteSeq, suffix, false);
 
