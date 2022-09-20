@@ -26,15 +26,15 @@ export type SelectionDirection = "forward" | "backward" | "none";
 const _cache = Symbol.for("ContentAreaElement._cache");
 const _value = Symbol.for("ContentAreaElement._value");
 const _observer = Symbol.for("ContentAreaElement._observer");
-const _startNodeOffset = Symbol.for("ContentAreaElement._startNodeOffset");
 const _onselectionchange = Symbol.for("ContentAreaElement._onselectionchange");
+const _selectionStart = Symbol.for("ContentAreaElement._selectionStart");
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
 	declare [_value]: string;
 	declare [_observer]: MutationObserver;
-	declare [_startNodeOffset]: [Node | null, number];
 	declare [_onselectionchange]: () => void;
+	declare [_selectionStart]: number;
 	constructor() {
 		super();
 
@@ -44,11 +44,12 @@ export class ContentAreaElement extends HTMLElement {
 			validate(this, records);
 		});
 
-		this[_startNodeOffset] = getStartNodeOffset();
+		this[_selectionStart] = 0;
 		this[_onselectionchange] = () => {
 			// We keep track of the starting node offset pair to accurately diff
 			// edits to text nodes.
-			this[_startNodeOffset] = getStartNodeOffset();
+			validate(this);
+			this[_selectionStart] = getSelectionRange(this).start;
 		};
 
 		this.addEventListener("input", () => {
@@ -77,7 +78,6 @@ export class ContentAreaElement extends HTMLElement {
 		});
 
 		validate(this);
-		this[_startNodeOffset] = getStartNodeOffset();
 		document.addEventListener(
 			"selectionchange",
 			this[_onselectionchange],
@@ -219,7 +219,7 @@ function validate(
 	}
 
 	const oldValue = _this[_value];
-	const edit = diff(_this, oldValue);
+	const edit = diff(_this, oldValue, _this[_selectionStart]);
 	_this[_value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
 	Promise.resolve().then(() => _this.dispatchEvent(ev));
@@ -307,16 +307,20 @@ function clear(parent: Node, cache: NodeInfoCache): void {
  * ContentAreaElement, and populates the cache with info about nodes for future
  * reads.
  */
-function diff(_this: ContentAreaElement, oldValue: string): Edit {
+function diff(
+	_this: ContentAreaElement,
+	oldValue: string,
+	oldSelectionStart: number,
+): Edit {
 	const walker = document.createTreeWalker(
 		_this,
 		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
 	);
 
 	const cache = _this[_cache];
-	const builder = Edit.builder(oldValue);
 	const stack: Array<{nodeInfo: NodeInfo; oldIndexRelative: number}> = [];
 	let nodeInfo: NodeInfo;
+	let value = "";
 	for (
 		let node: Node = _this,
 			descending = true,
@@ -326,7 +330,7 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 			oldIndex = 0,
 			/** the index into the old string of the parent */
 			oldIndexRelative = 0,
-			/** whether or not the value being built currently ends with a newline */
+			/** Whether or not the value being built currently ends with a newline */
 			hasNewline = false;
 		;
 		node = walker.currentNode
@@ -347,7 +351,6 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 					throw new Error("cache offset error");
 				} else if (deleteLength > 0) {
 					// deletion detected
-					builder.delete(deleteLength);
 					oldIndex += deleteLength;
 				}
 
@@ -357,20 +360,17 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 			if (offset && !hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
 				// Block-like elements prepend a newline when they appear after text or
 				// inline elements.
+				hasNewline = true;
+				offset += NEWLINE.length;
+				value += NEWLINE;
 				if (nodeInfo.flags & PREPENDS_NEWLINE) {
-					builder.retain(NEWLINE.length);
 					oldIndex += NEWLINE.length;
-					offset += NEWLINE.length;
-				} else {
-					builder.insert(NEWLINE);
-					offset += NEWLINE.length;
-					hasNewline = true;
 				}
 
 				nodeInfo.flags |= PREPENDS_NEWLINE;
 			} else {
 				if (nodeInfo.flags & PREPENDS_NEWLINE) {
-					builder.delete(NEWLINE.length);
+					// deletion detected
 					oldIndex += NEWLINE.length;
 				}
 
@@ -381,7 +381,7 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 			if (nodeInfo.flags & IS_VALID) {
 				// The node and its children are unchanged, so we read from the length.
 				if (nodeInfo.length) {
-					builder.retain(nodeInfo.length);
+					value += oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
 					oldIndex += nodeInfo.length;
 					offset += nodeInfo.length;
 					hasNewline =
@@ -391,51 +391,32 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 			} else if (node.nodeType === Node.TEXT_NODE) {
 				const text = (node as Text).data;
 				if (text.length) {
-					if (nodeInfo.flags & IS_OLD) {
-						const nodeOffset = getStartNodeOffset();
-						const oldText = oldValue.slice(
-							oldIndex,
-							oldIndex + nodeInfo.length,
-						);
-						const oldStartOffset =
-							_this[_startNodeOffset][0] === node
-								? _this[_startNodeOffset][1]
-								: -1;
-						const startOffset = nodeOffset[0] === node ? nodeOffset[1] : -1;
-						const hint = Math.min(oldStartOffset, startOffset);
-						if (hint > -1) {
-							const edit = Edit.diff(oldText, text, hint);
-							builder.concat(edit);
-						} else {
-							builder.insert(text);
-							builder.delete(nodeInfo.length);
-						}
-
-						oldIndex += nodeInfo.length;
-					} else {
-						// The node is new.
-						builder.insert(text);
-					}
-
+					value += text;
 					offset += text.length;
 					hasNewline = text.endsWith(NEWLINE);
+				}
+
+				if (nodeInfo.flags & IS_OLD) {
+					oldIndex += nodeInfo.length;
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
 				const text = (node as Element).getAttribute("data-content") || "";
 				if (text.length) {
-					builder.insert(text);
-					if (nodeInfo.flags & IS_OLD) {
-						builder.delete(nodeInfo.length);
-						oldIndex += nodeInfo.length;
-					}
-
+					value += text;
 					offset += text.length;
 					hasNewline = text.endsWith(NEWLINE);
 				}
+
+				if (nodeInfo.flags & IS_OLD) {
+					oldIndex += nodeInfo.length;
+				}
 			} else if (node.nodeName === "BR") {
-				builder.insert(NEWLINE);
+				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
+				if (nodeInfo.flags & IS_OLD) {
+					oldIndex += nodeInfo.length;
+				}
 			} else {
 				descending = !!walker.firstChild();
 				if (descending) {
@@ -465,8 +446,7 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 			if (!(nodeInfo.flags & IS_VALID)) {
 				// TODO: Figure out if we should always recalculate APPENDS_NEWLINE???
 				if (!hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
-					// Block-like elements append a newline when their contents do not.
-					builder.insert(NEWLINE);
+					value += NEWLINE;
 					offset += NEWLINE.length;
 					hasNewline = true;
 					nodeInfo.flags |= APPENDS_NEWLINE;
@@ -496,9 +476,15 @@ function diff(_this: ContentAreaElement, oldValue: string): Edit {
 		}
 	}
 
-	// Make sure the rest of the old value is deleted
-	builder.delete(Infinity);
-	return builder.build();
+	const selectionStart = getSelectionRange(_this).start;
+	// TODO: Doing a diff over the entirety of both oldValue and value is a
+	// performance bottleneck. Figure out how to reduce the search for changed
+	// values.
+	return Edit.diff(
+		oldValue,
+		value,
+		Math.min(oldSelectionStart, selectionStart),
+	);
 }
 
 function getStartNodeOffset(): [Node | null, number] {
