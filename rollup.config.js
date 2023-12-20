@@ -3,7 +3,6 @@ import * as path from "path";
 
 import typescript2 from "rollup-plugin-typescript2";
 import MagicString from "magic-string";
-import pkg from "./package.json";
 
 /**
  * A hack to add triple-slash references to sibling d.ts files for deno.
@@ -26,21 +25,36 @@ function dts() {
 	};
 }
 
+import pkg from "./package.json";
 function copyPackage() {
 	return {
-		name: "copy-package",
+		name: "copy-stuff",
 		writeBundle() {
 			const pkg1 = {...pkg};
 			delete pkg1.private;
 			delete pkg1.scripts;
+			delete pkg1.typesVersions;
+			rewriteExports(pkg1.exports);
 			fs.writeFileSync("./dist/package.json", JSON.stringify(pkg1, null, 2));
 			fs.copyFileSync("./README.md", "./dist/README.md");
 		},
 	};
 }
 
+function rewriteExports(exports) {
+	for (const key of Object.keys(exports)) {
+		if (typeof exports[key] === "object") {
+			rewriteExports(exports[key]);
+		} else {
+			exports[key] = exports[key].replace(
+				new RegExp(`^.${path.sep}dist${path.sep}`),
+				`.${path.sep}`,
+			);
+		}
+	}
+}
+
 const input = [
-	"src/subseq.ts",
 	"src/edit.ts",
 	"src/contentarea.ts",
 	"src/keyer.ts",
@@ -50,7 +64,7 @@ const input = [
 const ts = typescript2({
 	clean: true,
 	tsconfigOverride: {
-		exclude: ["src/__tests__"],
+		exclude: ["test"],
 	},
 });
 
@@ -78,16 +92,4 @@ export default [
 		},
 		plugins: [ts],
 	},
-	//{
-	//	input: "src/umd.ts",
-	//	output: {
-	//		format: "umd",
-	//		dir: "dist",
-	//		name: "Revise",
-	//		preserveModules: false,
-	//		sourcemap: true,
-	//		exports: "named",
-	//	},
-	//	plugins: [ts],
-	//},
 ];

@@ -1,9 +1,10 @@
-import type {Edit} from "./edit";
+import type {Edit} from "./edit.js";
 
 export class Keyer {
 	nextKey: number;
 	keys: Array<number>;
 
+	// TODO: Accept a custom key function.
 	constructor() {
 		this.nextKey = 0;
 		this.keys = [];
@@ -22,21 +23,16 @@ export class Keyer {
 		const operations = edit.operations();
 		for (let i = operations.length - 1; i >= 0; i--) {
 			const op = operations[i];
-			// TODO: Is this correct?
 			switch (op.type) {
 				case "delete": {
 					this.keys.splice(op.start + 1, op.end - op.start);
 					break;
 				}
 				case "insert": {
-					// We use slice and concat rather than splice(op.start, 0, ...new
-					// Array(op.value.length) because the latter seems to fill in added
-					// indices with undefined rather than leaving the array sparse.
-					this.keys.length = Math.max(this.keys.length, op.start + 1);
 					this.keys = this.keys
-						.slice(0, op.start + 1)
+						.slice(0, op.start)
 						.concat(new Array(op.value.length))
-						.concat(this.keys.slice(op.start + 1));
+						.concat(this.keys.slice(op.start));
 					break;
 				}
 			}

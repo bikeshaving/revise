@@ -24,7 +24,9 @@ function Twemoji(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 
 				const key = keyer.keyAt(cursor);
 				cursor += line.length + 1;
-				return line ? <div crank-key={key} innerHTML={line1} /> : (
+				return line ? (
+					<div crank-key={key} innerHTML={line1} />
+				) : (
 					<div crank-key={key}>
 						<br />
 					</div>
