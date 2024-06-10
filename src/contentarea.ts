@@ -1,12 +1,10 @@
 /// <reference lib="dom" />
 import {Edit} from "./edit.js";
 
-// TODO: custom newlines?
-const NEWLINE = "\n";
-
 export interface ContentEventDetail {
 	edit: Edit;
 	source: string | null;
+	mutations: Array<MutationRecord>;
 }
 
 export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
@@ -140,6 +138,10 @@ export class ContentAreaElement extends HTMLElement {
 		setSelectionRange(this, {start, end, direction});
 	}
 
+	getSelectionRange(): SelectionRange {
+		return getSelectionRange(this);
+	}
+
 	setSelectionRange(
 		start: number,
 		end: number,
@@ -221,7 +223,7 @@ function validate(
 	const oldValue = _this[_value];
 	const edit = diff(_this, oldValue, _this[_selectionStart]);
 	_this[_value] = edit.apply(oldValue);
-	const ev = new ContentEvent("contentchange", {detail: {edit, source}});
+	const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
 	Promise.resolve().then(() => _this.dispatchEvent(ev));
 	return true;
 }
@@ -300,6 +302,10 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 		cache.delete(node);
 	}
 }
+
+
+// TODO: custom newlines?
+const NEWLINE = "\n";
 
 // THIS IS THE MOST COMPLICATED FUNCTION IN THE LIBRARY!
 /**
@@ -485,16 +491,6 @@ function diff(
 		value,
 		Math.min(oldSelectionStart, selectionStart),
 	);
-}
-
-function getStartNodeOffset(): [Node | null, number] {
-	const selection = document.getSelection();
-	if (selection && selection.rangeCount) {
-		const range = selection.getRangeAt(0);
-		return [range.startContainer, range.startOffset];
-	}
-
-	return [null, 0];
 }
 
 const BLOCKLIKE_DISPLAYS = new Set([
@@ -698,7 +694,7 @@ function nodeOffsetFromChild(
 	return [parentNode, offset];
 }
 
-interface SelectionRange {
+export interface SelectionRange {
 	start: number;
 	end: number;
 	direction: SelectionDirection;
