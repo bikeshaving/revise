@@ -552,26 +552,39 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 
 /** @returns The length of the common prefix between two strings. */
 function commonPrefixLength(text1: string, text2: string) {
-	const length = Math.min(text1.length, text2.length);
-	for (let i = 0; i < length; i++) {
-		if (text1[i] !== text2[i]) {
-			return i;
+	let min = 0;
+	let max = Math.min(text1.length, text2.length);
+	let mid = max;
+	while (min < mid) {
+		if (text1.slice(min, mid) === text2.slice(min, mid)) {
+			min = mid;
+		} else {
+			max = mid;
 		}
+
+		mid = Math.floor((max - min) / 2 + min);
 	}
 
-	return length;
+	return mid;
 }
 
 /** @returns The length of the common suffix between two strings. */
 function commonSuffixLength(text1: string, text2: string) {
-	const length1 = text1.length;
-	const length2 = text2.length;
-	const length = Math.min(length1, length2);
-	for (let i = 0; i < length; i++) {
-		if (text1[length1 - i - 1] !== text2[length2 - i - 1]) {
-			return i;
+	let min = 0;
+	let max = Math.min(text1.length, text2.length);
+	let mid = max;
+	while (min < mid) {
+		if (
+			text1.slice(text1.length - mid, text1.length - min) ===
+			text2.slice(text2.length - mid, text2.length - min)
+		) {
+			min = mid;
+		} else {
+			max = mid;
 		}
+
+		mid = Math.floor((max - min) / 2 + min);
 	}
 
-	return length;
+	return mid;
 }
