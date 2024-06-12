@@ -2,21 +2,20 @@ import type {Edit} from "./edit.js";
 
 export class Keyer {
 	nextKey: number;
-	keys: Array<number>;
+	keys: Map<number, number>;
 
 	// TODO: Accept a custom key function.
 	constructor() {
 		this.nextKey = 0;
-		this.keys = [];
+		this.keys = new Map();
 	}
 
 	keyAt(i: number): number {
-		// TODO: maybe we can use `in`
-		if (typeof this.keys[i] === "undefined") {
-			this.keys[i] = this.nextKey++;
+		if (!this.keys.has(i)) {
+			this.keys.set(i, this.nextKey++);
 		}
 
-		return this.keys[i];
+		return this.keys.get(i)!;
 	}
 
 	transform(edit: Edit): void {
@@ -25,17 +24,59 @@ export class Keyer {
 			const op = operations[i];
 			switch (op.type) {
 				case "delete": {
-					this.keys.splice(op.start + 1, op.end - op.start);
+					for (let j = op.start + 1; j <= op.end; j++) {
+						this.keys.delete(j);
+					}
+					// Adjust keys after the deleted range
+					this.keys = adjustKeysAfterDelete(
+						this.keys,
+						op.start,
+						op.end - op.start,
+					);
 					break;
 				}
 				case "insert": {
-					this.keys = this.keys
-						.slice(0, op.start)
-						.concat(new Array(op.value.length))
-						.concat(this.keys.slice(op.start));
+					// Shift keys after the insertion point
+					this.keys = shiftKeysAfterInsert(
+						this.keys,
+						op.start,
+						op.value.length,
+					);
 					break;
 				}
 			}
 		}
 	}
+}
+
+function adjustKeysAfterDelete(
+	keys: Map<number, number>,
+	start: number,
+	length: number,
+): Map<number, number> {
+	const newKeys = new Map<number, number>();
+	keys.forEach((value, key) => {
+		if (key > start) {
+			newKeys.set(key - length, value);
+		} else {
+			newKeys.set(key, value);
+		}
+	});
+	return newKeys;
+}
+
+function shiftKeysAfterInsert(
+	keys: Map<number, number>,
+	start: number,
+	length: number,
+): Map<number, number> {
+	const newKeys = new Map<number, number>();
+	keys.forEach((value, key) => {
+		if (key >= start) {
+			newKeys.set(key + length, value);
+		} else {
+			newKeys.set(key, value);
+		}
+	});
+	return newKeys;
 }

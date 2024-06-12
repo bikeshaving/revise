@@ -13,13 +13,14 @@ test("keyAt/transform", () => {
 	const key3 = keyer.keyAt(6);
 	const key4 = keyer.keyAt(9);
 
-	const keys1: Array<any> = [];
-	keys1[0] = key1;
-	keys1[3] = key2;
-	keys1[6] = key3;
-	keys1[9] = key4;
-	Assert.equal(keyer.keys, keys1);
+	const keys1 = new Map([
+		[0, key1],
+		[3, key2],
+		[6, key3],
+		[9, key4],
+	]);
 
+	Assert.equal(keyer.keys, keys1);
 	// "01\n34\n 67\n90"
 	//          ^
 	// "01\n34\n\n67\n90"
@@ -30,15 +31,16 @@ test("keyAt/transform", () => {
 		.build();
 
 	keyer.transform(edit);
-	const keys2: Array<any> = [];
-	keys2[0] = key1;
-	keys2[3] = key2;
-	keys2[7] = key3;
-	keys2[10] = key4;
+	const keys2 = new Map([
+		[0, key1],
+		[3, key2],
+		[7, key3],
+		[10, key4],
+	]);
 
 	Assert.equal(keyer.keys, keys2);
 	const key5 = keyer.keyAt(6);
-	keys2[6] = key5;
+	keys2.set(6, key5);
 
 	Assert.equal(keyer.keys, keys2);
 	const edit1 = Edit.builder()
@@ -48,10 +50,11 @@ test("keyAt/transform", () => {
 		.build();
 
 	keyer.transform(edit1);
-	const keys3: Array<any> = [];
-	keys3[0] = key1;
-	keys3[3] = key2;
-	keys3[8] = key4;
+	const keys3 = new Map([
+		[0, key1],
+		[3, key2],
+		[8, key4],
+	]);
 	Assert.equal(keyer.keys, keys3);
 });
 
