@@ -32,7 +32,7 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 		) : (
 			<br />
 		);
-		return <div c-key={key}>{chars}</div>;
+		return <div key={key}>{chars}</div>;
 	});
 
 	return (
@@ -51,6 +51,7 @@ function* App(this: Context<{}>) {
 			return;
 		}
 
+		ev.preventDefault();
 		value = ev.target.value;
 		this.refresh();
 	});

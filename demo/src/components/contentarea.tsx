@@ -34,7 +34,7 @@ export function* ContentArea(
 		selectionRange = oldSelectionRange,
 		renderSource,
 	} of this) {
-		this.flush((area) => {
+		this.after((area) => {
 			if (typeof renderSource === "string") {
 				area.source(renderSource);
 			}
@@ -48,19 +48,21 @@ export function* ContentArea(
 			}
 
 			if (selectionRange) {
+				console.log("AFTER", selectionRange);
 				area.setSelectionRange(
-					selectionRange.selectionStart,
-					selectionRange.selectionEnd,
-					selectionRange.selectionDirection,
+					selectionRange.start,
+					selectionRange.end,
+					selectionRange.direction,
 				);
 			}
 		});
 
 		const area: ContentAreaElement = yield (
-			<content-area c-static={composing}>{children}</content-area>
+			<content-area copy={composing}>{children}</content-area>
 		);
 
 		oldSelectionRange = area.getSelectionRange();
+		console.log("AFTER YIELD", oldSelectionRange);
 	}
 }
 

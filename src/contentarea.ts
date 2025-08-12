@@ -14,6 +14,50 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 		// Maybe we should do some runtime eventInit validation.
 		super(typeArg, {bubbles: true, ...eventInit});
 	}
+
+	preventDefault() {
+		super.preventDefault();
+		const contentArea = this.target as ContentAreaElement;
+		const records = this.detail.mutations;
+		for (let i = records.length - 1; i >= 0; i--) {
+			const record = records[i];
+			switch (record.type) {
+				case 'childList': {
+					for (let j = 0; j < record.addedNodes.length; j++) {
+						const node = record.addedNodes[j];
+						if (node.parentNode) {
+							node.parentNode.removeChild(node);
+						}
+					}
+
+					for (let j = 0; j < record.removedNodes.length; j++) {
+						const node = record.removedNodes[j];
+						record.target.insertBefore(node, record.nextSibling);
+					}
+					break;
+				}
+
+				case 'characterData': {
+					if (record.oldValue !== null) {
+						(record.target as CharacterData).data = record.oldValue;
+					}
+					break;
+				}
+
+				case 'attributes': {
+					if (record.oldValue === null) {
+						(record.target as Element).removeAttribute(record.attributeName!);
+					} else {
+						(record.target as Element).setAttribute(record.attributeName!, record.oldValue);
+					}
+					break;
+				}
+			}
+		}
+
+		const records1 = (contentArea)[_observer].takeRecords();
+		invalidate(contentArea, records1);
+	}
 }
 
 export type SelectionDirection = "forward" | "backward" | "none";
@@ -26,6 +70,8 @@ const _value = Symbol.for("ContentAreaElement._value");
 const _observer = Symbol.for("ContentAreaElement._observer");
 const _onselectionchange = Symbol.for("ContentAreaElement._onselectionchange");
 const _selectionStart = Symbol.for("ContentAreaElement._selectionStart");
+const _selectionEnd = Symbol.for("ContentAreaElement._selectionEnd");
+const _selectionDirection = Symbol.for("ContentAreaElement._selectionDirection");
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
@@ -33,6 +79,8 @@ export class ContentAreaElement extends HTMLElement {
 	declare [_observer]: MutationObserver;
 	declare [_onselectionchange]: () => void;
 	declare [_selectionStart]: number;
+	declare [_selectionEnd]: number;
+	declare [_selectionDirection]: SelectionDirection;
 	constructor() {
 		super();
 
@@ -42,15 +90,17 @@ export class ContentAreaElement extends HTMLElement {
 			validate(this, records);
 		});
 
-		this[_selectionStart] = 0;
 		this[_onselectionchange] = () => {
-			// We keep track of the starting node offset pair to accurately diff
-			// edits to text nodes.
-			validate(this);
-			this[_selectionStart] = getSelectionRange(this).start;
+			const selectionRange = getSelectionRange(this);
+			console.log("selectionchange", selectionRange);
+			this[_selectionStart] = selectionRange.start;
+			this[_selectionEnd] = selectionRange.end;
+			this[_selectionDirection] = selectionRange.direction;
 		};
+		this[_onselectionchange]();
 
 		this.addEventListener("input", () => {
+			// TODO: check if this is necessary
 			// This is necessary for Safari bugs where fast-repeating edits which
 			// cause >40ms of execution cause the selection to lag and make pending
 			// edits appear elsewhere in the DOM.
@@ -82,6 +132,7 @@ export class ContentAreaElement extends HTMLElement {
 			// We use capture in an attempt to run before other event listeners.
 			true,
 		);
+		this[_onselectionchange]();
 	}
 
 	disconnectedCallback() {
@@ -105,8 +156,7 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get selectionStart(): number {
-		validate(this);
-		return getSelectionRange(this).start;
+		return this[_selectionStart];
 	}
 
 	set selectionStart(start: number) {
@@ -117,8 +167,7 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get selectionEnd(): number {
-		validate(this);
-		return getSelectionRange(this).end;
+		return this[_selectionEnd];
 	}
 
 	set selectionEnd(end: number) {
@@ -128,8 +177,7 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	get selectionDirection(): SelectionDirection {
-		validate(this);
-		return getSelectionRange(this).direction;
+		return this[_selectionDirection];
 	}
 
 	set selectionDirection(direction: SelectionDirection) {
@@ -139,7 +187,11 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	getSelectionRange(): SelectionRange {
-		return getSelectionRange(this);
+		return {
+			start: this[_selectionStart],
+			end: this[_selectionEnd],
+			direction: this[_selectionDirection],
+		};
 	}
 
 	setSelectionRange(
@@ -217,6 +269,7 @@ function validate(
 	}
 
 	if (!invalidate(_this, records)) {
+		console.log("No changes detected");
 		return false;
 	}
 
@@ -224,7 +277,15 @@ function validate(
 	const edit = diff(_this, oldValue, _this[_selectionStart]);
 	_this[_value] = edit.apply(oldValue);
 	const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
-	Promise.resolve().then(() => _this.dispatchEvent(ev));
+	const selectionRange = getSelectionRange(_this);
+	_this[_selectionStart] = selectionRange.start;
+	_this[_selectionEnd] = selectionRange.end;
+	_this[_selectionDirection] = selectionRange.direction;
+		console.log("preventDefault", selectionRange);
+	const defaultPrevented = _this.dispatchEvent(ev);
+	if (defaultPrevented) {
+		validate(_this);
+	}
 	return true;
 }
 
