@@ -1,77 +1,17 @@
 /// <reference lib="dom" />
 import {Edit} from "./edit.js";
-
-export interface ContentEventDetail {
-	edit: Edit;
-	source: string | null;
-	mutations: Array<MutationRecord>;
-}
-
-export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
-
-export class ContentEvent extends CustomEvent<ContentEventDetail> {
-	constructor(typeArg: string, eventInit: ContentEventInit) {
-		// Maybe we should do some runtime eventInit validation.
-		super(typeArg, {bubbles: true, ...eventInit});
-	}
-
-	preventDefault() {
-		super.preventDefault();
-		const contentArea = this.target as ContentAreaElement;
-		const records = this.detail.mutations;
-		for (let i = records.length - 1; i >= 0; i--) {
-			const record = records[i];
-			switch (record.type) {
-				case 'childList': {
-					for (let j = 0; j < record.addedNodes.length; j++) {
-						const node = record.addedNodes[j];
-						if (node.parentNode) {
-							node.parentNode.removeChild(node);
-						}
-					}
-
-					for (let j = 0; j < record.removedNodes.length; j++) {
-						const node = record.removedNodes[j];
-						record.target.insertBefore(node, record.nextSibling);
-					}
-					break;
-				}
-
-				case 'characterData': {
-					if (record.oldValue !== null) {
-						(record.target as CharacterData).data = record.oldValue;
-					}
-					break;
-				}
-
-				case 'attributes': {
-					if (record.oldValue === null) {
-						(record.target as Element).removeAttribute(record.attributeName!);
-					} else {
-						(record.target as Element).setAttribute(record.attributeName!, record.oldValue);
-					}
-					break;
-				}
-			}
-		}
-
-		const records1 = (contentArea)[_observer].takeRecords();
-		invalidate(contentArea, records1);
-	}
-}
-
 export type SelectionDirection = "forward" | "backward" | "none";
 
 /********************************************/
 /*** ContentAreaElement private property symbols ***/
 /********************************************/
-const _cache = Symbol.for("ContentAreaElement._cache");
-const _value = Symbol.for("ContentAreaElement._value");
-const _observer = Symbol.for("ContentAreaElement._observer");
-const _onselectionchange = Symbol.for("ContentAreaElement._onselectionchange");
-const _selectionStart = Symbol.for("ContentAreaElement._selectionStart");
-const _selectionEnd = Symbol.for("ContentAreaElement._selectionEnd");
-const _selectionDirection = Symbol.for("ContentAreaElement._selectionDirection");
+const _cache = Symbol.for("ContentArea._cache");
+const _value = Symbol.for("ContentArea._value");
+const _observer = Symbol.for("ContentArea._observer");
+const _onselectionchange = Symbol.for("ContentArea._onselectionchange");
+const _selectionStart = Symbol.for("ContentArea._selectionStart");
+const _selectionEnd = Symbol.for("ContentArea._selectionEnd");
+const _selectionDirection = Symbol.for("ContentArea._selectionDirection");
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
@@ -92,13 +32,10 @@ export class ContentAreaElement extends HTMLElement {
 
 		this[_onselectionchange] = () => {
 			const selectionRange = getSelectionRange(this);
-			console.log("selectionchange", selectionRange);
 			this[_selectionStart] = selectionRange.start;
 			this[_selectionEnd] = selectionRange.end;
 			this[_selectionDirection] = selectionRange.direction;
 		};
-		this[_onselectionchange]();
-
 		this.addEventListener("input", () => {
 			// TODO: check if this is necessary
 			// This is necessary for Safari bugs where fast-repeating edits which
@@ -160,8 +97,6 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	set selectionStart(start: number) {
-		validate(this);
-
 		const {end, direction} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
@@ -171,7 +106,6 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	set selectionEnd(end: number) {
-		validate(this);
 		const {start, direction} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
@@ -181,7 +115,6 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	set selectionDirection(direction: SelectionDirection) {
-		validate(this);
 		const {start, end} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
@@ -213,8 +146,68 @@ export class ContentAreaElement extends HTMLElement {
 		return nodeOffsetAt(this, index);
 	}
 
-	source(source: string): boolean {
+	source(source: string | symbol | null): boolean {
 		return validate(this, this[_observer].takeRecords(), source);
+	}
+}
+
+export interface ContentEventDetail {
+	edit: Edit;
+	source: string | symbol | null;
+	mutations: Array<MutationRecord>;
+}
+
+export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
+
+const PreventDefaultSource = Symbol.for("ContentArea.PreventDefaultSource");
+export class ContentEvent extends CustomEvent<ContentEventDetail> {
+	constructor(typeArg: string, eventInit: ContentEventInit) {
+		// Maybe we should do some runtime eventInit validation.
+		super(typeArg, {bubbles: true, ...eventInit});
+	}
+
+	preventDefault() {
+		super.preventDefault();
+		const contentArea = this.target as ContentAreaElement;
+		const records = this.detail.mutations;
+		for (let i = records.length - 1; i >= 0; i--) {
+			const record = records[i];
+			switch (record.type) {
+				case 'childList': {
+					for (let j = 0; j < record.addedNodes.length; j++) {
+						const node = record.addedNodes[j];
+						if (node.parentNode) {
+							node.parentNode.removeChild(node);
+						}
+					}
+
+					for (let j = 0; j < record.removedNodes.length; j++) {
+						const node = record.removedNodes[j];
+						record.target.insertBefore(node, record.nextSibling);
+					}
+					break;
+				}
+
+				case 'characterData': {
+					if (record.oldValue !== null) {
+						(record.target as CharacterData).data = record.oldValue;
+					}
+					break;
+				}
+
+				case 'attributes': {
+					if (record.oldValue === null) {
+						(record.target as Element).removeAttribute(record.attributeName!);
+					} else {
+						(record.target as Element).setAttribute(record.attributeName!, record.oldValue);
+					}
+					break;
+				}
+			}
+		}
+
+		const records1 = (contentArea)[_observer].takeRecords();
+		validate(contentArea, records1, PreventDefaultSource);
 	}
 }
 
@@ -232,18 +225,18 @@ const APPENDS_NEWLINE = 1 << 4;
 
 /** Data associated with the child nodes of a ContentAreaElement. */
 class NodeInfo {
+	/** A bitmask (see flags above) */
+	declare f: number;
 	// TODO: explain the relationship of these numbers to newline stuff
 	/** The start of this node’s contents relative to the start of the parent. */
 	declare offset: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
-	/** A bitmask (see flags above) */
-	declare flags: number;
 
 	constructor(offset: number) {
+		this.f = 0;
 		this.offset = offset;
 		this.length = 0;
-		this.flags = 0;
 	}
 }
 
@@ -262,30 +255,39 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 function validate(
 	_this: ContentAreaElement,
 	records: Array<MutationRecord> = _this[_observer].takeRecords(),
-	source: string | null = null,
+	source: string | symbol | null = null,
 ): boolean {
 	if (typeof _this !== "object" || _this[_cache] == null) {
 		throw new TypeError("this is not a ContentAreaElement");
+	} else if (!document.contains(_this)) {
+		throw new Error("ContentArea cannot be read before it is inserted into the DOM");
 	}
 
 	if (!invalidate(_this, records)) {
-		console.log("No changes detected");
 		return false;
 	}
 
 	const oldValue = _this[_value];
 	const edit = diff(_this, oldValue, _this[_selectionStart]);
-	_this[_value] = edit.apply(oldValue);
-	const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
-	const selectionRange = getSelectionRange(_this);
-	_this[_selectionStart] = selectionRange.start;
-	_this[_selectionEnd] = selectionRange.end;
-	_this[_selectionDirection] = selectionRange.direction;
-		console.log("preventDefault", selectionRange);
-	const defaultPrevented = _this.dispatchEvent(ev);
-	if (defaultPrevented) {
-		validate(_this);
+	// Skip event dispatch for preventDefault validation
+	if (source === PreventDefaultSource) {
+		Promise.resolve().then(() => {
+			_this[_value] = edit.apply(oldValue);
+			const selectionRange = getSelectionRange(_this);
+			_this[_selectionStart] = selectionRange.start;
+			_this[_selectionEnd] = selectionRange.end;
+			_this[_selectionDirection] = selectionRange.direction;
+		});
+	} else {
+		const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
+		const selectionRange = getSelectionRange(_this);
+		_this[_value] = edit.apply(oldValue);
+		_this[_selectionStart] = selectionRange.start;
+		_this[_selectionEnd] = selectionRange.end;
+		_this[_selectionDirection] = selectionRange.direction;
+		_this.dispatchEvent(ev);
 	}
+
 	return true;
 }
 
@@ -307,13 +309,15 @@ function invalidate(
 		// We make sure all added and removed nodes and their children are deleted
 		// from the cache in case of any weirdness where nodes have been moved.
 		for (let j = 0; j < record.addedNodes.length; j++) {
-			clear(record.addedNodes[j], cache);
+			const addedNode = record.addedNodes[j];
+			clear(addedNode, cache);
 		}
 
 		for (let j = 0; j < record.removedNodes.length; j++) {
 			clear(record.removedNodes[j], cache);
 		}
 
+		// Debug logging for empty document case
 		let node = record.target;
 		if (node === _this) {
 			invalid = true;
@@ -330,7 +334,7 @@ function invalidate(
 
 			const nodeInfo = cache.get(node);
 			if (nodeInfo) {
-				nodeInfo.flags &= ~IS_VALID;
+				nodeInfo.f &= ~IS_VALID;
 			}
 
 			invalid = true;
@@ -339,7 +343,7 @@ function invalidate(
 
 	if (invalid) {
 		const nodeInfo = cache.get(_this)!;
-		nodeInfo.flags &= ~IS_VALID;
+		nodeInfo.f &= ~IS_VALID;
 	}
 
 	return invalid;
@@ -408,7 +412,7 @@ function diff(
 			if (nodeInfo === undefined) {
 				cache.set(node, (nodeInfo = new NodeInfo(offset)));
 				if (isBlocklikeElement(node)) {
-					nodeInfo.flags |= IS_BLOCKLIKE;
+					nodeInfo.f |= IS_BLOCKLIKE;
 				}
 			} else {
 				const expectedOffset = oldIndex - oldIndexRelative;
@@ -424,28 +428,28 @@ function diff(
 				nodeInfo.offset = offset;
 			}
 
-			if (offset && !hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
+			if (offset && !hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
 				// Block-like elements prepend a newline when they appear after text or
 				// inline elements.
 				hasNewline = true;
 				offset += NEWLINE.length;
 				value += NEWLINE;
-				if (nodeInfo.flags & PREPENDS_NEWLINE) {
+				if (nodeInfo.f & PREPENDS_NEWLINE) {
 					oldIndex += NEWLINE.length;
 				}
 
-				nodeInfo.flags |= PREPENDS_NEWLINE;
+				nodeInfo.f |= PREPENDS_NEWLINE;
 			} else {
-				if (nodeInfo.flags & PREPENDS_NEWLINE) {
+				if (nodeInfo.f & PREPENDS_NEWLINE) {
 					// deletion detected
 					oldIndex += NEWLINE.length;
 				}
 
-				nodeInfo.flags &= ~PREPENDS_NEWLINE;
+				nodeInfo.f &= ~PREPENDS_NEWLINE;
 			}
 
 			descending = false;
-			if (nodeInfo.flags & IS_VALID) {
+			if (nodeInfo.f & IS_VALID) {
 				// The node and its children are unchanged, so we read from the length.
 				if (nodeInfo.length) {
 					value += oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
@@ -463,7 +467,7 @@ function diff(
 					hasNewline = text.endsWith(NEWLINE);
 				}
 
-				if (nodeInfo.flags & IS_OLD) {
+				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
@@ -474,14 +478,14 @@ function diff(
 					hasNewline = text.endsWith(NEWLINE);
 				}
 
-				if (nodeInfo.flags & IS_OLD) {
+				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else if (node.nodeName === "BR") {
 				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
-				if (nodeInfo.flags & IS_OLD) {
+				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else {
@@ -500,7 +504,7 @@ function diff(
 
 			// If the child node prepends a newline, add to offset to increase the
 			// length of the parent node.
-			if (nodeInfo!.flags & PREPENDS_NEWLINE) {
+			if (nodeInfo!.f & PREPENDS_NEWLINE) {
 				offset += NEWLINE.length;
 			}
 
@@ -510,22 +514,22 @@ function diff(
 
 		if (!descending) {
 			// POST-ORDER LOGIC
-			if (!(nodeInfo.flags & IS_VALID)) {
+			if (!(nodeInfo.f & IS_VALID)) {
 				// TODO: Figure out if we should always recalculate APPENDS_NEWLINE???
-				if (!hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
+				if (!hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
 					value += NEWLINE;
 					offset += NEWLINE.length;
 					hasNewline = true;
-					nodeInfo.flags |= APPENDS_NEWLINE;
+					nodeInfo.f |= APPENDS_NEWLINE;
 				} else {
-					nodeInfo.flags &= ~APPENDS_NEWLINE;
+					nodeInfo.f &= ~APPENDS_NEWLINE;
 				}
 
 				nodeInfo.length = offset - nodeInfo.offset;
-				nodeInfo.flags |= IS_VALID;
+				nodeInfo.f |= IS_VALID;
 			}
 
-			nodeInfo.flags |= IS_OLD;
+			nodeInfo.f |= IS_OLD;
 
 			descending = !!walker.nextSibling();
 			if (!descending) {
@@ -615,7 +619,7 @@ function indexAt(
 		} else if (offset >= node.childNodes.length) {
 			const nodeInfo = cache.get(node)!;
 			index =
-				nodeInfo.flags & APPENDS_NEWLINE
+				nodeInfo.f & APPENDS_NEWLINE
 					? nodeInfo.length - NEWLINE.length
 					: nodeInfo.length;
 		} else {
@@ -632,7 +636,7 @@ function indexAt(
 				// If the offset references an element which prepends a newline
 				// ("hello<div>world</div>"), we have to start from -1 because the
 				// element’s info.offset will not account for the newline.
-				index = nodeInfo.flags & PREPENDS_NEWLINE ? -1 : 0;
+				index = nodeInfo.f & PREPENDS_NEWLINE ? -1 : 0;
 			}
 		}
 	}
@@ -640,7 +644,7 @@ function indexAt(
 	for (; node !== _this; node = node.parentNode!) {
 		const nodeInfo = cache.get(node)!;
 		index += nodeInfo.offset;
-		if (nodeInfo.flags & PREPENDS_NEWLINE) {
+		if (nodeInfo.f & PREPENDS_NEWLINE) {
 			index += NEWLINE.length;
 		}
 	}
@@ -687,7 +691,7 @@ function findNodeOffset(
 			return nodeOffsetFromChild(node, index > 0);
 		}
 
-		if (nodeInfo.flags & PREPENDS_NEWLINE) {
+		if (nodeInfo.f & PREPENDS_NEWLINE) {
 			index -= 1;
 		}
 
