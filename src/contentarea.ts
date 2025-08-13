@@ -11,6 +11,9 @@ const _value = Symbol.for("ContentArea._value");
 const _selectionRange = Symbol.for("ContentArea._selectionRange");
 const _staleValue = Symbol.for("ContentArea._staleValue");
 const _staleSelectionRange = Symbol.for("ContentArea._slateSelectionRange");
+const _compositionBuffer = Symbol.for("ContentArea._compositionBuffer");
+const _compositionStartValue = Symbol.for("ContentArea._compositionStartValue");
+const _compositionSelectionRange = Symbol.for("ContentArea._compositionSelectionRange");
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
@@ -20,10 +23,18 @@ export class ContentAreaElement extends HTMLElement {
 	declare [_selectionRange]: SelectionRange;
 	declare [_staleValue]: string | undefined;
 	declare [_staleSelectionRange]: SelectionRange | undefined;
+	declare [_compositionBuffer]: Array<MutationRecord> | undefined;
+	declare [_compositionStartValue]: string | undefined;
+	declare [_compositionSelectionRange]: SelectionRange | undefined;
 	constructor() {
 		super();
 		this[_cache] = new Map();
 		this[_observer] = new MutationObserver((records) => {
+			if (this[_compositionBuffer]) {
+				// Buffer mutations during composition but still process them to keep cache in sync
+				this[_compositionBuffer].push(...records);
+			}
+
 			validate(this, records);
 		});
 		this[_onselectionchange] = () => {
@@ -34,6 +45,9 @@ export class ContentAreaElement extends HTMLElement {
 		this[_selectionRange] = {start: 0, end: 0, direction: "none"};
 		this[_staleValue] = undefined;
 		this[_staleSelectionRange] = undefined;
+		this[_compositionBuffer] = undefined;
+		this[_compositionStartValue] = undefined;
+		this[_compositionSelectionRange] = undefined;
 	}
 
 	/******************************/
@@ -54,15 +68,71 @@ export class ContentAreaElement extends HTMLElement {
 				//"data-contentafter",
 			],
 		});
-
-		validate(this);
 		document.addEventListener(
 			"selectionchange",
 			this[_onselectionchange],
 			// We use capture in an attempt to run before other event listeners.
 			true,
 		);
+
+		validate(this);
 		this[_onselectionchange]();
+
+		// Composition event handling
+		let processCompositionTimeout: ReturnType<typeof setTimeout> | undefined;
+		this.addEventListener("compositionstart", () => {
+			clearTimeout(processCompositionTimeout); // Cancel pending commit
+			if (processCompositionTimeout == null) {
+				this[_compositionBuffer] = [];
+				this[_compositionStartValue] = this[_value];
+				this[_compositionSelectionRange] = { ...this[_selectionRange] };
+			}
+
+			processCompositionTimeout = undefined;
+		});
+
+		const processComposition = () => {
+			if (
+				this[_compositionBuffer] &&
+				this[_compositionBuffer].length > 0 &&
+				this[_compositionStartValue] !== undefined &&
+				this[_compositionSelectionRange] !== undefined
+			) {
+				const edit = Edit.diff(
+					this[_compositionStartValue],
+					this[_value],
+					this[_compositionSelectionRange].start
+				);
+				const ev = new ContentEvent("contentchange", {
+					detail: { edit, source: null, mutations: this[_compositionBuffer] }
+				});
+				this.dispatchEvent(ev);
+				this[_staleValue] = undefined;
+				this[_staleSelectionRange] = undefined;
+			}
+
+			this[_compositionBuffer] = undefined;
+			this[_compositionStartValue] = undefined;
+			this[_compositionSelectionRange] = undefined;
+			processCompositionTimeout = undefined;
+		};
+
+		this.addEventListener("compositionend", () => {
+			clearTimeout(processCompositionTimeout);
+			processCompositionTimeout = setTimeout(processComposition);
+		});
+
+		this.addEventListener("blur", () => {
+			clearTimeout(processCompositionTimeout);
+			processComposition();
+		});
+
+		this.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && this[_compositionBuffer]) {
+				clearTimeout(processCompositionTimeout);
+				processComposition();
+			}
+		});
 	}
 
 	disconnectedCallback() {
@@ -149,6 +219,7 @@ export class ContentAreaElement extends HTMLElement {
 	source(source: string | symbol | null): boolean {
 		return validate(this, this[_observer].takeRecords(), source);
 	}
+
 }
 
 export interface ContentEventDetail {
@@ -277,14 +348,13 @@ function validate(
 	const edit = diff(_this, oldValue, _this[_selectionRange].start);
 	_this[_value] = edit.apply(oldValue);
 	_this[_selectionRange] = getSelectionRange(_this);
-	// Skip event dispatch for preventDefault validation
-	if (source !== PreventDefaultSource) {
+	// Don't dispatch events during composition or preventDefault operations
+	if (source !== PreventDefaultSource && !_this[_compositionBuffer]) {
 		const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
 		_this.dispatchEvent(ev);
 		_this[_staleValue] = undefined;
 		_this[_staleSelectionRange] = undefined;
 	}
-
 	return true;
 }
 
