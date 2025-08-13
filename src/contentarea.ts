@@ -1,48 +1,39 @@
 /// <reference lib="dom" />
 import {Edit} from "./edit.js";
-export type SelectionDirection = "forward" | "backward" | "none";
 
-/********************************************/
+/***************************************************/
 /*** ContentAreaElement private property symbols ***/
-/********************************************/
+/***************************************************/
 const _cache = Symbol.for("ContentArea._cache");
-const _value = Symbol.for("ContentArea._value");
 const _observer = Symbol.for("ContentArea._observer");
 const _onselectionchange = Symbol.for("ContentArea._onselectionchange");
-const _selectionStart = Symbol.for("ContentArea._selectionStart");
-const _selectionEnd = Symbol.for("ContentArea._selectionEnd");
-const _selectionDirection = Symbol.for("ContentArea._selectionDirection");
+const _value = Symbol.for("ContentArea._value");
+const _selectionRange = Symbol.for("ContentArea._selectionRange");
+const _staleValue = Symbol.for("ContentArea._staleValue");
+const _staleSelectionRange = Symbol.for("ContentArea._slateSelectionRange");
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
-	declare [_value]: string;
 	declare [_observer]: MutationObserver;
 	declare [_onselectionchange]: () => void;
-	declare [_selectionStart]: number;
-	declare [_selectionEnd]: number;
-	declare [_selectionDirection]: SelectionDirection;
+	declare [_value]: string;
+	declare [_selectionRange]: SelectionRange;
+	declare [_staleValue]: string | undefined;
+	declare [_staleSelectionRange]: SelectionRange | undefined;
 	constructor() {
 		super();
-
 		this[_cache] = new Map();
-		this[_value] = "";
 		this[_observer] = new MutationObserver((records) => {
 			validate(this, records);
 		});
-
 		this[_onselectionchange] = () => {
-			const selectionRange = getSelectionRange(this);
-			this[_selectionStart] = selectionRange.start;
-			this[_selectionEnd] = selectionRange.end;
-			this[_selectionDirection] = selectionRange.direction;
+			this[_selectionRange] = getSelectionRange(this);
 		};
-		this.addEventListener("input", () => {
-			// TODO: check if this is necessary
-			// This is necessary for Safari bugs where fast-repeating edits which
-			// cause >40ms of execution cause the selection to lag and make pending
-			// edits appear elsewhere in the DOM.
-			validate(this);
-		});
+
+		this[_value] = "";
+		this[_selectionRange] = {start: 0, end: 0, direction: "none"};
+		this[_staleValue] = undefined;
+		this[_staleSelectionRange] = undefined;
 	}
 
 	/******************************/
@@ -53,7 +44,9 @@ export class ContentAreaElement extends HTMLElement {
 			subtree: true,
 			childList: true,
 			characterData: true,
+			characterDataOldValue: true,
 			attributes: true,
+			attributeOldValue: true,
 			attributeFilter: [
 				"data-content",
 				// TODO: implement these attributes
@@ -89,42 +82,49 @@ export class ContentAreaElement extends HTMLElement {
 
 	get value(): string {
 		validate(this);
-		return this[_value];
+		return this[_staleValue] == null ? this[_value] : this[_staleValue];
 	}
 
 	get selectionStart(): number {
-		return this[_selectionStart];
+		validate(this);
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return range.start;
 	}
 
 	set selectionStart(start: number) {
+		validate(this);
 		const {end, direction} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
 
 	get selectionEnd(): number {
-		return this[_selectionEnd];
+		validate(this);
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return range.end;
 	}
 
 	set selectionEnd(end: number) {
+		validate(this);
 		const {start, direction} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
 
 	get selectionDirection(): SelectionDirection {
-		return this[_selectionDirection];
+		validate(this);
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return range.direction;
 	}
 
 	set selectionDirection(direction: SelectionDirection) {
+		validate(this);
 		const {start, end} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
 
 	getSelectionRange(): SelectionRange {
-		return {
-			start: this[_selectionStart],
-			end: this[_selectionEnd],
-			direction: this[_selectionDirection],
-		};
+		validate(this);
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return {...range};
 	}
 
 	setSelectionRange(
@@ -167,8 +167,14 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 	}
 
 	preventDefault() {
+		if (this.defaultPrevented) {
+			return;
+		}
+
 		super.preventDefault();
-		const contentArea = this.target as ContentAreaElement;
+		const area = this.target as ContentAreaElement;
+		area[_staleValue] = area[_value];
+		area[_staleSelectionRange] = area[_selectionRange];
 		const records = this.detail.mutations;
 		for (let i = records.length - 1; i >= 0; i--) {
 			const record = records[i];
@@ -206,8 +212,8 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 			}
 		}
 
-		const records1 = (contentArea)[_observer].takeRecords();
-		validate(contentArea, records1, PreventDefaultSource);
+		const records1 = (area)[_observer].takeRecords();
+		validate(area, records1, PreventDefaultSource);
 	}
 }
 
@@ -268,24 +274,15 @@ function validate(
 	}
 
 	const oldValue = _this[_value];
-	const edit = diff(_this, oldValue, _this[_selectionStart]);
+	const edit = diff(_this, oldValue, _this[_selectionRange].start);
+	_this[_value] = edit.apply(oldValue);
+	_this[_selectionRange] = getSelectionRange(_this);
 	// Skip event dispatch for preventDefault validation
-	if (source === PreventDefaultSource) {
-		Promise.resolve().then(() => {
-			_this[_value] = edit.apply(oldValue);
-			const selectionRange = getSelectionRange(_this);
-			_this[_selectionStart] = selectionRange.start;
-			_this[_selectionEnd] = selectionRange.end;
-			_this[_selectionDirection] = selectionRange.direction;
-		});
-	} else {
+	if (source !== PreventDefaultSource) {
 		const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
-		const selectionRange = getSelectionRange(_this);
-		_this[_value] = edit.apply(oldValue);
-		_this[_selectionStart] = selectionRange.start;
-		_this[_selectionEnd] = selectionRange.end;
-		_this[_selectionDirection] = selectionRange.direction;
 		_this.dispatchEvent(ev);
+		_this[_staleValue] = undefined;
+		_this[_staleSelectionRange] = undefined;
 	}
 
 	return true;
@@ -317,7 +314,6 @@ function invalidate(
 			clear(record.removedNodes[j], cache);
 		}
 
-		// Debug logging for empty document case
 		let node = record.target;
 		if (node === _this) {
 			invalid = true;
@@ -765,6 +761,8 @@ export interface SelectionRange {
 	direction: SelectionDirection;
 }
 
+export type SelectionDirection = "forward" | "backward" | "none";
+
 function getSelectionRange(_this: ContentAreaElement): SelectionRange {
 	const selection = document.getSelection();
 	if (!selection) {
@@ -822,7 +820,7 @@ function setSelectionRange(
 		} else if (focusNode === null) {
 			selection.collapse(anchorNode, anchorOffset);
 		} else {
-			// This method is not implemented in IE.
+			// NOTE: This method is not implemented in IE.
 			selection.setBaseAndExtent(
 				anchorNode,
 				anchorOffset,
