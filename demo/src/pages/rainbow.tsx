@@ -23,7 +23,7 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	let cursor = 0;
 	// Testing different rendering strategies for lines.
 	lines = lines.map((line) => {
-		const key = keyer.keyAt(cursor);
+		const key = String(keyer.keyAt(cursor));
 		cursor += line.length + 1;
 		const chars = line ? (
 			[...line].map((char, i) => (
@@ -32,7 +32,7 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 		) : (
 			<br />
 		);
-		return <div c-key={key}>{chars}</div>;
+		return <div data-key={key} key={key}>{chars}</div>;
 	});
 
 	return (
@@ -42,15 +42,22 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 	);
 }
 
-function* App(this: Context<{}>) {
-	let value = "\n";
+function* App(this: Context) {
+	let value = "Hello\nWorld\nHello\nWorld\nHello\nWorld\n";
 	const keyer = new Keyer();
+
+	let initial = true;
 	this.addEventListener("contentchange", (ev: any) => {
-		keyer.transform(ev.detail.edit);
-		if (ev.detail.source === "render") {
+		const {edit, source} = ev.detail;
+		if (source === "render") {
 			return;
 		}
+		if (!initial) {
+			keyer.transform(edit);
+		}
+		initial = false;
 
+		ev.preventDefault();
 		value = ev.target.value;
 		this.refresh();
 	});

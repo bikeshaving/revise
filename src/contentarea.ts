@@ -1,61 +1,53 @@
 /// <reference lib="dom" />
 import {Edit} from "./edit.js";
 
-export interface ContentEventDetail {
-	edit: Edit;
-	source: string | null;
-	mutations: Array<MutationRecord>;
-}
-
-export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
-
-export class ContentEvent extends CustomEvent<ContentEventDetail> {
-	constructor(typeArg: string, eventInit: ContentEventInit) {
-		// Maybe we should do some runtime eventInit validation.
-		super(typeArg, {bubbles: true, ...eventInit});
-	}
-}
-
-export type SelectionDirection = "forward" | "backward" | "none";
-
-/********************************************/
+/***************************************************/
 /*** ContentAreaElement private property symbols ***/
-/********************************************/
-const _cache = Symbol.for("ContentAreaElement._cache");
-const _value = Symbol.for("ContentAreaElement._value");
-const _observer = Symbol.for("ContentAreaElement._observer");
-const _onselectionchange = Symbol.for("ContentAreaElement._onselectionchange");
-const _selectionStart = Symbol.for("ContentAreaElement._selectionStart");
+/***************************************************/
+const _cache = Symbol.for("ContentArea._cache");
+const _observer = Symbol.for("ContentArea._observer");
+const _onselectionchange = Symbol.for("ContentArea._onselectionchange");
+const _value = Symbol.for("ContentArea._value");
+const _selectionRange = Symbol.for("ContentArea._selectionRange");
+const _staleValue = Symbol.for("ContentArea._staleValue");
+const _staleSelectionRange = Symbol.for("ContentArea._slateSelectionRange");
+const _compositionBuffer = Symbol.for("ContentArea._compositionBuffer");
+const _compositionStartValue = Symbol.for("ContentArea._compositionStartValue");
+const _compositionSelectionRange = Symbol.for("ContentArea._compositionSelectionRange");
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
-	declare [_value]: string;
 	declare [_observer]: MutationObserver;
 	declare [_onselectionchange]: () => void;
-	declare [_selectionStart]: number;
+	declare [_value]: string;
+	declare [_selectionRange]: SelectionRange;
+	declare [_staleValue]: string | undefined;
+	declare [_staleSelectionRange]: SelectionRange | undefined;
+	declare [_compositionBuffer]: Array<MutationRecord> | undefined;
+	declare [_compositionStartValue]: string | undefined;
+	declare [_compositionSelectionRange]: SelectionRange | undefined;
 	constructor() {
 		super();
-
 		this[_cache] = new Map();
-		this[_value] = "";
 		this[_observer] = new MutationObserver((records) => {
+			if (this[_compositionBuffer]) {
+				// Buffer mutations during composition but still process them to keep cache in sync
+				this[_compositionBuffer].push(...records);
+			}
+
 			validate(this, records);
 		});
-
-		this[_selectionStart] = 0;
 		this[_onselectionchange] = () => {
-			// We keep track of the starting node offset pair to accurately diff
-			// edits to text nodes.
-			validate(this);
-			this[_selectionStart] = getSelectionRange(this).start;
+			this[_selectionRange] = getSelectionRange(this);
 		};
 
-		this.addEventListener("input", () => {
-			// This is necessary for Safari bugs where fast-repeating edits which
-			// cause >40ms of execution cause the selection to lag and make pending
-			// edits appear elsewhere in the DOM.
-			validate(this);
-		});
+		this[_value] = "";
+		this[_selectionRange] = {start: 0, end: 0, direction: "none"};
+		this[_staleValue] = undefined;
+		this[_staleSelectionRange] = undefined;
+		this[_compositionBuffer] = undefined;
+		this[_compositionStartValue] = undefined;
+		this[_compositionSelectionRange] = undefined;
 	}
 
 	/******************************/
@@ -66,7 +58,9 @@ export class ContentAreaElement extends HTMLElement {
 			subtree: true,
 			childList: true,
 			characterData: true,
+			characterDataOldValue: true,
 			attributes: true,
+			attributeOldValue: true,
 			attributeFilter: [
 				"data-content",
 				// TODO: implement these attributes
@@ -74,14 +68,71 @@ export class ContentAreaElement extends HTMLElement {
 				//"data-contentafter",
 			],
 		});
-
-		validate(this);
 		document.addEventListener(
 			"selectionchange",
 			this[_onselectionchange],
 			// We use capture in an attempt to run before other event listeners.
 			true,
 		);
+
+		validate(this);
+		this[_onselectionchange]();
+
+		// Composition event handling
+		let processCompositionTimeout: ReturnType<typeof setTimeout> | undefined;
+		this.addEventListener("compositionstart", () => {
+			clearTimeout(processCompositionTimeout); // Cancel pending commit
+			if (processCompositionTimeout == null) {
+				this[_compositionBuffer] = [];
+				this[_compositionStartValue] = this[_value];
+				this[_compositionSelectionRange] = { ...this[_selectionRange] };
+			}
+
+			processCompositionTimeout = undefined;
+		});
+
+		const processComposition = () => {
+			if (
+				this[_compositionBuffer] &&
+				this[_compositionBuffer].length > 0 &&
+				this[_compositionStartValue] !== undefined &&
+				this[_compositionSelectionRange] !== undefined
+			) {
+				const edit = Edit.diff(
+					this[_compositionStartValue],
+					this[_value],
+					this[_compositionSelectionRange].start
+				);
+				const ev = new ContentEvent("contentchange", {
+					detail: { edit, source: null, mutations: this[_compositionBuffer] }
+				});
+				this.dispatchEvent(ev);
+				this[_staleValue] = undefined;
+				this[_staleSelectionRange] = undefined;
+			}
+
+			this[_compositionBuffer] = undefined;
+			this[_compositionStartValue] = undefined;
+			this[_compositionSelectionRange] = undefined;
+			processCompositionTimeout = undefined;
+		};
+
+		this.addEventListener("compositionend", () => {
+			clearTimeout(processCompositionTimeout);
+			processCompositionTimeout = setTimeout(processComposition);
+		});
+
+		this.addEventListener("blur", () => {
+			clearTimeout(processCompositionTimeout);
+			processComposition();
+		});
+
+		this.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && this[_compositionBuffer]) {
+				clearTimeout(processCompositionTimeout);
+				processComposition();
+			}
+		});
 	}
 
 	disconnectedCallback() {
@@ -101,24 +152,25 @@ export class ContentAreaElement extends HTMLElement {
 
 	get value(): string {
 		validate(this);
-		return this[_value];
+		return this[_staleValue] == null ? this[_value] : this[_staleValue];
 	}
 
 	get selectionStart(): number {
 		validate(this);
-		return getSelectionRange(this).start;
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return range.start;
 	}
 
 	set selectionStart(start: number) {
 		validate(this);
-
 		const {end, direction} = getSelectionRange(this);
 		setSelectionRange(this, {start, end, direction});
 	}
 
 	get selectionEnd(): number {
 		validate(this);
-		return getSelectionRange(this).end;
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return range.end;
 	}
 
 	set selectionEnd(end: number) {
@@ -129,7 +181,8 @@ export class ContentAreaElement extends HTMLElement {
 
 	get selectionDirection(): SelectionDirection {
 		validate(this);
-		return getSelectionRange(this).direction;
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return range.direction;
 	}
 
 	set selectionDirection(direction: SelectionDirection) {
@@ -139,7 +192,9 @@ export class ContentAreaElement extends HTMLElement {
 	}
 
 	getSelectionRange(): SelectionRange {
-		return getSelectionRange(this);
+		validate(this);
+		const range = this[_staleSelectionRange] || this[_selectionRange];
+		return {...range};
 	}
 
 	setSelectionRange(
@@ -161,8 +216,75 @@ export class ContentAreaElement extends HTMLElement {
 		return nodeOffsetAt(this, index);
 	}
 
-	source(source: string): boolean {
+	source(source: string | symbol | null): boolean {
 		return validate(this, this[_observer].takeRecords(), source);
+	}
+
+}
+
+export interface ContentEventDetail {
+	edit: Edit;
+	source: string | symbol | null;
+	mutations: Array<MutationRecord>;
+}
+
+export interface ContentEventInit extends CustomEventInit<ContentEventDetail> {}
+
+const PreventDefaultSource = Symbol.for("ContentArea.PreventDefaultSource");
+export class ContentEvent extends CustomEvent<ContentEventDetail> {
+	constructor(typeArg: string, eventInit: ContentEventInit) {
+		// Maybe we should do some runtime eventInit validation.
+		super(typeArg, {bubbles: true, ...eventInit});
+	}
+
+	preventDefault() {
+		if (this.defaultPrevented) {
+			return;
+		}
+
+		super.preventDefault();
+		const area = this.target as ContentAreaElement;
+		area[_staleValue] = area[_value];
+		area[_staleSelectionRange] = area[_selectionRange];
+		const records = this.detail.mutations;
+		for (let i = records.length - 1; i >= 0; i--) {
+			const record = records[i];
+			switch (record.type) {
+				case 'childList': {
+					for (let j = 0; j < record.addedNodes.length; j++) {
+						const node = record.addedNodes[j];
+						if (node.parentNode) {
+							node.parentNode.removeChild(node);
+						}
+					}
+
+					for (let j = 0; j < record.removedNodes.length; j++) {
+						const node = record.removedNodes[j];
+						record.target.insertBefore(node, record.nextSibling);
+					}
+					break;
+				}
+
+				case 'characterData': {
+					if (record.oldValue !== null) {
+						(record.target as CharacterData).data = record.oldValue;
+					}
+					break;
+				}
+
+				case 'attributes': {
+					if (record.oldValue === null) {
+						(record.target as Element).removeAttribute(record.attributeName!);
+					} else {
+						(record.target as Element).setAttribute(record.attributeName!, record.oldValue);
+					}
+					break;
+				}
+			}
+		}
+
+		const records1 = (area)[_observer].takeRecords();
+		validate(area, records1, PreventDefaultSource);
 	}
 }
 
@@ -180,18 +302,18 @@ const APPENDS_NEWLINE = 1 << 4;
 
 /** Data associated with the child nodes of a ContentAreaElement. */
 class NodeInfo {
+	/** A bitmask (see flags above) */
+	declare f: number;
 	// TODO: explain the relationship of these numbers to newline stuff
 	/** The start of this node’s contents relative to the start of the parent. */
 	declare offset: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
-	/** A bitmask (see flags above) */
-	declare flags: number;
 
 	constructor(offset: number) {
+		this.f = 0;
 		this.offset = offset;
 		this.length = 0;
-		this.flags = 0;
 	}
 }
 
@@ -210,10 +332,12 @@ type NodeInfoCache = Map<Node, NodeInfo>;
 function validate(
 	_this: ContentAreaElement,
 	records: Array<MutationRecord> = _this[_observer].takeRecords(),
-	source: string | null = null,
+	source: string | symbol | null = null,
 ): boolean {
 	if (typeof _this !== "object" || _this[_cache] == null) {
 		throw new TypeError("this is not a ContentAreaElement");
+	} else if (!document.contains(_this)) {
+		throw new Error("ContentArea cannot be read before it is inserted into the DOM");
 	}
 
 	if (!invalidate(_this, records)) {
@@ -221,10 +345,16 @@ function validate(
 	}
 
 	const oldValue = _this[_value];
-	const edit = diff(_this, oldValue, _this[_selectionStart]);
+	const edit = diff(_this, oldValue, _this[_selectionRange].start);
 	_this[_value] = edit.apply(oldValue);
-	const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
-	Promise.resolve().then(() => _this.dispatchEvent(ev));
+	_this[_selectionRange] = getSelectionRange(_this);
+	// Don't dispatch events during composition or preventDefault operations
+	if (source !== PreventDefaultSource && !_this[_compositionBuffer]) {
+		const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
+		_this.dispatchEvent(ev);
+		_this[_staleValue] = undefined;
+		_this[_staleSelectionRange] = undefined;
+	}
 	return true;
 }
 
@@ -246,7 +376,8 @@ function invalidate(
 		// We make sure all added and removed nodes and their children are deleted
 		// from the cache in case of any weirdness where nodes have been moved.
 		for (let j = 0; j < record.addedNodes.length; j++) {
-			clear(record.addedNodes[j], cache);
+			const addedNode = record.addedNodes[j];
+			clear(addedNode, cache);
 		}
 
 		for (let j = 0; j < record.removedNodes.length; j++) {
@@ -269,7 +400,7 @@ function invalidate(
 
 			const nodeInfo = cache.get(node);
 			if (nodeInfo) {
-				nodeInfo.flags &= ~IS_VALID;
+				nodeInfo.f &= ~IS_VALID;
 			}
 
 			invalid = true;
@@ -278,7 +409,7 @@ function invalidate(
 
 	if (invalid) {
 		const nodeInfo = cache.get(_this)!;
-		nodeInfo.flags &= ~IS_VALID;
+		nodeInfo.f &= ~IS_VALID;
 	}
 
 	return invalid;
@@ -347,7 +478,7 @@ function diff(
 			if (nodeInfo === undefined) {
 				cache.set(node, (nodeInfo = new NodeInfo(offset)));
 				if (isBlocklikeElement(node)) {
-					nodeInfo.flags |= IS_BLOCKLIKE;
+					nodeInfo.f |= IS_BLOCKLIKE;
 				}
 			} else {
 				const expectedOffset = oldIndex - oldIndexRelative;
@@ -363,28 +494,28 @@ function diff(
 				nodeInfo.offset = offset;
 			}
 
-			if (offset && !hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
+			if (offset && !hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
 				// Block-like elements prepend a newline when they appear after text or
 				// inline elements.
 				hasNewline = true;
 				offset += NEWLINE.length;
 				value += NEWLINE;
-				if (nodeInfo.flags & PREPENDS_NEWLINE) {
+				if (nodeInfo.f & PREPENDS_NEWLINE) {
 					oldIndex += NEWLINE.length;
 				}
 
-				nodeInfo.flags |= PREPENDS_NEWLINE;
+				nodeInfo.f |= PREPENDS_NEWLINE;
 			} else {
-				if (nodeInfo.flags & PREPENDS_NEWLINE) {
+				if (nodeInfo.f & PREPENDS_NEWLINE) {
 					// deletion detected
 					oldIndex += NEWLINE.length;
 				}
 
-				nodeInfo.flags &= ~PREPENDS_NEWLINE;
+				nodeInfo.f &= ~PREPENDS_NEWLINE;
 			}
 
 			descending = false;
-			if (nodeInfo.flags & IS_VALID) {
+			if (nodeInfo.f & IS_VALID) {
 				// The node and its children are unchanged, so we read from the length.
 				if (nodeInfo.length) {
 					value += oldValue.slice(oldIndex, oldIndex + nodeInfo.length);
@@ -402,7 +533,7 @@ function diff(
 					hasNewline = text.endsWith(NEWLINE);
 				}
 
-				if (nodeInfo.flags & IS_OLD) {
+				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else if ((node as Element).hasAttribute("data-content")) {
@@ -413,14 +544,14 @@ function diff(
 					hasNewline = text.endsWith(NEWLINE);
 				}
 
-				if (nodeInfo.flags & IS_OLD) {
+				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else if (node.nodeName === "BR") {
 				value += NEWLINE;
 				offset += NEWLINE.length;
 				hasNewline = true;
-				if (nodeInfo.flags & IS_OLD) {
+				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else {
@@ -439,7 +570,7 @@ function diff(
 
 			// If the child node prepends a newline, add to offset to increase the
 			// length of the parent node.
-			if (nodeInfo!.flags & PREPENDS_NEWLINE) {
+			if (nodeInfo!.f & PREPENDS_NEWLINE) {
 				offset += NEWLINE.length;
 			}
 
@@ -449,22 +580,22 @@ function diff(
 
 		if (!descending) {
 			// POST-ORDER LOGIC
-			if (!(nodeInfo.flags & IS_VALID)) {
+			if (!(nodeInfo.f & IS_VALID)) {
 				// TODO: Figure out if we should always recalculate APPENDS_NEWLINE???
-				if (!hasNewline && nodeInfo.flags & IS_BLOCKLIKE) {
+				if (!hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
 					value += NEWLINE;
 					offset += NEWLINE.length;
 					hasNewline = true;
-					nodeInfo.flags |= APPENDS_NEWLINE;
+					nodeInfo.f |= APPENDS_NEWLINE;
 				} else {
-					nodeInfo.flags &= ~APPENDS_NEWLINE;
+					nodeInfo.f &= ~APPENDS_NEWLINE;
 				}
 
 				nodeInfo.length = offset - nodeInfo.offset;
-				nodeInfo.flags |= IS_VALID;
+				nodeInfo.f |= IS_VALID;
 			}
 
-			nodeInfo.flags |= IS_OLD;
+			nodeInfo.f |= IS_OLD;
 
 			descending = !!walker.nextSibling();
 			if (!descending) {
@@ -554,7 +685,7 @@ function indexAt(
 		} else if (offset >= node.childNodes.length) {
 			const nodeInfo = cache.get(node)!;
 			index =
-				nodeInfo.flags & APPENDS_NEWLINE
+				nodeInfo.f & APPENDS_NEWLINE
 					? nodeInfo.length - NEWLINE.length
 					: nodeInfo.length;
 		} else {
@@ -571,7 +702,7 @@ function indexAt(
 				// If the offset references an element which prepends a newline
 				// ("hello<div>world</div>"), we have to start from -1 because the
 				// element’s info.offset will not account for the newline.
-				index = nodeInfo.flags & PREPENDS_NEWLINE ? -1 : 0;
+				index = nodeInfo.f & PREPENDS_NEWLINE ? -1 : 0;
 			}
 		}
 	}
@@ -579,7 +710,7 @@ function indexAt(
 	for (; node !== _this; node = node.parentNode!) {
 		const nodeInfo = cache.get(node)!;
 		index += nodeInfo.offset;
-		if (nodeInfo.flags & PREPENDS_NEWLINE) {
+		if (nodeInfo.f & PREPENDS_NEWLINE) {
 			index += NEWLINE.length;
 		}
 	}
@@ -626,7 +757,7 @@ function findNodeOffset(
 			return nodeOffsetFromChild(node, index > 0);
 		}
 
-		if (nodeInfo.flags & PREPENDS_NEWLINE) {
+		if (nodeInfo.f & PREPENDS_NEWLINE) {
 			index -= 1;
 		}
 
@@ -700,6 +831,8 @@ export interface SelectionRange {
 	direction: SelectionDirection;
 }
 
+export type SelectionDirection = "forward" | "backward" | "none";
+
 function getSelectionRange(_this: ContentAreaElement): SelectionRange {
 	const selection = document.getSelection();
 	if (!selection) {
@@ -757,7 +890,7 @@ function setSelectionRange(
 		} else if (focusNode === null) {
 			selection.collapse(anchorNode, anchorOffset);
 		} else {
-			// This method is not implemented in IE.
+			// NOTE: This method is not implemented in IE.
 			selection.setBaseAndExtent(
 				anchorNode,
 				anchorOffset,

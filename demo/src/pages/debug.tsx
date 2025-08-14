@@ -48,8 +48,8 @@ function* Debugger(this: Context) {
 		yield (
 			<Fragment>
 				<h1>😤 Debugger 😤</h1>
-				<content-area c-ref={(ref: any) => (area = ref)}>
-					<div class="editable" contenteditable="true" c-static={true}>
+				<content-area ref={(ref: any) => (area = ref)}>
+					<div class="editable" contenteditable="true" copy={true}>
 						<div>Hello</div>
 						<div>World</div>
 					</div>

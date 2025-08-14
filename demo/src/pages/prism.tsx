@@ -249,10 +249,8 @@ function* App(this: Context) {
 	});
 
 	this.addEventListener("beforeinput", (ev: any) => {
-		//console.log(ev.inputType);
 		switch (ev.inputType) {
 			case "historyUndo": {
-				//console.log("historyUndo");
 				ev.preventDefault();
 				const edit = editHistory.undo();
 				if (edit) {
@@ -264,7 +262,6 @@ function* App(this: Context) {
 				break;
 			}
 			case "historyRedo": {
-				//console.log("historyRedo");
 				ev.preventDefault();
 				const edit = editHistory.redo();
 				if (edit) {

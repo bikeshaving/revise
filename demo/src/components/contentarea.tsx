@@ -14,18 +14,6 @@ export function* ContentArea(
 	this: Context<ContentAreaProps>,
 	{value, children, selectionRange, renderSource}: ContentAreaProps,
 ) {
-	let composing = false;
-	this.addEventListener("compositionstart", () => {
-		composing = true;
-	});
-
-	this.addEventListener("compositionend", () => {
-		composing = false;
-		// Refreshing synchronously seems to cause weird effects with
-		// characters getting preserved in Korean (and probably other
-		// languages).
-		Promise.resolve().then(() => this.refresh());
-	});
 
 	let oldSelectionRange: SelectionRange | undefined;
 	for ({
@@ -34,7 +22,7 @@ export function* ContentArea(
 		selectionRange = oldSelectionRange,
 		renderSource,
 	} of this) {
-		this.flush((area) => {
+		this.after((area) => {
 			if (typeof renderSource === "string") {
 				area.source(renderSource);
 			}
@@ -49,15 +37,15 @@ export function* ContentArea(
 
 			if (selectionRange) {
 				area.setSelectionRange(
-					selectionRange.selectionStart,
-					selectionRange.selectionEnd,
-					selectionRange.selectionDirection,
+					selectionRange.start,
+					selectionRange.end,
+					selectionRange.direction,
 				);
 			}
 		});
 
 		const area: ContentAreaElement = yield (
-			<content-area c-static={composing}>{children}</content-area>
+			<content-area>{children}</content-area>
 		);
 
 		oldSelectionRange = area.getSelectionRange();
