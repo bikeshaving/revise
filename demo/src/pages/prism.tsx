@@ -93,6 +93,7 @@ export function splitLines(
 		lines.pop();
 	}
 
+	console.log(lines);
 	return lines;
 }
 
@@ -133,7 +134,7 @@ function CodeBlock(
 				const length = line.reduce((l, t) => l + t.length, 0);
 				cursor += length + 1;
 				return (
-					<div c-key={key}>
+					<div key={key}>
 						<code>{printTokens(line)}</code>
 						<br />
 					</div>
@@ -152,130 +153,131 @@ function* App(this: Context) {
 	const editHistory = new EditHistory();
 	this.addEventListener("contentchange", (ev: any) => {
 		const {edit, source} = ev.detail;
-		keyer.transform(edit);
 		if (source === "render") {
 			return;
 		} else if (source !== "history") {
-			editHistory.append(edit);
+			//editHistory.append(edit);
+			ev.preventDefault();
 		}
 
+		keyer.transform(edit);
 		value = ev.target.value;
 		this.refresh();
 	});
 
-	this.addEventListener("keydown", (ev) => {
-		if (ev.key === "Enter") {
-			// Potato quality tab-matching.
-			let {value: value1, selectionStart: selectionStart1, selectionEnd} = area;
-			if (selectionStart1 !== selectionEnd) {
-				return;
-			}
+	//this.addEventListener("keydown", (ev) => {
+	//	if (ev.key === "Enter") {
+	//		// Potato quality tab-matching.
+	//		let {value: value1, selectionStart: selectionStart1, selectionEnd} = area;
+	//		if (selectionStart1 !== selectionEnd) {
+	//			return;
+	//		}
 
-			// A reasonable length to look for tabs and braces.
-			const prev = value.slice(0, selectionStart1);
-			const tabMatch = prev.match(/[\r\n]?([^\S\r\n]*).*$/);
-			// [^\S\r\n] = non-newline whitespace
-			const prevMatch = prev.match(/({|\(|\[)([^\S\r\n]*)$/);
-			if (prevMatch) {
-				// increase tab
-				ev.preventDefault();
-				const next = value1.slice(selectionStart1);
-				const startBracket = prevMatch[1];
-				const startWhitespace = prevMatch[2];
-				let insertBefore = "\n";
-				if (tabMatch) {
-					insertBefore += tabMatch[1] + "  ";
-				}
+	//		// A reasonable length to look for tabs and braces.
+	//		const prev = value.slice(0, selectionStart1);
+	//		const tabMatch = prev.match(/[\r\n]?([^\S\r\n]*).*$/);
+	//		// [^\S\r\n] = non-newline whitespace
+	//		const prevMatch = prev.match(/({|\(|\[)([^\S\r\n]*)$/);
+	//		if (prevMatch) {
+	//			// increase tab
+	//			ev.preventDefault();
+	//			const next = value1.slice(selectionStart1);
+	//			const startBracket = prevMatch[1];
+	//			const startWhitespace = prevMatch[2];
+	//			let insertBefore = "\n";
+	//			if (tabMatch) {
+	//				insertBefore += tabMatch[1] + "  ";
+	//			}
 
-				let edit = Edit.build(
-					value1,
-					insertBefore,
-					selectionStart1,
-					selectionStart1 + startWhitespace.length,
-				);
+	//			let edit = Edit.build(
+	//				value1,
+	//				insertBefore,
+	//				selectionStart1,
+	//				selectionStart1 + startWhitespace.length,
+	//			);
 
-				selectionStart1 -= startWhitespace.length;
-				selectionStart1 += insertBefore.length;
+	//			selectionStart1 -= startWhitespace.length;
+	//			selectionStart1 += insertBefore.length;
 
-				const closingMap: Record<string, string> = {
-					"{": "}",
-					"(": ")",
-					"[": "]",
-				};
-				let closing = closingMap[startBracket];
-				if (closing !== "}") {
-					closing = "\\" + closing;
-				}
+	//			const closingMap: Record<string, string> = {
+	//				"{": "}",
+	//				"(": ")",
+	//				"[": "]",
+	//			};
+	//			let closing = closingMap[startBracket];
+	//			if (closing !== "}") {
+	//				closing = "\\" + closing;
+	//			}
 
-				const nextMatch = next.match(
-					new RegExp(String.raw`^([^\S\r\n]*)${closing}`),
-				);
+	//			const nextMatch = next.match(
+	//				new RegExp(String.raw`^([^\S\r\n]*)${closing}`),
+	//			);
 
-				if (nextMatch) {
-					const value2 = edit.apply(value1);
-					const endWhitespace = nextMatch[1];
-					const insertAfter = tabMatch ? "\n" + tabMatch[1] : "\n";
-					const edit1 = Edit.build(
-						value2,
-						insertAfter,
-						selectionStart1,
-						selectionStart1 + endWhitespace.length,
-					);
+	//			if (nextMatch) {
+	//				const value2 = edit.apply(value1);
+	//				const endWhitespace = nextMatch[1];
+	//				const insertAfter = tabMatch ? "\n" + tabMatch[1] : "\n";
+	//				const edit1 = Edit.build(
+	//					value2,
+	//					insertAfter,
+	//					selectionStart1,
+	//					selectionStart1 + endWhitespace.length,
+	//				);
 
-					edit = edit.compose(edit1);
-				}
+	//				edit = edit.compose(edit1);
+	//			}
 
-				value = edit.apply(value1);
-				selectionRange = {
-					selectionStart: selectionStart1,
-					selectionEnd: selectionStart1,
-					selectionDirection: "none",
-				};
-				this.refresh();
-			} else if (tabMatch && tabMatch[1].length) {
-				// match the tabbing of the previous line
-				ev.preventDefault();
-				const insertBefore = "\n" + tabMatch[1];
-				const edit = Edit.build(value1, insertBefore, selectionStart1);
-				value = edit.apply(value1);
-				selectionRange = {
-					selectionStart: selectionStart1 + insertBefore.length,
-					selectionEnd: selectionStart1 + insertBefore.length,
-					selectionDirection: "none",
-				};
-				this.refresh();
-			}
-		}
-	});
+	//			value = edit.apply(value1);
+	//			selectionRange = {
+	//				selectionStart: selectionStart1,
+	//				selectionEnd: selectionStart1,
+	//				selectionDirection: "none",
+	//			};
+	//			this.refresh();
+	//		} else if (tabMatch && tabMatch[1].length) {
+	//			// match the tabbing of the previous line
+	//			ev.preventDefault();
+	//			const insertBefore = "\n" + tabMatch[1];
+	//			const edit = Edit.build(value1, insertBefore, selectionStart1);
+	//			value = edit.apply(value1);
+	//			selectionRange = {
+	//				selectionStart: selectionStart1 + insertBefore.length,
+	//				selectionEnd: selectionStart1 + insertBefore.length,
+	//				selectionDirection: "none",
+	//			};
+	//			this.refresh();
+	//		}
+	//	}
+	//});
 
-	this.addEventListener("beforeinput", (ev: any) => {
-		switch (ev.inputType) {
-			case "historyUndo": {
-				ev.preventDefault();
-				const edit = editHistory.undo();
-				if (edit) {
-					selectionRange = selectionRangeFromEdit(edit);
-					value = edit.apply(value);
-					renderSource = "history";
-					this.refresh();
-				}
-				break;
-			}
-			case "historyRedo": {
-				ev.preventDefault();
-				const edit = editHistory.redo();
-				if (edit) {
-					value = edit.apply(value);
-					selectionRange = selectionRangeFromEdit(edit);
-					renderSource = "history";
-					this.refresh();
-				}
-				break;
-			}
-		}
-	});
+	//this.addEventListener("beforeinput", (ev: any) => {
+	//	switch (ev.inputType) {
+	//		case "historyUndo": {
+	//			ev.preventDefault();
+	//			const edit = editHistory.undo();
+	//			if (edit) {
+	//				selectionRange = selectionRangeFromEdit(edit);
+	//				value = edit.apply(value);
+	//				renderSource = "history";
+	//				this.refresh();
+	//			}
+	//			break;
+	//		}
+	//		case "historyRedo": {
+	//			ev.preventDefault();
+	//			const edit = editHistory.redo();
+	//			if (edit) {
+	//				value = edit.apply(value);
+	//				selectionRange = selectionRangeFromEdit(edit);
+	//				renderSource = "history";
+	//				this.refresh();
+	//			}
+	//			break;
+	//		}
+	//	}
+	//});
 
-	checkpointEditHistoryBySelection(this, editHistory);
+	//checkpointEditHistoryBySelection(this, editHistory);
 	for ({} of this) {
 		this.schedule(() => {
 			selectionRange = undefined;
@@ -285,7 +287,7 @@ function* App(this: Context) {
 			<div class="app">
 				<p>Using content-area with Prism.js.</p>
 				<ContentArea
-					c-ref={(area1: any) => (area = area1)}
+					ref={(area1: any) => (area = area1)}
 					value={value}
 					renderSource={renderSource}
 					selectionRange={selectionRange}
@@ -327,7 +329,7 @@ function checkpointEditHistoryBySelection(
 		oldSelectionRange = newSelectionRange;
 	};
 
-	ctx.schedule((el) => {
+	ctx.after((el: any) => {
 		area = el.querySelector("content-area");
 	});
 
