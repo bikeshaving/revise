@@ -32,7 +32,11 @@ function Rainbow(this: Context, {value, keyer}: {value: string; keyer: Keyer}) {
 		) : (
 			<br />
 		);
-		return <div data-key={key} key={key}>{chars}</div>;
+		return (
+			<div data-key={key} key={key}>
+				{chars}
+			</div>
+		);
 	});
 
 	return (

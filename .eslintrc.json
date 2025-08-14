@@ -24,7 +24,7 @@
   "extends": [
     "eslint:recommended",
     "plugin:prettier/recommended",
-    "prettier/@typescript-eslint"
+    "prettier"
   ],
   "rules": {
     "no-console": [

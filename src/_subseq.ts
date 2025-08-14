@@ -34,9 +34,11 @@
  */
 export type Subseq = Array<number>;
 
-export function measure(
-	subseq: Subseq,
-): {length: number; includedLength: number; excludedLength: number} {
+export function measure(subseq: Subseq): {
+	length: number;
+	includedLength: number;
+	excludedLength: number;
+} {
 	let length = 0,
 		includedLength = 0,
 		excludedLength = 0;

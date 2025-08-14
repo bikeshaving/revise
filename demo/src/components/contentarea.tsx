@@ -14,7 +14,6 @@ export function* ContentArea(
 	this: Context<ContentAreaProps>,
 	{value, children, selectionRange, renderSource}: ContentAreaProps,
 ) {
-
 	let oldSelectionRange: SelectionRange | undefined;
 	for ({
 		value,

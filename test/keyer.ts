@@ -24,11 +24,7 @@ test("keyAt/transform", () => {
 	// "01\n34\n 67\n90"
 	//          ^
 	// "01\n34\n\n67\n90"
-	const edit = Edit.builder()
-		.retain(6)
-		.insert("\n")
-		.retain(4)
-		.build();
+	const edit = Edit.builder().retain(6).insert("\n").retain(4).build();
 
 	keyer.transform(edit);
 	const keys2 = new Map([
@@ -43,11 +39,7 @@ test("keyAt/transform", () => {
 	keys2.set(6, key5);
 
 	Assert.equal(keyer.keys, keys2);
-	const edit1 = Edit.builder()
-		.retain(5)
-		.delete(2)
-		.retain(4)
-		.build();
+	const edit1 = Edit.builder().retain(5).delete(2).retain(4).build();
 
 	keyer.transform(edit1);
 	const keys3 = new Map([

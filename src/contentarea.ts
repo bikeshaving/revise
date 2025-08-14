@@ -13,7 +13,9 @@ const _staleValue = Symbol.for("ContentArea._staleValue");
 const _staleSelectionRange = Symbol.for("ContentArea._slateSelectionRange");
 const _compositionBuffer = Symbol.for("ContentArea._compositionBuffer");
 const _compositionStartValue = Symbol.for("ContentArea._compositionStartValue");
-const _compositionSelectionRange = Symbol.for("ContentArea._compositionSelectionRange");
+const _compositionSelectionRange = Symbol.for(
+	"ContentArea._compositionSelectionRange",
+);
 
 export class ContentAreaElement extends HTMLElement {
 	declare [_cache]: NodeInfoCache;
@@ -85,7 +87,7 @@ export class ContentAreaElement extends HTMLElement {
 			if (processCompositionTimeout == null) {
 				this[_compositionBuffer] = [];
 				this[_compositionStartValue] = this[_value];
-				this[_compositionSelectionRange] = { ...this[_selectionRange] };
+				this[_compositionSelectionRange] = {...this[_selectionRange]};
 			}
 
 			processCompositionTimeout = undefined;
@@ -101,10 +103,10 @@ export class ContentAreaElement extends HTMLElement {
 				const edit = Edit.diff(
 					this[_compositionStartValue],
 					this[_value],
-					this[_compositionSelectionRange].start
+					this[_compositionSelectionRange].start,
 				);
 				const ev = new ContentEvent("contentchange", {
-					detail: { edit, source: null, mutations: this[_compositionBuffer] }
+					detail: {edit, source: null, mutations: this[_compositionBuffer]},
 				});
 				this.dispatchEvent(ev);
 				this[_staleValue] = undefined;
@@ -219,7 +221,6 @@ export class ContentAreaElement extends HTMLElement {
 	source(source: string | symbol | null): boolean {
 		return validate(this, this[_observer].takeRecords(), source);
 	}
-
 }
 
 export interface ContentEventDetail {
@@ -250,7 +251,7 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 		for (let i = records.length - 1; i >= 0; i--) {
 			const record = records[i];
 			switch (record.type) {
-				case 'childList': {
+				case "childList": {
 					for (let j = 0; j < record.addedNodes.length; j++) {
 						const node = record.addedNodes[j];
 						if (node.parentNode) {
@@ -265,25 +266,28 @@ export class ContentEvent extends CustomEvent<ContentEventDetail> {
 					break;
 				}
 
-				case 'characterData': {
+				case "characterData": {
 					if (record.oldValue !== null) {
 						(record.target as CharacterData).data = record.oldValue;
 					}
 					break;
 				}
 
-				case 'attributes': {
+				case "attributes": {
 					if (record.oldValue === null) {
 						(record.target as Element).removeAttribute(record.attributeName!);
 					} else {
-						(record.target as Element).setAttribute(record.attributeName!, record.oldValue);
+						(record.target as Element).setAttribute(
+							record.attributeName!,
+							record.oldValue,
+						);
 					}
 					break;
 				}
 			}
 		}
 
-		const records1 = (area)[_observer].takeRecords();
+		const records1 = area[_observer].takeRecords();
 		validate(area, records1, PreventDefaultSource);
 	}
 }
@@ -337,7 +341,9 @@ function validate(
 	if (typeof _this !== "object" || _this[_cache] == null) {
 		throw new TypeError("this is not a ContentAreaElement");
 	} else if (!document.contains(_this)) {
-		throw new Error("ContentArea cannot be read before it is inserted into the DOM");
+		throw new Error(
+			"ContentArea cannot be read before it is inserted into the DOM",
+		);
 	}
 
 	if (!invalidate(_this, records)) {
@@ -350,7 +356,9 @@ function validate(
 	_this[_selectionRange] = getSelectionRange(_this);
 	// Don't dispatch events during composition or preventDefault operations
 	if (source !== PreventDefaultSource && !_this[_compositionBuffer]) {
-		const ev = new ContentEvent("contentchange", {detail: {edit, source, mutations: records}});
+		const ev = new ContentEvent("contentchange", {
+			detail: {edit, source, mutations: records},
+		});
 		_this.dispatchEvent(ev);
 		_this[_staleValue] = undefined;
 		_this[_staleSelectionRange] = undefined;
@@ -433,7 +441,6 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 		cache.delete(node);
 	}
 }
-
 
 // TODO: custom newlines?
 const NEWLINE = "\n";
@@ -839,13 +846,8 @@ function getSelectionRange(_this: ContentAreaElement): SelectionRange {
 		return {start: 0, end: 0, direction: "none"};
 	}
 
-	const {
-		focusNode,
-		focusOffset,
-		anchorNode,
-		anchorOffset,
-		isCollapsed,
-	} = selection;
+	const {focusNode, focusOffset, anchorNode, anchorOffset, isCollapsed} =
+		selection;
 	const focus = Math.max(0, indexAt(_this, focusNode, focusOffset));
 	const anchor = isCollapsed
 		? focus
