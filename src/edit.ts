@@ -1,9 +1,6 @@
 import * as S from "./_subseq.js";
 import type {Subseq} from "./_subseq.js";
 
-// For now, keep the flexible type but add helper functions for type-safe access
-type EditParts = Array<string | number>;
-
 export interface InsertOperation {
 	type: "insert";
 	start: number;
@@ -64,7 +61,7 @@ export class Edit {
 	 *   At position 5: insert "oo"
 	 *   Retain from 5 to 11
 	 */
-	declare parts: EditParts;
+	declare parts: Array<string | number>;
 
 	constructor(parts: Array<string | number>) {
 		validateEditParts(parts);
