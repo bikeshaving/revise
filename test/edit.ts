@@ -303,4 +303,103 @@ test("createBuilder compose", () => {
 	);
 });
 
+// Validation tests
+test("validation: empty array", () => {
+	Assert.throws(() => new Edit([]), /Edit parts cannot be empty/);
+});
+
+test("validation: wrong length", () => {
+	Assert.throws(() => new Edit([1, 2]), /Edit parts length 2 is invalid/);
+});
+
+test("validation: final position not number", () => {
+	Assert.throws(
+		() => new Edit(["not a number"]),
+		/Single-element edit must be a number/,
+	);
+});
+
+test("validation: negative final position", () => {
+	Assert.throws(() => new Edit([-1]), /Final position cannot be negative/);
+});
+
+test("validation: position not number", () => {
+	Assert.throws(
+		() => new Edit(["not a number", "del", "ins", 5]),
+		/Position at index 0 must be a number/,
+	);
+});
+
+test("validation: deleted not string", () => {
+	Assert.throws(
+		() => new Edit([1, 2, "ins", 5]),
+		/Deleted at index 1 must be a string/,
+	);
+});
+
+test("validation: inserted not string", () => {
+	Assert.throws(
+		() => new Edit([1, "del", 3, 5]),
+		/Inserted at index 2 must be a string/,
+	);
+});
+
+test("validation: negative position", () => {
+	Assert.throws(
+		() => new Edit([-1, "del", "ins", 5]),
+		/Position -1 at index 0 cannot be negative/,
+	);
+});
+
+test("validation: positions not strictly increasing", () => {
+	Assert.throws(
+		() => new Edit([1, "a", "b", 2, "c", "d", 5]),
+		/Position 2 at index 3 must be > previous end position 2/,
+	);
+});
+
+test("validation: deletion exceeds next position", () => {
+	Assert.throws(
+		() => new Edit([1, "abc", "x", 3, "y", "z", 5]),
+		/Deletion at position 1 extends to 4, exceeding next position 3/,
+	);
+});
+
+test("validation: deletion exceeds final position", () => {
+	Assert.throws(
+		() => new Edit([1, "toolong", "ins", 5]),
+		/Deletion at position 1 extends to 8, exceeding final position 5/,
+	);
+});
+
+test("validation: valid empty edit", () => {
+	// Should not throw
+	const edit = new Edit([5]);
+	Assert.is(edit.parts.length, 1);
+});
+
+test("validation: valid single operation", () => {
+	// Should not throw
+	const edit = new Edit([1, "del", "ins", 5]);
+	Assert.is(edit.parts.length, 4);
+});
+
+test("validation: valid multiple operations", () => {
+	// Should not throw
+	const edit = new Edit([1, "a", "b", 3, "c", "d", 5]);
+	Assert.is(edit.parts.length, 7);
+});
+
+test("validation: valid operations with gaps", () => {
+	// Should not throw
+	const edit = new Edit([1, "a", "b", 5, "c", "d", 10]);
+	Assert.is(edit.parts.length, 7);
+});
+
+test("validation: valid adjacent operations", () => {
+	// Should not throw - operations touch but don't overlap
+	const edit = new Edit([1, "ab", "x", 4, "cd", "y", 6]);
+	Assert.is(edit.parts.length, 7);
+});
+
 test.run();

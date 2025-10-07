@@ -1,9 +1,6 @@
 import * as S from "./_subseq.js";
 import type {Subseq} from "./_subseq.js";
 
-// Type definitions for the string pairs format
-type EditOperation = [number, string, string]; // [position, deleted, inserted]
-
 // For now, keep the flexible type but add helper functions for type-safe access
 type EditParts = Array<string | number>;
 
@@ -70,9 +67,9 @@ export class Edit {
 	declare parts: EditParts;
 
 	constructor(parts: Array<string | number>) {
+		validateEditParts(parts);
 		this.parts = parts;
 	}
-
 
 	/** A string which represents a concatenation of all insertions. */
 	get inserted(): string {
@@ -228,7 +225,6 @@ export class Edit {
 		return synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
-
 	invert(): Edit {
 		let [insertSeq, inserted, deleteSeq, deleted] = factor(this);
 		deleteSeq = S.expand(deleteSeq, insertSeq);
@@ -276,7 +272,10 @@ export class Edit {
 							prefix = commonPrefixLength(insertion, deletion);
 							const insertionRemainder = insertion.slice(prefix);
 							const deletionRemainder = deletion.slice(prefix);
-							suffix = commonSuffixLength(insertionRemainder, deletionRemainder);
+							suffix = commonSuffixLength(
+								insertionRemainder,
+								deletionRemainder,
+							);
 						}
 
 						S.pushSegment(insertSeq, prefix, false);
@@ -322,17 +321,30 @@ export class Edit {
 
 				const deletedRemainder = deleted.slice(prefixLen);
 				const insertedRemainder = inserted.slice(prefixLen);
-				const suffixLen = commonSuffixLength(deletedRemainder, insertedRemainder);
+				const suffixLen = commonSuffixLength(
+					deletedRemainder,
+					insertedRemainder,
+				);
 
 				// Only include the differing parts
 				if (prefixLen > 0 || suffixLen > 0) {
-					const optimizedDeleted = deleted.slice(prefixLen, deleted.length - suffixLen);
-					const optimizedInserted = inserted.slice(prefixLen, inserted.length - suffixLen);
+					const optimizedDeleted = deleted.slice(
+						prefixLen,
+						deleted.length - suffixLen,
+					);
+					const optimizedInserted = inserted.slice(
+						prefixLen,
+						inserted.length - suffixLen,
+					);
 					const optimizedPosition = position + prefixLen;
 
 					// Only add if there's actually a change
 					if (optimizedDeleted || optimizedInserted) {
-						compactedParts.push(optimizedPosition, optimizedDeleted, optimizedInserted);
+						compactedParts.push(
+							optimizedPosition,
+							optimizedDeleted,
+							optimizedInserted,
+						);
 					}
 				} else {
 					// No optimization possible, keep as-is
@@ -695,3 +707,99 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 	return result;
 }
 
+function validateEditParts(parts: Array<string | number>): void {
+	// Check minimum length (must be at least final position)
+	if (parts.length === 0) {
+		throw new Error("Edit parts cannot be empty");
+	}
+
+	// Check length follows triplet pattern: operations * 3 + final position
+	if (parts.length !== 1 && (parts.length - 1) % 3 !== 0) {
+		throw new Error(
+			`Edit parts length ${parts.length} is invalid - must be 1 or (operations * 3 + 1)`,
+		);
+	}
+
+	// For empty edit (just final position)
+	if (parts.length === 1) {
+		if (typeof parts[0] !== "number") {
+			throw new Error("Single-element edit must be a number (final position)");
+		}
+		if (parts[0] < 0) {
+			throw new Error("Final position cannot be negative");
+		}
+		return;
+	}
+
+	// Validate triplet structure and ordering
+	const finalPos = parts[parts.length - 1];
+	if (typeof finalPos !== "number") {
+		throw new Error("Final position must be a number");
+	}
+	if (finalPos < 0) {
+		throw new Error("Final position cannot be negative");
+	}
+
+	let previousPos = -1;
+	for (let i = 0; i < parts.length - 1; i += 3) {
+		const position = parts[i];
+		const deleted = parts[i + 1];
+		const inserted = parts[i + 2];
+
+		// Validate types
+		if (typeof position !== "number") {
+			throw new Error(
+				`Position at index ${i} must be a number, got ${typeof position}`,
+			);
+		}
+		if (typeof deleted !== "string") {
+			throw new Error(
+				`Deleted at index ${i + 1} must be a string, got ${typeof deleted}`,
+			);
+		}
+		if (typeof inserted !== "string") {
+			throw new Error(
+				`Inserted at index ${i + 2} must be a string, got ${typeof inserted}`,
+			);
+		}
+
+		// Validate position ordering
+		if (position < 0) {
+			throw new Error(`Position ${position} at index ${i} cannot be negative`);
+		}
+		if (position <= previousPos) {
+			throw new Error(
+				`Position ${position} at index ${i} must be > previous end position ${previousPos}`,
+			);
+		}
+
+		// Validate deletion doesn't exceed next position or final position
+		const deletionEnd = position + deleted.length;
+		const nextIndex = i + 3;
+		if (nextIndex < parts.length - 1) {
+			// There's a next operation
+			const nextPos = parts[nextIndex] as number;
+			if (deletionEnd > nextPos) {
+				throw new Error(
+					`Deletion at position ${position} extends to ${deletionEnd}, exceeding next position ${nextPos}`,
+				);
+			}
+		} else {
+			// This is the last operation, check against final position
+			if (deletionEnd > finalPos) {
+				throw new Error(
+					`Deletion at position ${position} extends to ${deletionEnd}, exceeding final position ${finalPos}`,
+				);
+			}
+		}
+
+		previousPos = deletionEnd;
+	}
+
+	// Validate final position is reachable
+	if (previousPos > finalPos) {
+		throw new Error(
+			`Operations extend to position ${previousPos}, exceeding final position ${finalPos}`,
+		);
+	}
+}
