@@ -1,6 +1,12 @@
 import * as S from "./_subseq.js";
 import type {Subseq} from "./_subseq.js";
 
+// Type definitions for the string pairs format
+type EditOperation = [number, string, string]; // [position, deleted, inserted]
+
+// For now, keep the flexible type but add helper functions for type-safe access
+type EditParts = Array<string | number>;
+
 export interface InsertOperation {
 	type: "insert";
 	start: number;
@@ -17,17 +23,17 @@ export interface DeleteOperation {
 	type: "delete";
 	start: number;
 	end: number;
-	value: string | undefined;
+	value: string;
 }
 
 export type Operation = RetainOperation | DeleteOperation | InsertOperation;
 
 export interface EditBuilder {
+	insert(value: string): EditBuilder;
+
 	retain(length: number): EditBuilder;
 
 	delete(length: number): EditBuilder;
-
-	insert(value: string): EditBuilder;
 
 	concat(edit: Edit): EditBuilder;
 
@@ -37,57 +43,54 @@ export interface EditBuilder {
 /** A compact data structure for representing changes to strings. */
 export class Edit {
 	/**
-	 * An array of strings and integers representing operations.
+	 * An array of strings and numbers in string pairs format.
 	 *
-	 * Strings represent insertions, and pairs of integers represent the start
-	 * and end indices of retained segments. Deletions are implied by gaps
-	 * between the retained segments.
+	 * Format: [position, deleted_string, inserted_string, position, deleted_string, inserted_string, ..., final_position]
+	 *
+	 * Each triplet represents operations at a specific position:
+	 * - position: where in the original text this operation occurs
+	 * - deleted_string: text to delete (empty string if no deletion)
+	 * - inserted_string: text to insert (empty string if no insertion)
+	 * - final_position: the length of the original text
+	 *
+	 * Retains are implicit between positions.
 	 *
 	 * Examples:
 	 *
-	 *   [0, 3, 7, 10]
-	 *   retain 0-3, delete 3-7, retain 7-10
+	 *   [1, "ello", "i", 11]
+	 *   Retain from 0 to 1
+	 *   At position 1: delete "ello", insert "i"
+	 *   Retain from 5 (1 + len("ello")) to 11
 	 *
-	 *   ["hello", 0, 10]
-	 *   insert "hello", retain 0-10
-	 *
-	 *   [0, 5, " ", 6, 10]
-	 *   retain 0-5, insert " ", delete 5-6, retain 6-10
-	 *
-	 * If the edit includes a delete operation at its end, this is signified by
-	 * an extra number signifying the length. Therefore, regardless of whether or
-	 * not the last character of the string is retained, the last number will
-	 * always represent the length of the original string.
-	 *
-	 *   // retain 0-10, delete 10-11
-	 *   [0, 10, 11]
-	 *
-	 * An edit that is only retains will contain a single number representing the
-	 * length of the string.
+	 *   [5, "", "oo", 11]
+	 *   Retain from 0 to 5
+	 *   At position 5: insert "oo"
+	 *   Retain from 5 to 11
 	 */
-	declare parts: Array<string | number>;
+	declare parts: EditParts;
 
-	/**
-	 * A string which represents a concatenation of all deletions.
-	 *
-	 * This property is optional, but required if you want to invert the edit.
-	 */
-	declare deleted: string | undefined;
-
-	constructor(parts: Array<string | number>, deleted?: string) {
+	constructor(parts: Array<string | number>) {
 		this.parts = parts;
-		this.deleted = deleted;
 	}
+
 
 	/** A string which represents a concatenation of all insertions. */
 	get inserted(): string {
 		let text = "";
-		for (let i = 0; i < this.parts.length; i++) {
-			if (typeof this.parts[i] === "string") {
-				text += this.parts[i];
-			}
+		for (let i = 2; i < this.parts.length; i += 3) {
+			const inserted = this.parts[i] as string;
+			text += inserted;
 		}
+		return text;
+	}
 
+	/** A string which represents a concatenation of all deletions. */
+	get deleted(): string {
+		let text = "";
+		for (let i = 1; i < this.parts.length; i += 3) {
+			const deleted = this.parts[i] as string;
+			text += deleted;
+		}
 		return text;
 	}
 
@@ -95,70 +98,104 @@ export class Edit {
 	 * Returns an array of operations, which is more readable than the parts
 	 * array.
 	 *
-	 *   new Edit([0, 1, " ", 2], "x").operations();
+	 *   new Edit([0, "old", "new", 3, "", "", 6]).operations();
 	 *   [
-	 *     {type: "retain", start: 0, end: 1},
-	 *     {type: "insert", start: 1, value: " "},
-	 *     {type: "delete", start: 1, end: 2, value: "x"},
+	 *     {type: "delete", start: 0, end: 3, value: "old"},
+	 *     {type: "insert", start: 0, value: "new"},
+	 *     {type: "retain", start: 3, end: 6},
 	 *   ]
 	 *
-	 * When insertions and deletions happen at the same index, insertions will
-	 * always appear before deletions in the operations array.
+	 * When insertions and deletions happen at the same index, deletions will
+	 * always appear before insertions in the operations array (deletion-first format).
 	 */
 	operations(): Array<Operation> {
 		const operations: Array<Operation> = [];
-		let retaining = false;
-		let index = 0;
-		let deleteStart = 0;
-		for (let i = 0; i < this.parts.length; i++) {
-			const part = this.parts[i];
-			if (typeof part === "number") {
-				if (part < index) {
-					throw new TypeError("Malformed edit");
-				} else if (part > index) {
-					if (retaining) {
-						operations.push({type: "retain", start: index, end: part});
-					} else {
-						const value =
-							typeof this.deleted === "undefined"
-								? undefined
-								: this.deleted.slice(deleteStart, part);
-						operations.push({
-							type: "delete",
-							start: index,
-							end: part,
-							value,
-						});
-						deleteStart = part;
-					}
-				}
+		let currentPos = 0;
 
-				index = part;
-				retaining = !retaining;
-			} else {
-				operations.push({type: "insert", start: index, value: part});
+		// Handle empty edit (just final position)
+		if (this.parts.length === 1) {
+			const finalPos = this.parts[0] as number;
+			if (finalPos > 0) {
+				operations.push({
+					type: "retain",
+					start: 0,
+					end: finalPos,
+				});
 			}
+			return operations;
+		}
+
+		// Process triplets
+		for (let i = 0; i < this.parts.length - 1; i += 3) {
+			const position = this.parts[i] as number;
+			const deleted = this.parts[i + 1] as string;
+			const inserted = this.parts[i + 2] as string;
+
+			// Add retain operation for gap if needed
+			if (position > currentPos) {
+				operations.push({
+					type: "retain",
+					start: currentPos,
+					end: position,
+				});
+			}
+
+			// Add operations at this position (deletion-first format)
+			if (deleted) {
+				operations.push({
+					type: "delete",
+					start: position,
+					end: position + deleted.length,
+					value: deleted,
+				});
+			}
+			if (inserted) {
+				operations.push({
+					type: "insert",
+					start: position,
+					value: inserted,
+				});
+			}
+
+			// Move current position past the deletion
+			currentPos = position + deleted.length;
+		}
+
+		// Handle final retain if needed
+		const finalPos = this.parts[this.parts.length - 1] as number;
+		if (finalPos > currentPos) {
+			operations.push({
+				type: "retain",
+				start: currentPos,
+				end: finalPos,
+			});
 		}
 
 		return operations;
 	}
 
 	apply(text: string): string {
-		let text1 = "";
+		let result = "";
+		let sourcePos = 0;
 		const operations = this.operations();
+
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i];
 			switch (op.type) {
 				case "retain":
-					text1 += text.slice(op.start, op.end);
+					result += text.slice(sourcePos, sourcePos + (op.end - op.start));
+					sourcePos += op.end - op.start;
+					break;
+				case "delete":
+					sourcePos += op.end - op.start;
 					break;
 				case "insert":
-					text1 += op.value;
+					result += op.value;
 					break;
 			}
 		}
 
-		return text1;
+		return result;
 	}
 
 	/** Composes two consecutive edits. */
@@ -187,35 +224,26 @@ export class Edit {
 		const insertSeq = S.union(insertSeq1, insertSeq2);
 		const inserted = consolidate(insertSeq1, inserted1, insertSeq2, inserted2);
 		const deleteSeq = S.shrink(S.union(deleteSeq1, deleteSeq2), insertSeq);
-		const deleted =
-			deleted1 != null && deleted2 != null
-				? consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2)
-				: undefined;
+		const deleted = consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2);
 		return synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
-	invert(): Edit {
-		if (typeof this.deleted === "undefined") {
-			throw new Error("Edit is not invertible");
-		}
 
+	invert(): Edit {
 		let [insertSeq, inserted, deleteSeq, deleted] = factor(this);
 		deleteSeq = S.expand(deleteSeq, insertSeq);
 		insertSeq = S.shrink(insertSeq, deleteSeq);
-		return synthesize(deleteSeq, deleted!, insertSeq, inserted);
+		return synthesize(deleteSeq, deleted, insertSeq, inserted);
 	}
 
 	normalize(): Edit {
-		if (typeof this.deleted === "undefined") {
-			throw new Error("Edit is not normalizable");
-		}
-
 		const insertSeq: Array<number> = [];
 		const deleteSeq: Array<number> = [];
 		let inserted = "";
 		let deleted = "";
 		let insertion: string | undefined;
 		const operations = this.operations();
+
 		for (let i = 0; i < operations.length; i++) {
 			const op = operations[i];
 			switch (op.type) {
@@ -238,7 +266,7 @@ export class Edit {
 
 				case "delete": {
 					const length = op.end - op.start;
-					const deletion = op.value!;
+					const deletion = op.value;
 					let prefix = 0;
 					let suffix = 0;
 					if (insertion !== undefined) {
@@ -246,10 +274,9 @@ export class Edit {
 							prefix = deletion.length;
 						} else {
 							prefix = commonPrefixLength(insertion, deletion);
-							suffix = commonSuffixLength(
-								insertion.slice(prefix),
-								deletion.slice(prefix),
-							);
+							const insertionRemainder = insertion.slice(prefix);
+							const deletionRemainder = deletion.slice(prefix);
+							suffix = commonSuffixLength(insertionRemainder, deletionRemainder);
 						}
 
 						S.pushSegment(insertSeq, prefix, false);
@@ -259,7 +286,6 @@ export class Edit {
 
 					deleted += deletion.slice(prefix, deletion.length - suffix);
 					S.pushSegment(deleteSeq, prefix, false);
-					// TODO: This line is throwing for some reason
 					S.pushSegment(deleteSeq, length - prefix - suffix, true);
 					S.pushSegment(deleteSeq, suffix, false);
 
@@ -276,7 +302,52 @@ export class Edit {
 			inserted += insertion;
 		}
 
-		return synthesize(insertSeq, inserted, deleteSeq, deleted);
+		const result = synthesize(insertSeq, inserted, deleteSeq, deleted);
+
+		if (result.parts.length <= 1) {
+			return result;
+		}
+
+		// Apply edit-level compaction for adjacent operations
+		const compactedParts: Array<string | number> = [];
+
+		for (let i = 0; i < result.parts.length - 1; i += 3) {
+			const position = result.parts[i] as number;
+			const deleted = result.parts[i + 1] as string;
+			const inserted = result.parts[i + 2] as string;
+
+			// Apply prefix/suffix optimization between deleted and inserted
+			if (deleted && inserted) {
+				const prefixLen = commonPrefixLength(deleted, inserted);
+
+				const deletedRemainder = deleted.slice(prefixLen);
+				const insertedRemainder = inserted.slice(prefixLen);
+				const suffixLen = commonSuffixLength(deletedRemainder, insertedRemainder);
+
+				// Only include the differing parts
+				if (prefixLen > 0 || suffixLen > 0) {
+					const optimizedDeleted = deleted.slice(prefixLen, deleted.length - suffixLen);
+					const optimizedInserted = inserted.slice(prefixLen, inserted.length - suffixLen);
+					const optimizedPosition = position + prefixLen;
+
+					// Only add if there's actually a change
+					if (optimizedDeleted || optimizedInserted) {
+						compactedParts.push(optimizedPosition, optimizedDeleted, optimizedInserted);
+					}
+				} else {
+					// No optimization possible, keep as-is
+					compactedParts.push(position, deleted, inserted);
+				}
+			} else {
+				// No optimization needed for operations with only delete or only insert
+				compactedParts.push(position, deleted, inserted);
+			}
+		}
+
+		// Always add final position
+		compactedParts.push(result.parts[result.parts.length - 1]);
+
+		return new Edit(compactedParts);
 	}
 
 	hasChangesBetween(start: number, end: number): boolean {
@@ -306,30 +377,33 @@ export class Edit {
 		return false;
 	}
 
-	static builder(value?: string | undefined): EditBuilder {
+	static builder(value: string = ""): EditBuilder {
 		let index = 0;
 		let inserted = "";
-		let deleted: string | undefined = undefined;
+		let deleted = "";
 		const insertSeq: Subseq = [];
 		const deleteSeq: Subseq = [];
 
 		return {
 			retain(length: number) {
-				if (value != null) {
+				if (value != null && value !== "") {
 					length = Math.min(value.length - index, length);
 				}
 
-				index += length;
-				S.pushSegment(insertSeq, length, false);
-				S.pushSegment(deleteSeq, length, false);
+				if (length > 0) {
+					index += length;
+					S.pushSegment(insertSeq, length, false);
+					S.pushSegment(deleteSeq, length, false);
+				}
 				return this;
 			},
 
 			delete(length: number) {
-				if (value != null) {
+				if (value != null && value !== "") {
 					length = Math.min(value.length - index, length);
-					deleted = (deleted || "") + value.slice(index, index + length);
+					deleted += value.slice(index, index + length);
 				}
+				// When no text is provided, deletion is tracked as empty string
 
 				index += length;
 				S.pushSegment(insertSeq, length, false);
@@ -367,12 +441,9 @@ export class Edit {
 			},
 
 			build(): Edit {
-				if (value != null) {
-					deleted = deleted || "";
-					if (index < value.length) {
-						S.pushSegment(insertSeq, value.length - index, false);
-						S.pushSegment(deleteSeq, value.length - index, false);
-					}
+				if (value != null && index < value.length) {
+					S.pushSegment(insertSeq, value.length - index, false);
+					S.pushSegment(deleteSeq, value.length - index, false);
 				}
 
 				return synthesize(insertSeq, inserted, deleteSeq, deleted);
@@ -393,14 +464,14 @@ export class Edit {
 	static diff(text1: string, text2: string, startHint?: number): Edit {
 		let prefix = commonPrefixLength(text1, text2);
 		let suffix = commonSuffixLength(text1, text2);
+
 		// prefix and suffix overlap when edits are in runs of the same character.
 		if (prefix + suffix > Math.min(text1.length, text2.length)) {
 			if (startHint != null && startHint >= 0) {
 				prefix = Math.min(prefix, startHint);
 			}
 
-			// TODO: We can probably avoid the commonSuffixLength() call here in
-			// favor of arithmetic but I’m too dumb to figure it out.
+			// Recalculate suffix for the sliced strings
 			suffix = commonSuffixLength(text1.slice(prefix), text2.slice(prefix));
 		}
 
@@ -417,56 +488,129 @@ function synthesize(
 	insertSeq: Subseq,
 	inserted: string,
 	deleteSeq: Subseq,
-	deleted?: string | undefined,
+	deleted: string,
 ): Edit {
 	if (S.measure(insertSeq).includedLength !== inserted.length) {
 		throw new Error("insertSeq and inserted string do not match in length");
-	} else if (
-		deleted !== undefined &&
-		S.measure(deleteSeq).includedLength !== deleted.length
-	) {
+	} else if (S.measure(deleteSeq).includedLength !== deleted.length) {
 		throw new Error("deleteSeq and deleted string do not match in length");
 	}
 
 	const parts: Array<string | number> = [];
 	let insertIndex = 0;
-	let retainIndex = 0;
-	let needsLength = true;
-	for (const [length, deleting, inserting] of S.align(
-		S.expand(deleteSeq, insertSeq),
-		insertSeq,
-	)) {
-		if (inserting) {
-			const insertion = inserted.slice(insertIndex, insertIndex + length);
-			if (parts.length && typeof parts[parts.length - 1] === "string") {
-				parts[parts.length - 1] += insertion;
-			} else {
-				parts.push(insertion);
-			}
+	let deleteIndex = 0;
+	let position = 0; // Position in original text
 
-			insertIndex += length;
-		} else {
-			if (!deleting) {
-				parts.push(retainIndex, retainIndex + length);
-			}
+	// Track pending operations to merge adjacent ones
+	let pendingPos = -1;
+	let pendingDeleted = "";
+	let pendingInserted = "";
 
-			retainIndex += length;
-			needsLength = deleting;
+	function flushPending() {
+		if (pendingPos >= 0 && (pendingDeleted || pendingInserted)) {
+			parts.push(pendingPos, pendingDeleted, pendingInserted);
+			pendingPos = -1;
+			pendingDeleted = "";
+			pendingInserted = "";
 		}
 	}
 
-	if (needsLength) {
-		parts.push(retainIndex);
+	// Expand deleteSeq to align with insertSeq
+	const expandedDeleteSeq = S.expand(deleteSeq, insertSeq);
+
+	// Align both sequences
+	for (const [length, deleting, inserting] of S.align(
+		expandedDeleteSeq,
+		insertSeq,
+	)) {
+		if (deleting || inserting) {
+			// We have an operation at this position
+			const deletedText = deleting
+				? deleted.slice(deleteIndex, deleteIndex + length)
+				: "";
+			const insertedText = inserting
+				? inserted.slice(insertIndex, insertIndex + length)
+				: "";
+
+			// Check if we can merge with pending operation
+			if (pendingPos >= 0 && position === pendingPos + pendingDeleted.length) {
+				// Adjacent operation - merge it
+				pendingDeleted += deletedText;
+				pendingInserted += insertedText;
+			} else {
+				// New operation position - flush pending and start new
+				flushPending();
+				pendingPos = position;
+				pendingDeleted = deletedText;
+				pendingInserted = insertedText;
+			}
+
+			if (deleting) {
+				deleteIndex += length;
+			}
+			if (inserting) {
+				insertIndex += length;
+			}
+		}
+
+		// Update position - only advance for non-inserted segments
+		if (!inserting || deleting) {
+			position += length;
+		}
 	}
 
-	return new Edit(parts, deleted);
+	// Flush any remaining pending operation
+	flushPending();
+
+	// Always add final position
+	const totalLength = S.measure(deleteSeq).length;
+	parts.push(totalLength);
+
+	return new Edit(parts);
 }
 
-function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
+/** @returns The length of the common prefix between two strings. */
+function commonPrefixLength(text1: string, text2: string): number {
+	let min = 0;
+	let max = Math.min(text1.length, text2.length);
+	let mid = max;
+	while (min < mid) {
+		if (text1.slice(min, mid) === text2.slice(min, mid)) {
+			min = mid;
+		} else {
+			max = mid;
+		}
+		mid = Math.floor((max - min) / 2 + min);
+	}
+	return mid;
+}
+
+/** @returns The length of the common suffix between two strings. */
+function commonSuffixLength(text1: string, text2: string): number {
+	let min = 0;
+	let max = Math.min(text1.length, text2.length);
+	let mid = max;
+	while (min < mid) {
+		if (
+			text1.slice(text1.length - mid, text1.length - min) ===
+			text2.slice(text2.length - mid, text2.length - min)
+		) {
+			min = mid;
+		} else {
+			max = mid;
+		}
+		mid = Math.floor((max - min) / 2 + min);
+	}
+	return mid;
+}
+
+function factor(edit: Edit): [Subseq, string, Subseq, string] {
 	const insertSeq: Array<number> = [];
 	const deleteSeq: Array<number> = [];
 	let inserted = "";
+	let deleted = "";
 	const operations = edit.operations();
+
 	for (let i = 0; i < operations.length; i++) {
 		const op = operations[i];
 		switch (op.type) {
@@ -480,6 +624,7 @@ function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
 				const length = op.end - op.start;
 				S.pushSegment(insertSeq, length, false);
 				S.pushSegment(deleteSeq, length, true);
+				deleted += op.value;
 				break;
 			}
 			case "insert":
@@ -489,7 +634,7 @@ function factor(edit: Edit): [Subseq, string, Subseq, string | undefined] {
 		}
 	}
 
-	return [insertSeq, inserted, deleteSeq, edit.deleted];
+	return [insertSeq, inserted, deleteSeq, deleted];
 }
 
 /**
@@ -550,41 +695,3 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 	return result;
 }
 
-/** @returns The length of the common prefix between two strings. */
-function commonPrefixLength(text1: string, text2: string) {
-	let min = 0;
-	let max = Math.min(text1.length, text2.length);
-	let mid = max;
-	while (min < mid) {
-		if (text1.slice(min, mid) === text2.slice(min, mid)) {
-			min = mid;
-		} else {
-			max = mid;
-		}
-
-		mid = Math.floor((max - min) / 2 + min);
-	}
-
-	return mid;
-}
-
-/** @returns The length of the common suffix between two strings. */
-function commonSuffixLength(text1: string, text2: string) {
-	let min = 0;
-	let max = Math.min(text1.length, text2.length);
-	let mid = max;
-	while (min < mid) {
-		if (
-			text1.slice(text1.length - mid, text1.length - min) ===
-			text2.slice(text2.length - mid, text2.length - min)
-		) {
-			min = mid;
-		} else {
-			max = mid;
-		}
-
-		mid = Math.floor((max - min) / 2 + min);
-	}
-
-	return mid;
-}
