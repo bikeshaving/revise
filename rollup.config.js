@@ -59,6 +59,7 @@ const input = [
 	"src/contentarea.ts",
 	"src/keyer.ts",
 	"src/history.ts",
+	"src/state.ts",
 ];
 
 const ts = typescript2({

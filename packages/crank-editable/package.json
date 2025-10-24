@@ -1,0 +1,48 @@
+{
+  "name": "@b9g/crank-editable",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ]
+    }
+  },
+  "scripts": {
+    "prebuild": "npm run clean",
+    "build": "rollup -c rollup.config.js",
+    "clean": "shx rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@b9g/crank": "^0.6.0",
+    "@b9g/revise": "^0.1.0"
+  },
+  "devDependencies": {
+    "@b9g/crank": "^0.6.0",
+    "@b9g/revise": "workspace:*",
+    "@typescript-eslint/eslint-plugin": "^5.33.0",
+    "@typescript-eslint/parser": "^5.33.0",
+    "eslint": "^8.22.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "magic-string": "^0.26.2",
+    "prettier": "^2.7.1",
+    "rollup": "^2.78.0",
+    "rollup-plugin-typescript2": "^0.32.1",
+    "shx": "^0.3.4",
+    "typescript": "^4.7.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
