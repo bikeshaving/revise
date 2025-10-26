@@ -54,7 +54,7 @@ export class Edit {
 	 *   [1, "ello", "i", 11]
 	 *   Retain from 0 to 1
 	 *   At position 1: delete "ello", insert "i"
-	 *   Retain from 5 (1 + len("ello")) to 11
+	 *   Retain from 5 (1 + "ello".length) to 11
 	 *
 	 *   [5, "", "oo", 11]
 	 *   Retain from 0 to 5
@@ -64,7 +64,7 @@ export class Edit {
 	declare parts: Array<string | number>;
 
 	constructor(parts: Array<string | number>) {
-		validateEditParts(parts);
+		validate(parts);
 		this.parts = parts;
 	}
 
@@ -92,7 +92,7 @@ export class Edit {
 	 * Returns an array of operations, which is more readable than the parts
 	 * array.
 	 *
-	 *   new Edit([0, "old", "new", 3, "", "", 6]).operations();
+	 *   new Edit([0, "old", "new", 6]).operations();
 	 *   [
 	 *     {type: "delete", start: 0, end: 3, value: "old"},
 	 *     {type: "insert", start: 0, value: "new"},
@@ -227,6 +227,51 @@ export class Edit {
 		deleteSeq = S.expand(deleteSeq, insertSeq);
 		insertSeq = S.shrink(insertSeq, deleteSeq);
 		return synthesize(deleteSeq, deleted, insertSeq, inserted);
+	}
+
+	/**
+	 * Transforms two concurrent edits against each other.
+	 * Returns a pair [thisTransformed, thatTransformed] where both edits
+	 * can be applied in sequence to achieve the same result as applying
+	 * them concurrently.
+	 */
+	transform(that: Edit): [Edit, Edit] {
+		let [insertSeq1, inserted1, deleteSeq1, deleted1] = factor(this);
+		let [insertSeq2, inserted2, deleteSeq2, deleted2] = factor(that);
+
+		// Follow compose pattern for coordinate space alignment
+		// 1. Expand deleteSeqs to match their respective insertSeqs
+		deleteSeq1 = S.expand(deleteSeq1, insertSeq1);
+		deleteSeq2 = S.expand(deleteSeq2, insertSeq2);
+
+		// 2. Interleave insertSeqs to put them in same coordinate space
+		[insertSeq1, insertSeq2] = S.interleave(insertSeq1, insertSeq2);
+
+		// 3. Expand deleteSeqs to the interleaved coordinate space
+		const expandSeq = S.union(insertSeq1, insertSeq2);
+		deleteSeq1 = S.expand(deleteSeq1, expandSeq);
+		deleteSeq2 = S.expand(deleteSeq2, expandSeq);
+
+		// 4. Transform by shrinking each edit by the opposite edit's effects
+		const shrinkSeq1 = S.union(insertSeq2, deleteSeq2);
+		const shrinkSeq2 = S.union(insertSeq1, deleteSeq1);
+
+		// Transform strings by erasing overlapping parts
+		const inserted1Final = erase(insertSeq1, inserted1, S.intersection(insertSeq1, shrinkSeq1));
+		const inserted2Final = erase(insertSeq2, inserted2, S.intersection(insertSeq2, shrinkSeq2));
+		const deleted1Final = erase(deleteSeq1, deleted1, S.intersection(deleteSeq1, shrinkSeq1));
+		const deleted2Final = erase(deleteSeq2, deleted2, S.intersection(deleteSeq2, shrinkSeq2));
+
+		// Transform sequences by shrinking by opposite effects
+		const insertSeq1Final = S.shrink(insertSeq1, shrinkSeq1);
+		const deleteSeq1Final = S.shrink(deleteSeq1, shrinkSeq1);
+		const insertSeq2Final = S.shrink(insertSeq2, shrinkSeq2);
+		const deleteSeq2Final = S.shrink(deleteSeq2, shrinkSeq2);
+
+		return [
+			synthesize(insertSeq1Final, inserted1Final, deleteSeq1Final, deleted1Final).normalize(),
+			synthesize(insertSeq2Final, inserted2Final, deleteSeq2Final, deleted2Final).normalize()
+		];
 	}
 
 	normalize(): Edit {
@@ -704,7 +749,7 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 	return result;
 }
 
-function validateEditParts(parts: Array<string | number>): void {
+function validate(parts: Array<string | number>): void {
 	// Check minimum length (must be at least final position)
 	if (parts.length === 0) {
 		throw new Error("Edit parts cannot be empty");

@@ -402,4 +402,70 @@ test("validation: valid adjacent operations", () => {
 	Assert.is(edit.parts.length, 7);
 });
 
+test("transform 1", () => {
+	// Concurrent insertions at different positions
+	// s0: "hello world"
+	// A:  "=====++======"
+	// B:  "===========+"
+	// A': "=====++======="
+	// B': "=============+"
+	const editA = new Edit([5, "", "oo", 11]);
+	const editB = new Edit([11, "", "!", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+
+	const text = "hello world";
+	Assert.is(editA.apply(text), "hellooo world");
+	Assert.is(editB.apply(text), "hello world!");
+	Assert.is(editA.apply(text), bPrime.apply(editA.apply(text)));
+	Assert.is(editB.apply(text), aPrime.apply(editB.apply(text)));
+});
+
+test("transform 2", () => {
+	// Concurrent deletions at different positions
+	// s0: "hello world"
+	// A:  "=---======="
+	// B:  "=====----=="
+	// Result should maintain deletion consistency
+	const editA = new Edit([1, "ell", "", 11]);
+	const editB = new Edit([5, " wor", "", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+
+	const text = "hello world";
+	const resultAB = bPrime.apply(editA.apply(text));
+	const resultBA = aPrime.apply(editB.apply(text));
+	Assert.is(resultAB, resultBA);
+});
+
+test("transform 3", () => {
+	// Overlapping deletions - should handle intersection
+	// s0: "hello world"
+	// A:  "==---======"
+	// B:  "====--====="
+	// A': "==--====="
+	// B': "==-====="
+	const editA = new Edit([2, "llo", "", 11]);
+	const editB = new Edit([4, "o ", "", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+
+	const text = "hello world";
+	const resultAB = bPrime.apply(editA.apply(text));
+	const resultBA = aPrime.apply(editB.apply(text));
+	Assert.is(resultAB, resultBA);
+});
+
+test("transform 4", () => {
+	// Mixed operations - one inserts, one deletes
+	// s0: "hello world"
+	// A:  "=====+++======"
+	// B:  "=====----=="
+	const editA = new Edit([5, "", "ooo", 11]);
+	const editB = new Edit([5, " wor", "", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+
+	const text = "hello world";
+	const resultAB = bPrime.apply(editA.apply(text));
+	const resultBA = aPrime.apply(editB.apply(text));
+	Assert.is(resultAB, resultBA);
+});
+
 test.run();
