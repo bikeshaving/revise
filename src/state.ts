@@ -34,70 +34,76 @@ export function selectionRangeFromEdit(edit: Edit): SelectionRange | undefined {
 }
 
 export class EditableState extends EventTarget {
-	value: string;
-	history: EditHistory;
-	keyer: Keyer;
-	selection: SelectionRange | undefined;
-	source: string | null;
+	#value: string;
+	#history: EditHistory;
+	#keyer: Keyer;
+	#selection: SelectionRange | undefined;
+	#source: string | null;
+
+	get value(): string { return this.#value; }
+	get history(): EditHistory { return this.#history; }
+	get keyer(): Keyer { return this.#keyer; }
+	get selection(): SelectionRange | undefined { return this.#selection; }
+	get source(): string | null { return this.#source; }
 
 	constructor(options?: {value?: string}) {
 		super();
-		this.value = options?.value ?? "";
-		this.history = new EditHistory();
-		this.keyer = new Keyer();
-		this.selection = undefined;
-		this.source = null;
+		this.#value = options?.value ?? "";
+		this.#history = new EditHistory();
+		this.#keyer = new Keyer();
+		this.#selection = undefined;
+		this.#source = null;
 	}
 
 	applyEdit(edit: Edit, source?: string): void {
 		edit = edit.normalize();
-		this.value = edit.apply(this.value);
-		this.keyer.transform(edit);
+		this.#value = edit.apply(this.#value);
+		this.#keyer.transform(edit);
 		if (source !== "history") {
-			this.history.append(edit);
+			this.#history.append(edit);
 		}
-		this.selection = selectionRangeFromEdit(edit);
-		this.source = source ?? null;
+		this.#selection = selectionRangeFromEdit(edit);
+		this.#source = source ?? null;
 		this.dispatchEvent(new Event("change"));
 	}
 
 	setValue(newValue: string, source?: string): void {
-		const edit = Edit.diff(this.value, newValue);
+		const edit = Edit.diff(this.#value, newValue);
 		this.applyEdit(edit, source);
 	}
 
 	undo(): boolean {
-		const edit = this.history.undo();
+		const edit = this.#history.undo();
 		if (!edit) return false;
 		this.applyEdit(edit, "history");
 		return true;
 	}
 
 	redo(): boolean {
-		const edit = this.history.redo();
+		const edit = this.#history.redo();
 		if (!edit) return false;
 		this.applyEdit(edit, "history");
 		return true;
 	}
 
 	canUndo(): boolean {
-		return this.history.canUndo();
+		return this.#history.canUndo();
 	}
 
 	canRedo(): boolean {
-		return this.history.canRedo();
+		return this.#history.canRedo();
 	}
 
 	checkpoint(): void {
-		this.history.checkpoint();
+		this.#history.checkpoint();
 	}
 
 	reset(value: string = ""): void {
-		this.value = value;
-		this.history = new EditHistory();
-		this.keyer = new Keyer();
-		this.selection = undefined;
-		this.source = "reset";
+		this.#value = value;
+		this.#history = new EditHistory();
+		this.#keyer = new Keyer();
+		this.#selection = undefined;
+		this.#source = "reset";
 		this.dispatchEvent(new Event("change"));
 	}
 }
