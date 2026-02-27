@@ -33,7 +33,7 @@ export function selectionRangeFromEdit(edit: Edit): SelectionRange | undefined {
 	return {start: start!, end: end!, direction: "none"};
 }
 
-export class EditableState extends EventTarget {
+export class EditableState {
 	#value: string;
 	#history: EditHistory;
 	#keyer: Keyer;
@@ -47,7 +47,6 @@ export class EditableState extends EventTarget {
 	get source(): string | null { return this.#source; }
 
 	constructor(options?: {value?: string}) {
-		super();
 		this.#value = options?.value ?? "";
 		this.#history = new EditHistory();
 		this.#keyer = new Keyer();
@@ -73,7 +72,6 @@ export class EditableState extends EventTarget {
 		}
 		this.#selection = selectionRangeFromEdit(edit);
 		this.#source = source ?? null;
-		this.dispatchEvent(new Event("change"));
 	}
 
 	setValue(newValue: string, options?: string | {source?: string; history?: boolean}): void {
@@ -113,6 +111,5 @@ export class EditableState extends EventTarget {
 		this.#keyer = new Keyer();
 		this.#selection = undefined;
 		this.#source = "reset";
-		this.dispatchEvent(new Event("change"));
 	}
 }

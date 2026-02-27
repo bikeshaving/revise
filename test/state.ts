@@ -163,30 +163,6 @@ stateTest("applyEdit source defaults to null", () => {
 	Assert.is(state.source, null);
 });
 
-stateTest("applyEdit dispatches change event", () => {
-	const state = new EditableState({value: "hello"});
-	let fired = false;
-	state.addEventListener("change", () => {
-		fired = true;
-	});
-	const edit = Edit.diff("hello", "hello world");
-	state.applyEdit(edit);
-	Assert.ok(fired);
-});
-
-stateTest("applyEdit state is synchronous in event handler", () => {
-	const state = new EditableState({value: "hello"});
-	let capturedValue: string | undefined;
-	let capturedSource: string | null | undefined;
-	state.addEventListener("change", () => {
-		capturedValue = state.value;
-		capturedSource = state.source;
-	});
-	state.applyEdit(Edit.diff("hello", "hello world"), "test");
-	Assert.is(capturedValue, "hello world");
-	Assert.is(capturedSource, "test");
-});
-
 stateTest("setValue diffs and applies", () => {
 	const state = new EditableState({value: "hello"});
 	state.setValue("hello world");
@@ -217,17 +193,6 @@ stateTest("undo sets source to 'history'", () => {
 	state.applyEdit(Edit.diff("hello", "hello world"));
 	state.undo();
 	Assert.is(state.source, "history");
-});
-
-stateTest("undo dispatches change event", () => {
-	const state = new EditableState({value: "hello"});
-	state.applyEdit(Edit.diff("hello", "hello world"));
-	let fired = false;
-	state.addEventListener("change", () => {
-		fired = true;
-	});
-	state.undo();
-	Assert.ok(fired);
 });
 
 stateTest("undo transforms keyer", () => {
@@ -328,16 +293,6 @@ stateTest("reset clears everything", () => {
 	Assert.is(state.canRedo(), false);
 	Assert.is(state.selection, undefined);
 	Assert.is(state.source, "reset");
-});
-
-stateTest("reset dispatches change event", () => {
-	const state = new EditableState({value: "hello"});
-	let fired = false;
-	state.addEventListener("change", () => {
-		fired = true;
-	});
-	state.reset("new");
-	Assert.ok(fired);
 });
 
 stateTest("reset reinitializes keyer", () => {
