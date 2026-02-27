@@ -125,6 +125,22 @@ stateTest("applyEdit skips history for source 'history'", () => {
 	Assert.ok(!state.canUndo());
 });
 
+stateTest("applyEdit skips history with history: false", () => {
+	const state = new EditableState({value: "hello"});
+	const edit = Edit.diff("hello", "hello world");
+	state.applyEdit(edit, {history: false});
+	Assert.is(state.value, "hello world");
+	Assert.ok(!state.canUndo());
+});
+
+stateTest("applyEdit with options object passes source", () => {
+	const state = new EditableState({value: "hello"});
+	const edit = Edit.diff("hello", "hello world");
+	state.applyEdit(edit, {source: "remote", history: false});
+	Assert.is(state.source, "remote");
+	Assert.ok(!state.canUndo());
+});
+
 stateTest("applyEdit computes selection", () => {
 	const state = new EditableState({value: "hello"});
 	const edit = Edit.diff("hello", "hello world");

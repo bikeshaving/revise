@@ -55,11 +55,20 @@ export class EditableState extends EventTarget {
 		this.#source = null;
 	}
 
-	applyEdit(edit: Edit, source?: string): void {
+	applyEdit(edit: Edit, options?: string | {source?: string; history?: boolean}): void {
+		let source: string | undefined;
+		let recordHistory = true;
+		if (typeof options === "string") {
+			source = options;
+		} else if (options) {
+			source = options.source;
+			recordHistory = options.history ?? true;
+		}
+
 		edit = edit.normalize();
 		this.#value = edit.apply(this.#value);
 		this.#keyer.transform(edit);
-		if (source !== "history") {
+		if (recordHistory && source !== "history") {
 			this.#history.append(edit);
 		}
 		this.#selection = selectionRangeFromEdit(edit);
@@ -67,9 +76,9 @@ export class EditableState extends EventTarget {
 		this.dispatchEvent(new Event("change"));
 	}
 
-	setValue(newValue: string, source?: string): void {
+	setValue(newValue: string, options?: string | {source?: string; history?: boolean}): void {
 		const edit = Edit.diff(this.#value, newValue);
-		this.applyEdit(edit, source);
+		this.applyEdit(edit, options);
 	}
 
 	undo(): boolean {
