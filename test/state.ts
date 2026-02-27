@@ -56,6 +56,14 @@ selTest("edge: empty string insertion", () => {
 	Assert.equal(sel, {start: 0, end: 5, direction: "none"});
 });
 
+selTest("multi-region: insertion then deletion", () => {
+	// "hello world" -> "XXhello" (insert "XX" at start, delete " world" at end)
+	const edit = new Edit([0, "", "XX", 5, " world", "", 11]);
+	const sel = selectionRangeFromEdit(edit);
+	// start stays at first change (0), end at last change (5 in new text)
+	Assert.equal(sel, {start: 0, end: 7, direction: "none"});
+});
+
 selTest("edge: delete everything", () => {
 	const edit = Edit.diff("hello", "");
 	const sel = selectionRangeFromEdit(edit);

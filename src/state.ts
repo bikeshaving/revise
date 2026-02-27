@@ -17,7 +17,7 @@ export function selectionRangeFromEdit(edit: Edit): SelectionRange | undefined {
 				newIndex += op.end - op.start;
 				break;
 			case "delete":
-				start = newIndex;
+				if (start === undefined) start = newIndex;
 				end = newIndex;
 				break;
 			case "insert":
