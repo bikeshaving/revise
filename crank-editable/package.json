@@ -1,7 +1,6 @@
 {
   "name": "@b9g/crank-editable",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
   "type": "module",
   "scripts": {

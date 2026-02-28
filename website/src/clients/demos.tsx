@@ -1,7 +1,6 @@
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
 import {EditableState} from "@b9g/revise/state.js";
 
 import {CrankEditable} from "../components/crank-editable.js";
@@ -12,11 +11,6 @@ import "prismjs/components/prism-typescript";
 
 // @ts-ignore
 Prism.manual = true;
-
-// Register custom element
-if (!customElements.get("content-area")) {
-	customElements.define("content-area", ContentAreaElement);
-}
 
 /*** Demo 1: Simple Editable ***/
 function* SimpleEditable(

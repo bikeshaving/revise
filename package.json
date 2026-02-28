@@ -1,10 +1,9 @@
 {
   "name": "@b9g/revise",
-  "version": "0.1.3",
-  "private": true,
+  "version": "0.1.4",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/src/contentarea.js",
+  "main": "./dist/src/contentarea.cjs",
   "exports": {
     "./edit.js": {
       "types": "./dist/src/edit.d.ts",
@@ -30,7 +29,38 @@
       "types": "./dist/src/state.d.ts",
       "import": "./dist/src/state.js",
       "require": "./dist/src/state.cjs"
-    }
+    },
+    ".": {
+      "types": "./dist/src/contentarea.d.ts",
+      "import": "./dist/src/contentarea.js",
+      "require": "./dist/src/contentarea.cjs"
+    },
+    "./contentarea": {
+      "types": "./dist/src/contentarea.d.ts",
+      "import": "./dist/src/contentarea.js",
+      "require": "./dist/src/contentarea.cjs"
+    },
+    "./edit": {
+      "types": "./dist/src/edit.d.ts",
+      "import": "./dist/src/edit.js",
+      "require": "./dist/src/edit.cjs"
+    },
+    "./history": {
+      "types": "./dist/src/history.d.ts",
+      "import": "./dist/src/history.js",
+      "require": "./dist/src/history.cjs"
+    },
+    "./keyer": {
+      "types": "./dist/src/keyer.d.ts",
+      "import": "./dist/src/keyer.js",
+      "require": "./dist/src/keyer.cjs"
+    },
+    "./state": {
+      "types": "./dist/src/state.d.ts",
+      "import": "./dist/src/state.js",
+      "require": "./dist/src/state.cjs"
+    },
+    "./package.json": "./dist/package.json"
   },
   "scripts": {
     "build": "libuild build",
@@ -46,5 +76,7 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "module": "./dist/src/contentarea.js",
+  "types": "./dist/src/contentarea.d.ts"
 }

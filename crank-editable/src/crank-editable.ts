@@ -5,7 +5,7 @@ import type {SelectionRange} from "@b9g/revise/contentarea.js";
 import {EditableState} from "@b9g/revise/state.js";
 
 export type {SelectionRange};
-export {EditableState};
+export {ContentAreaElement, EditableState};
 
 export interface CrankEditableProps {
 	state: EditableState;
@@ -16,6 +16,11 @@ export function* CrankEditable(
 	this: Context<CrankEditableProps>,
 	{state, children}: CrankEditableProps,
 ) {
+	// Ensure the custom element is registered
+	if (!customElements.get("content-area")) {
+		customElements.define("content-area", ContentAreaElement);
+	}
+
 	let lastEditSelection: SelectionRange | undefined;
 	let pendingSelection: SelectionRange | undefined;
 	let area: ContentAreaElement | undefined;
