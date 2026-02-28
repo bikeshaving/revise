@@ -92,7 +92,7 @@ async function generateStaticSite() {
 			const guidesDir = await docsDir.getDirectoryHandle("guides");
 			const docs = await collectDocuments(guidesDir, "guides");
 			for (const doc of docs) {
-				staticRoutes.push(doc.url.replace(/\/$/, ""));
+				staticRoutes.push(doc.url);
 			}
 		} catch (e: any) {
 			logger.info("No docs directory found, skipping guide routes");
