@@ -105,8 +105,9 @@ async function generateStaticSite() {
 				const response = await fetch(route);
 				if (response.ok) {
 					const content = await response.text();
+					const base = route.replace(/^\/|\/$/g, "");
 					const filePath =
-						route === "/" ? "index.html" : `${route.slice(1)}/index.html`;
+						base === "" ? "index.html" : `${base}/index.html`;
 
 					const parts = filePath.split("/");
 					let currentDir = staticBucket;
