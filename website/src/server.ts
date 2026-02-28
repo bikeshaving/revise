@@ -5,14 +5,20 @@ import {trailingSlash} from "@b9g/router/middleware";
 import {assets as assetsMiddleware} from "@b9g/assets/middleware";
 
 import HomeView from "./views/home.js";
+import GuideView from "./views/guide.js";
+import NotFoundView from "./views/not-found.js";
+
+import {collectDocuments} from "./models/document.js";
 
 // Import assets with content-hashed URLs
 import clientCSS from "./styles/client.css" with {assetBase: "/static/"};
 import demosScript from "./clients/demos.tsx" with {assetBase: "/static/"};
+import navbarScript from "./clients/navbar.ts" with {assetBase: "/static/"};
 
 export const assets = {
 	clientCSS,
 	demosScript,
+	navbarScript,
 };
 
 // Create router
@@ -27,11 +33,16 @@ async function renderView(
 	url: string,
 	params: Record<string, string> = {},
 ): Promise<Response> {
-	const html = await renderer.render(jsx`
+	const result = await renderer.render(jsx`
 		<${View} url=${url} params=${params} />
 	`);
 
-	return new Response(html, {
+	// Views can return a Response directly (e.g. for 404s)
+	if (result instanceof Response) {
+		return result;
+	}
+
+	return new Response(result, {
 		headers: {"Content-Type": "text/html"},
 	});
 }
@@ -42,13 +53,15 @@ router.route("/").get(async (request) => {
 	return renderView(HomeView, url.pathname);
 });
 
+router.route("/guides/:slug").get(async (request) => {
+	const url = new URL(request.url);
+	return renderView(GuideView, url.pathname, request.params);
+});
+
 // 404 catch-all
 router.route("*").all(async (request) => {
 	const url = new URL(request.url);
-	return new Response(`<h1>404 Not Found</h1><p>${url.pathname}</p>`, {
-		status: 404,
-		headers: {"Content-Type": "text/html"},
-	});
+	return renderView(NotFoundView, url.pathname);
 });
 
 // ServiceWorker fetch event
@@ -72,6 +85,20 @@ async function generateStaticSite() {
 	try {
 		const staticBucket = await self.directories.open("public");
 		const staticRoutes = ["/"];
+
+		// Add guide routes
+		try {
+			const docsDir = await self.directories.open("docs");
+			const guidesDir = await docsDir.getDirectoryHandle("guides");
+			const docs = await collectDocuments(guidesDir, "guides");
+			for (const doc of docs) {
+				if (doc.attributes.publish) {
+					staticRoutes.push(doc.url.replace(/\/$/, ""));
+				}
+			}
+		} catch (e: any) {
+			logger.info("No docs directory found, skipping guide routes");
+		}
 
 		logger.info(`Pre-rendering ${staticRoutes.length} routes...`);
 
@@ -104,6 +131,23 @@ async function generateStaticSite() {
 			} catch (error: any) {
 				logger.error(`Failed to generate ${route}:`, error.message);
 			}
+		}
+
+		// Generate 404 page
+		try {
+			const response = await fetch("/404");
+			if (response.ok) {
+				const content = await response.text();
+				const fileHandle = await staticBucket.getFileHandle("404.html", {
+					create: true,
+				});
+				const writable = await fileHandle.createWritable();
+				await writable.write(content);
+				await writable.close();
+				logger.info("Generated 404.html");
+			}
+		} catch (e: any) {
+			logger.error("Failed to generate 404:", e.message);
 		}
 
 		logger.info("Static site generation complete!");

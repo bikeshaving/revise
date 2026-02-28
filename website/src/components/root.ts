@@ -1,7 +1,19 @@
 import {jsx, Raw} from "@b9g/crank/standalone";
 import type {Children, Context} from "@b9g/crank";
 import {extractCritical} from "@emotion/server";
+import {Navbar} from "./navbar.js";
+import {Footer} from "./footer.js";
+import {getColorSchemeScript} from "../utils/color-scheme.js";
 import {assets} from "../server.js";
+
+function ColorSchemeScript() {
+	const scriptText = `(() => { ${getColorSchemeScript()} })()`;
+	return jsx`
+		<script>
+			<${Raw} value=${scriptText} />
+		</script>
+	`;
+}
 
 export function* Root(
 	this: Context,
@@ -10,19 +22,25 @@ export function* Root(
 		children,
 		url,
 		description = "",
+		noFooter = false,
 	}: {
 		title: string;
 		children: Children;
 		url: string;
 		description?: string;
+		noFooter?: boolean;
 	},
 ) {
-	for ({title, children, url, description = ""} of this) {
+	for ({title, children, url, description = "", noFooter = false} of this) {
 		this.schedule(() => this.refresh());
-		// First pass: render children to extract critical CSS
-		const childrenHTML: string = yield jsx`${children}`;
+		const childrenHTML: string = yield jsx`
+			<div id="navbar-root">
+				<${Navbar} url=${url} />
+			</div>
+			${children}
+			${!noFooter && jsx`<${Footer} />`}
+		`;
 		const {html, css} = extractCritical(childrenHTML);
-		// Second pass: full HTML document with extracted CSS
 		yield jsx`
 			<${Raw} value="<!DOCTYPE html>" />
 			<html lang="en">
@@ -36,11 +54,13 @@ export function* Root(
 					<meta property="og:title" content=${title} />
 					<meta property="og:description" content=${description} />
 					<meta property="og:type" content="website" />
-					<meta property="og:site_name" content="Revise" />
+					<meta property="og:site_name" content="Revise.js" />
 				</head>
 				<body>
+					<${ColorSchemeScript} />
 					<${Raw} value=${html} />
 					<script type="module" src=${assets.demosScript}></script>
+					<script type="module" src=${assets.navbarScript}></script>
 				</body>
 			</html>
 		`;

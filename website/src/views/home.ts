@@ -22,7 +22,7 @@ export default function Home({url}: {url: string; params: Record<string, string>
 		<${Root} title="Revise" url=${url} description="A rich text editing primitives library">
 			<header class=${css`
 				text-align: center;
-				padding: 4rem 1rem 2rem;
+				padding: 6rem 1rem 2rem;
 			`}>
 				<h1 class=${css`
 					font-size: max(40px, 8vw);

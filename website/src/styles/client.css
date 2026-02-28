@@ -1,5 +1,5 @@
 @import "normalize.css/normalize.css";
-@import "prism-themes/themes/prism-one-dark.css";
+@import "./prism-theme.css";
 
 :root {
 	--bg-color: #0f1117;
@@ -10,12 +10,42 @@
 	--border-color: #27272a;
 }
 
+.color-scheme-light {
+	--bg-color: #f0f4f8;
+	--text-color: #1a1b26;
+	--text-muted: #52525b;
+	--highlight-color: #2563eb;
+	--code-bg: #e3eaf2;
+	--border-color: #d4d4d8;
+}
+
+.blur-background {
+	@supports (backdrop-filter: blur(4px)) {
+		backdrop-filter: blur(4px);
+		background-color: rgba(15, 17, 23, 0.5) !important;
+	}
+}
+
+.color-scheme-light {
+	.blur-background {
+		@supports (backdrop-filter: blur(4px)) {
+			backdrop-filter: blur(4px);
+			background-color: rgba(240, 244, 248, 0.5) !important;
+		}
+	}
+}
+
 * {
 	box-sizing: border-box;
 }
 
+::selection {
+	background: dodgerblue;
+}
+
 html {
 	font-size: 16px;
+	scroll-behavior: smooth;
 }
 
 body {
@@ -26,20 +56,107 @@ body {
 	line-height: 1.6;
 }
 
+p {
+	line-height: 1.6;
+	margin: 1.5em 0;
+}
+
 a {
 	color: var(--highlight-color);
 	text-decoration: none;
+
+	&[aria-current] {
+		color: var(--highlight-color);
+	}
 }
 
 a:hover {
 	text-decoration: underline;
 }
 
+h1, h2, h3, h4, h5, h6 {
+	padding: 0;
+	margin: 0 0 1.4em;
+	scroll-margin-top: 70px;
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.heading-anchor {
+		opacity: 0;
+		font-weight: normal;
+		font-size: 0.8em;
+		margin-left: 0.2em;
+		transition: opacity 0.15s;
+	}
+
+	&:hover .heading-anchor {
+		opacity: 0.4;
+	}
+
+	.heading-anchor:hover {
+		opacity: 1;
+	}
+}
+
+h1, h2, h3 {
+	color: var(--highlight-color);
+}
+
+:is(h1, h2, h3, h4, h5, h6) code {
+	color: inherit;
+	font-size: 0.9em;
+	background: rgba(96, 165, 250, 0.1);
+}
+
+.color-scheme-light :is(h1, h2, h3, h4, h5, h6) code {
+	background: rgba(37, 99, 235, 0.15);
+}
+
+blockquote {
+	border-left: 2px solid var(--highlight-color);
+	margin: 1.5em 0;
+	padding: 0 0 0 .8em;
+
+	p {
+		margin: 0;
+	}
+}
+
+li {
+	margin: 0 0 1em;
+}
+
 code {
 	font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
 	font-size: 0.9em;
+	padding: .1em .2em;
+	background: var(--coldark01);
 }
 
+pre {
+	margin: 0;
+	padding: 1em;
+	font-size: 14px;
+	color: var(--text-color);
+	line-height: 1.5;
+	tab-size: 2;
+	outline: none;
+	background: var(--code-bg);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	overflow-x: auto;
+}
+
+pre code {
+	padding: 0;
+	margin: 0;
+	font-size: 14px;
+	background: none;
+}
+
+/* Editable demos */
 content-area {
 	display: block;
 }
@@ -70,4 +187,95 @@ content-area [contenteditable] div {
 .editable:focus {
 	border-color: var(--highlight-color);
 	box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15);
+}
+
+.color-scheme-light .editable:focus {
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Table styling */
+table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 2em 0;
+	font-size: 0.95em;
+	background: rgba(255, 255, 255, 0.02);
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	@media screen and (min-width: 1100px) {
+		max-width: 900px;
+	}
+}
+
+.color-scheme-light table {
+	background: rgba(0, 0, 0, 0.02);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+th, td {
+	text-align: left;
+	padding: 12px 16px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.color-scheme-light th,
+.color-scheme-light td {
+	border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+th {
+	background: rgba(255, 255, 255, 0.05);
+	font-weight: 600;
+	color: var(--highlight-color);
+	border-bottom: 2px solid var(--highlight-color);
+}
+
+.color-scheme-light th {
+	background: rgba(0, 0, 0, 0.05);
+}
+
+td {
+	vertical-align: top;
+}
+
+th code, td code {
+	font-size: 0.9em;
+	padding: 2px 4px;
+	border-radius: 3px;
+}
+
+tbody tr:nth-child(even) {
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.color-scheme-light tbody tr:nth-child(even) {
+	background: rgba(0, 0, 0, 0.02);
+}
+
+tbody tr:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.color-scheme-light tbody tr:hover {
+	background: rgba(0, 0, 0, 0.05);
+}
+
+:is(.language-bash, .language-shell, .language-sh) code > :is(.token.function, .token.builtin):first-child::before {
+	content: "$ ";
+	opacity: 0.5;
+	user-select: none;
+}
+
+button {
+	background-color: transparent;
+	border-radius: 4px;
+	border: 1px solid currentcolor;
+	padding: 0.3em;
+}
+
+img {
+	display: block;
+	margin: 0 auto;
+	max-width: 100%;
 }

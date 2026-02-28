@@ -18,13 +18,16 @@
 		"@b9g/shovel": "^0.2.16",
 		"@emotion/css": "^11.13.5",
 		"@emotion/server": "^11.11.0",
+		"front-matter": "^4.0.2",
 		"gh-pages": "^6.3.0",
+		"marked": "^15.0.0",
 		"normalize.css": "^8.0.1",
-		"prism-themes": "^1.9.0",
-		"prismjs": "^1.30.0"
+		"prismjs": "^1.30.0",
+		"serialize-javascript": "^6.0.0"
 	},
 	"devDependencies": {
 		"@types/prismjs": "^1.26.0",
+		"@types/serialize-javascript": "^5.0.0",
 		"typescript": "^5.0.0"
 	}
 }
