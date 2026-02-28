@@ -28,7 +28,7 @@ export default function Home({url}: {url: string; params: Record<string, string>
 					font-size: max(40px, 8vw);
 					color: var(--highlight-color);
 					margin: 0;
-				`}>Revise</h1>
+				`}>Revise.js</h1>
 				<p class=${css`
 					font-size: 1.25rem;
 					color: var(--text-muted);

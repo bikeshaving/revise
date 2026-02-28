@@ -1,0 +1,27 @@
+{
+  "name": "@b9g/crank-editable",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "libuild build",
+    "publish": "libuild publish",
+    "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
+  },
+  "peerDependencies": {
+    "@b9g/crank": ">=0.7.0",
+    "@b9g/revise": ">=0.1.0"
+  },
+  "dependencies": {
+    "@b9g/crank": "^0.7.8",
+    "@b9g/revise": "file:.."
+  },
+  "devDependencies": {
+    "@b9g/libuild": "file:../../libuild",
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
