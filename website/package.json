@@ -1,0 +1,30 @@
+{
+	"name": "revise-website",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"develop": "shovel develop src/server.ts --port 1339 --platform bun",
+		"predeploy": "npm run static",
+		"deploy": "gh-pages -d dist/public --nojekyll --cname revise.js.org",
+		"static": "MODE=production shovel build src/server.ts --platform bun --lifecycle"
+	},
+	"dependencies": {
+		"@b9g/assets": "^0.2.1",
+		"@b9g/crank": "^0.7.6",
+		"@b9g/platform": "^0.1.17",
+		"@b9g/platform-bun": "^0.1.16",
+		"@b9g/revise": "file:..",
+		"@b9g/router": "^0.2.5",
+		"@b9g/shovel": "^0.2.16",
+		"@emotion/css": "^11.13.5",
+		"@emotion/server": "^11.11.0",
+		"gh-pages": "^6.3.0",
+		"normalize.css": "^8.0.1",
+		"prism-themes": "^1.9.0",
+		"prismjs": "^1.30.0"
+	},
+	"devDependencies": {
+		"@types/prismjs": "^1.26.0",
+		"typescript": "^5.0.0"
+	}
+}
