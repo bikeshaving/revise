@@ -3,12 +3,7 @@ import {css} from "@emotion/css";
 
 import {Root} from "../components/root.js";
 
-interface ViewProps {
-	url: string;
-	params: Record<string, string>;
-}
-
-export default function NotFound({url}: ViewProps) {
+export default function NotFound({url}: {url: string}) {
 	return jsx`
 		<${Root}
 			title="404 - Page Not Found | Revise.js"

@@ -6,14 +6,9 @@ import {Main, Sidebar} from "../components/sidebar.js";
 import {Marked} from "../components/marked.js";
 import {components} from "../components/marked-components.js";
 
-interface ViewProps {
-	url: string;
-	params: Record<string, string>;
-}
-
 import {collectDocuments} from "../models/document.js";
 
-export default async function Guide({url}: ViewProps) {
+export default async function Guide({url}: {url: string}) {
 	const docsDir = await self.directories.open("docs");
 	const guidesDir = await docsDir.getDirectoryHandle("guides");
 	const docs = await collectDocuments(guidesDir, "guides");

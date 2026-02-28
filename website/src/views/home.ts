@@ -17,7 +17,7 @@ const message = greet("World");
 console.log(message);
 `;
 
-export default function Home({url}: {url: string; params: Record<string, string>}) {
+export default function Home({url}: {url: string}) {
 	return jsx`
 		<${Root} title="Revise" url=${url} description="A rich text editing primitives library">
 			<header class=${css`

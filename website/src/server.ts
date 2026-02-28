@@ -31,18 +31,18 @@ router.use(assetsMiddleware());
 async function renderView(
 	View: any,
 	url: string,
-	params: Record<string, string> = {},
+	status: number = 200,
 ): Promise<Response> {
 	const result = await renderer.render(jsx`
-		<${View} url=${url} params=${params} />
+		<${View} url=${url} />
 	`);
 
-	// Views can return a Response directly (e.g. for 404s)
 	if (result instanceof Response) {
 		return result;
 	}
 
 	return new Response(result, {
+		status,
 		headers: {"Content-Type": "text/html"},
 	});
 }
@@ -55,13 +55,13 @@ router.route("/").get(async (request) => {
 
 router.route("/guides/:slug/").get(async (request) => {
 	const url = new URL(request.url);
-	return renderView(GuideView, url.pathname, request.params);
+	return renderView(GuideView, url.pathname);
 });
 
 // 404 catch-all
 router.route("*").all(async (request) => {
 	const url = new URL(request.url);
-	return renderView(NotFoundView, url.pathname);
+	return renderView(NotFoundView, url.pathname, 404);
 });
 
 // ServiceWorker fetch event
