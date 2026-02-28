@@ -1,0 +1,62 @@
+{
+  "env": {
+    "browser": true,
+    "commonjs": true,
+    "es6": true,
+    "node": true
+  },
+  "settings": {
+    "react": {
+      "pragma": "createElement",
+      "fragment": "Fragment"
+    }
+  },
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "sourceType": "module",
+    "createDefaultProgram": true
+  },
+  "plugins": [
+    "@typescript-eslint",
+    "prettier",
+    "react"
+  ],
+  "extends": [
+    "eslint:recommended",
+    "plugin:prettier/recommended",
+    "prettier"
+  ],
+  "rules": {
+    "no-console": [
+      "error",
+      {
+        "allow": ["error"]
+      }
+    ],
+    "no-unused-vars": 0,
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "varsIgnorePattern": "^_",
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "no-empty-pattern": 0,
+    "no-dupe-class-members": 0,
+    "@typescript-eslint/no-dupe-class-members": 1,
+    "no-undef": 0,
+    "no-redeclare": 0,
+    "prettier/prettier": [
+      "error",
+      {
+        "trailingComma": "all",
+        "arrowParens": "always",
+        "useTabs": true,
+        "bracketSpacing": false
+      }
+    ],
+    "linebreak-style": ["error", "unix"],
+    "react/jsx-uses-vars": 1,
+    "react/jsx-uses-react": 1
+  }
+}
