@@ -70,7 +70,7 @@
     "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
   },
   "devDependencies": {
-    "@b9g/libuild": "file:../libuild",
+    "@b9g/libuild": "^0.1.24",
     "playwright-test": "^8.1.1",
     "typescript": "^5.0.0"
   },
