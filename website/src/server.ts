@@ -24,7 +24,7 @@ export const assets = {
 // Create router
 const router = new Router();
 
-router.use(trailingSlash("strip"));
+router.use(trailingSlash("append"));
 router.use(assetsMiddleware());
 
 // Helper to render a Crank view
@@ -53,7 +53,7 @@ router.route("/").get(async (request) => {
 	return renderView(HomeView, url.pathname);
 });
 
-router.route("/guides/:slug").get(async (request) => {
+router.route("/guides/:slug/").get(async (request) => {
 	const url = new URL(request.url);
 	return renderView(GuideView, url.pathname, request.params);
 });
