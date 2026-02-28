@@ -20,5 +20,22 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "module": "./dist/src/crank-editable.js",
+  "types": "./dist/src/crank-editable.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/crank-editable.d.ts",
+      "import": "./dist/src/crank-editable.js"
+    },
+    "./crank-editable": {
+      "types": "./dist/src/crank-editable.d.ts",
+      "import": "./dist/src/crank-editable.js"
+    },
+    "./crank-editable.js": {
+      "types": "./dist/src/crank-editable.d.ts",
+      "import": "./dist/src/crank-editable.js"
+    },
+    "./package.json": "./dist/package.json"
   }
 }
