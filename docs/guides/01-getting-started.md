@@ -109,4 +109,4 @@ area.addEventListener("beforeinput", (ev) => {
 
 - See the [live demos](/) for complete examples with syntax highlighting and social highlighting
 - Read the [API reference](/guides/api) for the full EditableState, Edit, and ContentAreaElement APIs
-- Check out [`@b9g/crank-editable`](https://github.com/bikeshaving/revise/tree/main/crank-editable) for a ready-made Crank.js integration
+- Check out [`@b9g/crankeditable`](https://github.com/bikeshaving/revise/tree/main/crankeditable) for a ready-made Crank.js integration

@@ -3,7 +3,7 @@ import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
 import {EditableState} from "@b9g/revise/state.js";
 
-import {CrankEditable} from "../components/crank-editable.js";
+import {CrankEditable} from "../components/crankeditable.js";
 
 import Prism from "prismjs";
 import type {Token} from "prismjs";

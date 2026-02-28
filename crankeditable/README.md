@@ -1,4 +1,4 @@
-# @b9g/crank-editable
+# @b9g/crankeditable
 
 A [Crank.js](https://crank.js.org) component that bridges
 [`@b9g/revise`](https://github.com/bikeshaving/revise) to the DOM. It handles
@@ -6,18 +6,15 @@ contenteditable event wiring, undo/redo, selection preservation, and cursor
 scrolling so your component only needs to render lines from state.
 
 ```
-npm install @b9g/crank-editable @b9g/crank @b9g/revise
+npm install @b9g/crankeditable @b9g/crank @b9g/revise
 ```
 
 ## Usage
 
 ```jsx
 import {renderer} from "@b9g/crank/dom";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
 import {EditableState} from "@b9g/revise/state.js";
-import {CrankEditable} from "@b9g/crank-editable";
-
-customElements.define("content-area", ContentAreaElement);
+import {CrankEditable} from "@b9g/crankeditable";
 
 function* MyEditor() {
   const state = new EditableState({value: "Hello World!\n"});
