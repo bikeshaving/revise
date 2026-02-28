@@ -4,3 +4,4 @@ dist
 # snowpack...
 build
 *.log
+package-lock.json

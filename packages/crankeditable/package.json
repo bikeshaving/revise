@@ -1,0 +1,24 @@
+{
+  "name": "@b9g/crankeditable",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "libuild build",
+    "publish": "libuild publish",
+    "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
+  },
+  "peerDependencies": {
+    "@b9g/crank": ">=0.7.0",
+    "@b9g/revise": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@b9g/crank": "^0.7.8",
+    "@b9g/revise": "^0.1.4",
+    "@b9g/libuild": "^0.1.24",
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

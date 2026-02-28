@@ -1,0 +1,66 @@
+import {jsx} from "@b9g/crank/standalone";
+import {css} from "@emotion/css";
+import type {Context} from "@b9g/crank/standalone";
+import {useColorScheme} from "../utils/color-scheme.js";
+
+const toggleStyles = css`
+	position: relative;
+	width: 60px;
+	height: 32px;
+	border-radius: 16px;
+	border: 1px solid var(--text-color);
+	background: transparent;
+	cursor: pointer;
+	padding: 0 4px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 16px;
+
+	&:focus {
+		outline: none;
+		border-color: var(--highlight-color);
+	}
+`;
+
+const knobStyles = css`
+	position: absolute;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	border: 1px solid var(--text-color);
+	background: var(--bg-color);
+	transition: left 0.2s;
+	display: none;
+`;
+
+const IS_CLIENT = typeof window !== "undefined";
+
+export function* ColorSchemeToggle(this: Context) {
+	const colorScheme = useColorScheme(this);
+
+	for ({} of this) {
+		const scheme = colorScheme.get();
+		const isDark = scheme === "dark";
+		const onclick = () => colorScheme.toggle();
+
+		yield jsx`
+			<button
+				onclick=${onclick}
+				role="switch"
+				aria-label="toggle color scheme"
+				aria-checked=${isDark ? "true" : "false"}
+				hydrate="!aria-checked"
+				class=${toggleStyles}
+			>
+				<span>${"🌙"}</span>
+				<span>${"💡"}</span>
+				<span
+					hydrate="!style"
+					class=${knobStyles}
+					style=${IS_CLIENT ? {display: "block", left: isDark ? "30px" : "1px"} : undefined}
+				/>
+			</button>
+		`;
+	}
+}

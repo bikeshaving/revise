@@ -1,62 +1,82 @@
 {
   "name": "@b9g/revise",
-  "version": "0.1.3",
-  "private": true,
+  "version": "0.1.5",
   "license": "MIT",
   "type": "module",
+  "main": "./dist/src/contentarea.cjs",
   "exports": {
     "./edit.js": {
-      "import": "./dist/edit.js",
-      "require": "./dist/edit.cjs"
+      "types": "./dist/src/edit.d.ts",
+      "import": "./dist/src/edit.js",
+      "require": "./dist/src/edit.cjs"
     },
     "./contentarea.js": {
-      "import": "./dist/contentarea.js",
-      "require": "./dist/contentarea.cjs"
+      "types": "./dist/src/contentarea.d.ts",
+      "import": "./dist/src/contentarea.js",
+      "require": "./dist/src/contentarea.cjs"
     },
     "./keyer.js": {
-      "import": "./dist/keyer.js",
-      "require": "./dist/keyer.cjs"
+      "types": "./dist/src/keyer.d.ts",
+      "import": "./dist/src/keyer.js",
+      "require": "./dist/src/keyer.cjs"
     },
     "./history.js": {
-      "import": "./dist/history.js",
-      "require": "./dist/history.cjs"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      "*": [
-        "dist/*"
-      ]
-    }
+      "types": "./dist/src/history.d.ts",
+      "import": "./dist/src/history.js",
+      "require": "./dist/src/history.cjs"
+    },
+    "./state.js": {
+      "types": "./dist/src/state.d.ts",
+      "import": "./dist/src/state.js",
+      "require": "./dist/src/state.cjs"
+    },
+    ".": {
+      "types": "./dist/src/contentarea.d.ts",
+      "import": "./dist/src/contentarea.js",
+      "require": "./dist/src/contentarea.cjs"
+    },
+    "./contentarea": {
+      "types": "./dist/src/contentarea.d.ts",
+      "import": "./dist/src/contentarea.js",
+      "require": "./dist/src/contentarea.cjs"
+    },
+    "./edit": {
+      "types": "./dist/src/edit.d.ts",
+      "import": "./dist/src/edit.js",
+      "require": "./dist/src/edit.cjs"
+    },
+    "./history": {
+      "types": "./dist/src/history.d.ts",
+      "import": "./dist/src/history.js",
+      "require": "./dist/src/history.cjs"
+    },
+    "./keyer": {
+      "types": "./dist/src/keyer.d.ts",
+      "import": "./dist/src/keyer.js",
+      "require": "./dist/src/keyer.cjs"
+    },
+    "./state": {
+      "types": "./dist/src/state.d.ts",
+      "import": "./dist/src/state.js",
+      "require": "./dist/src/state.cjs"
+    },
+    "./package.json": "./dist/package.json"
   },
   "scripts": {
-    "prebuild": "npm run clean",
-    "build": "rollup -c rollup.config.js",
-    "clean": "shx rm -rf dist",
-    "lint": "eslint --ext .js,.jsx,.ts,.tsx .",
-    "preshipit": "npm run typecheck && npm run test && npm run build",
-    "shipit": "cd dist && npm publish",
+    "build": "libuild build",
+    "publish": "libuild publish",
     "test": "playwright-test --runner uvu",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^5.33.0",
-    "@typescript-eslint/parser": "^5.33.0",
-    "eslint": "^8.22.0",
-    "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "eslint-plugin-react": "^7.30.1",
-    "magic-string": "^0.26.2",
+    "@b9g/libuild": "^0.1.24",
     "playwright-test": "^8.1.1",
-    "prettier": "^2.7.1",
-    "rollup": "^2.78.0",
-    "rollup-plugin-typescript2": "^0.32.1",
-    "shx": "^0.3.4",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.7.4",
-    "uvu": "^0.5.6"
+    "typescript": "^5.0.0"
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "module": "./dist/src/contentarea.js",
+  "types": "./dist/src/contentarea.d.ts"
 }

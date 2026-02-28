@@ -1,0 +1,14 @@
+{
+	"directories": {
+		"static": {
+			"module": "@b9g/filesystem/node-fs",
+			"export": "NodeFSDirectory",
+			"path": "./static"
+		},
+		"docs": {
+			"module": "@b9g/filesystem/node-fs",
+			"export": "NodeFSDirectory",
+			"path": "../docs"
+		}
+	}
+}
