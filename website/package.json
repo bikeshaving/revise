@@ -11,9 +11,10 @@
 	"dependencies": {
 		"@b9g/assets": "^0.2.1",
 		"@b9g/crank": "^0.7.6",
+		"@b9g/crankeditable": "^0.1.0",
 		"@b9g/platform": "^0.1.17",
 		"@b9g/platform-bun": "^0.1.16",
-		"@b9g/revise": "file:..",
+		"@b9g/revise": "^0.1.5",
 		"@b9g/router": "^0.2.5",
 		"@b9g/shovel": "^0.2.16",
 		"@emotion/css": "^11.13.5",

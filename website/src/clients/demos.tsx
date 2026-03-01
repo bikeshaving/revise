@@ -1,9 +1,7 @@
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
-import {EditableState} from "@b9g/revise/state.js";
-
-import {CrankEditable} from "../components/crankeditable.js";
+import {CrankEditable, EditableState} from "@b9g/crankeditable";
 
 import Prism from "prismjs";
 import type {Token} from "prismjs";
