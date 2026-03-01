@@ -3,6 +3,7 @@ import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
 import {CrankEditable, EditableState} from "@b9g/crankeditable";
 
+import {parse as parseEmoji} from "@twemoji/parser";
 import Prism from "prismjs";
 import type {Token} from "prismjs";
 import "prismjs/components/prism-typescript";
@@ -286,6 +287,73 @@ function* SocialEditable(
 	}
 }
 
+/*** Demo 5: Twemoji ***/
+function renderTwemoji(text: string): Array<Element | string> {
+	const entities = parseEmoji(text);
+	if (!entities.length) return [text];
+
+	const result: Array<Element | string> = [];
+	let lastIndex = 0;
+	for (const entity of entities) {
+		const [start, end] = entity.indices;
+		if (start > lastIndex) {
+			result.push(text.slice(lastIndex, start));
+		}
+
+		result.push(
+			<img
+				data-content={entity.text}
+				src={entity.url}
+				alt={entity.text}
+				draggable={false}
+				style={{
+					height: "1.2em",
+					width: "1.2em",
+					verticalAlign: "middle",
+					display: "inline-block",
+				}}
+			/>,
+		);
+		lastIndex = end;
+	}
+
+	if (lastIndex < text.length) {
+		result.push(text.slice(lastIndex));
+	}
+
+	return result;
+}
+
+function* TwemojiEditable(
+	this: Context,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for (const {} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<div class="editable" contenteditable="true" spellcheck={false}>
+					{lines.map((line) => {
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						return (
+							<div key={key}>
+								{line ? renderTwemoji(line) : <br />}
+							</div>
+						);
+					})}
+				</div>
+			</CrankEditable>
+		);
+	}
+}
+
 /*** Hydrate demos ***/
 function hydrate(id: string, Component: any) {
 	const el = document.getElementById(id);
@@ -301,3 +369,4 @@ hydrate("demo-simple", SimpleEditable);
 hydrate("demo-rainbow", RainbowEditable);
 hydrate("demo-code", CodeEditable);
 hydrate("demo-social", SocialEditable);
+hydrate("demo-twemoji", TwemojiEditable);

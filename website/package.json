@@ -19,6 +19,7 @@
 		"@b9g/shovel": "^0.2.16",
 		"@emotion/css": "^11.13.5",
 		"@emotion/server": "^11.11.0",
+		"@twemoji/parser": "^17.0.1",
 		"front-matter": "^4.0.2",
 		"gh-pages": "^6.3.0",
 		"marked": "^15.0.0",

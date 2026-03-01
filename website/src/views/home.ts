@@ -9,6 +9,8 @@ const RAINBOW_INITIAL = "Hello\nWorld\nRainbow\nText\n";
 
 const SOCIAL_INITIAL = "Check out #revise by @bikeshaving\nIt's at https://revise.js.org\n#javascript #editing @everyone\n";
 
+const TWEMOJI_INITIAL = "Hello World! \u{1F44B}\nRevise.js is \u{1F525}\u{1F525}\u{1F525}\nType some emoji: \u{1F60E}\u{2764}\u{FE0F}\u{1F680}\n";
+
 const CODE_INITIAL = `function greet(name: string): string {
 \treturn \`Hello, \${name}!\`;
 }
@@ -89,6 +91,22 @@ export default function Home({url}: {url: string}) {
 					<div
 						id="demo-social"
 						data-initial=${SOCIAL_INITIAL}
+					/>
+				</section>
+
+				<section>
+					<h2 class=${css`
+						color: var(--highlight-color);
+						font-size: 1.5rem;
+						margin: 0 0 0.5em;
+					`}>Twemoji</h2>
+					<p class=${css`
+						color: var(--text-muted);
+						margin: 0 0 1em;
+					`}>Emoji replaced with SVG using <code>data-content</code>.</p>
+					<div
+						id="demo-twemoji"
+						data-initial=${TWEMOJI_INITIAL}
 					/>
 				</section>
 
