@@ -366,4 +366,147 @@ test("normalize: double normalize is idempotent", () => {
 	);
 });
 
+// --- operations / builder roundtrip ---
+
+test("operations: rebuild from operations matches apply", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const builder = Edit.builder(base);
+				for (const op of edit.operations()) {
+					switch (op.type) {
+						case "retain":
+							builder.retain(op.end - op.start);
+							break;
+						case "delete":
+							builder.delete(op.end - op.start);
+							break;
+						case "insert":
+							builder.insert(op.value);
+							break;
+					}
+				}
+				Assert.is(builder.build().apply(base), edit.apply(base));
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+// --- diff cross-method ---
+
+test("diff + invert: diff(a, b).invert().apply(b) === a", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}),
+			fc.string({minLength: 0, maxLength: 20}),
+			(a, b) => {
+				Assert.is(Edit.diff(a, b).invert().apply(b), a);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("diff + compose: diff(a, b).compose(diff(b, c)).apply(a) === c", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 15}),
+			fc.string({minLength: 0, maxLength: 15}),
+			fc.string({minLength: 0, maxLength: 15}),
+			(a, b, c) => {
+				Assert.is(Edit.diff(a, b).compose(Edit.diff(b, c)).apply(a), c);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+// --- invert cross-method ---
+
+test("invert + compose: edit.invert().compose(edit.invert().invert()) is identity", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const mid = edit.apply(base);
+				const inv = edit.invert();
+				const composed = inv.compose(inv.invert());
+				Assert.is(composed.apply(mid), mid);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+// --- transform cross-method ---
+
+test("transform + invert: A'.invert() undoes A' on B's output", () => {
+	fc.assert(
+		fc.property(arbitraryConcurrentEdits(), ({base, editA, editB}) => {
+			const [_aPrime, bPrime] = editA.transform(editB);
+			const afterA = editA.apply(base);
+			const converged = bPrime.apply(afterA);
+			Assert.is(bPrime.invert().apply(converged), afterA);
+		}),
+		{numRuns: 2000},
+	);
+});
+
+test("transform + compose + invert: round-trip through transform", () => {
+	fc.assert(
+		fc.property(arbitraryConcurrentEdits(), ({base, editA, editB}) => {
+			const [_aPrime, bPrime] = editA.transform(editB);
+			// Going forward via A then B' and back via B'.invert() lands on A's output
+			const pathAB = editA.compose(bPrime);
+			const roundTrip = pathAB.compose(bPrime.invert());
+			Assert.is(roundTrip.apply(base), editA.apply(base));
+		}),
+		{numRuns: 2000},
+	);
+});
+
+// --- normalize cross-method ---
+
+test("normalize + compose: normalizing inputs doesn't change compose result", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).chain((edit1) => {
+					const mid = edit1.apply(base);
+					return arbitraryEdit(mid).map((edit2) => ({base, edit1, edit2}));
+				}),
+			),
+			({base, edit1, edit2}) => {
+				const raw = edit1.compose(edit2);
+				const normalized = edit1.normalize().compose(edit2.normalize());
+				Assert.is(raw.apply(base), normalized.apply(base));
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("normalize + invert: normalizing before invert doesn't change result", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const raw = edit.invert().apply(edit.apply(base));
+				const normalized = edit.normalize().invert().apply(edit.normalize().apply(base));
+				Assert.is(raw, base);
+				Assert.is(normalized, base);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
 test.run();
