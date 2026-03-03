@@ -19,7 +19,11 @@
 		"@b9g/shovel": "^0.2.16",
 		"@emotion/css": "^11.13.5",
 		"@emotion/server": "^11.11.0",
+		"@sveltejs/acorn-typescript": "^1.0.5",
 		"@twemoji/parser": "^17.0.1",
+		"acorn": "^8.14.0",
+		"acorn-jsx": "^5.3.2",
+		"astring": "^1.9.0",
 		"front-matter": "^4.0.2",
 		"gh-pages": "^6.3.0",
 		"marked": "^15.0.0",
@@ -28,6 +32,7 @@
 		"serialize-javascript": "^6.0.0"
 	},
 	"devDependencies": {
+		"@types/estree": "^1.0.6",
 		"@types/prismjs": "^1.26.0",
 		"@types/serialize-javascript": "^5.0.0",
 		"typescript": "^5.0.0"

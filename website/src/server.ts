@@ -1,3 +1,4 @@
+import "./ssr-polyfill.js";
 import {jsx} from "@b9g/crank/standalone";
 import {renderer} from "@b9g/crank/html";
 import {Router} from "@b9g/router";
@@ -10,15 +11,95 @@ import NotFoundView from "./views/not-found.js";
 
 import {collectDocuments} from "./models/document.js";
 
+// Prism setup for SSR syntax highlighting (language components loaded inside)
+import "./utils/prism.js";
+
 // Import assets with content-hashed URLs
 import clientCSS from "./styles/client.css" with {assetBase: "/static/"};
 import demosScript from "./clients/demos.tsx" with {assetBase: "/static/"};
 import navbarScript from "./clients/navbar.ts" with {assetBase: "/static/"};
+import codeBlocksScript from "./clients/code-blocks.ts" with {
+	assetBase: "/static/",
+};
+
+// Import Crank client bundles for live code preview iframe
+import crankModule from "./clients/crank/index.ts" with {assetBase: "/static/"};
+import crankDomModule from "./clients/crank/dom.ts" with {
+	assetBase: "/static/",
+};
+import crankStandaloneModule from "./clients/crank/standalone.ts" with {
+	assetBase: "/static/",
+};
+import crankJsxRuntimeModule from "./clients/crank/jsx-runtime.ts" with {
+	assetBase: "/static/",
+};
+import crankJsxDevRuntimeModule from "./clients/crank/jsx-dev-runtime.ts" with {
+	assetBase: "/static/",
+};
+import crankJsxTagModule from "./clients/crank/jsx-tag.ts" with {
+	assetBase: "/static/",
+};
+import crankAsyncModule from "./clients/crank/async.ts" with {
+	assetBase: "/static/",
+};
+import crankEventTargetModule from "./clients/crank/event-target.ts" with {
+	assetBase: "/static/",
+};
+import crankHtmlModule from "./clients/crank/html.ts" with {
+	assetBase: "/static/",
+};
+
+// Import Revise client bundles for live code preview iframe
+import reviseModule from "./clients/revise/index.ts" with {
+	assetBase: "/static/",
+};
+import reviseContentAreaModule from "./clients/revise/contentarea.ts" with {
+	assetBase: "/static/",
+};
+import reviseEditModule from "./clients/revise/edit.ts" with {
+	assetBase: "/static/",
+};
+import reviseKeyerModule from "./clients/revise/keyer.ts" with {
+	assetBase: "/static/",
+};
+import reviseHistoryModule from "./clients/revise/history.ts" with {
+	assetBase: "/static/",
+};
+import reviseStateModule from "./clients/revise/state.ts" with {
+	assetBase: "/static/",
+};
+
+// Import CrankEditable client bundle for live code preview iframe
+import crankEditableModule from "./clients/crankeditable/index.ts" with {
+	assetBase: "/static/",
+};
 
 export const assets = {
 	clientCSS,
 	demosScript,
 	navbarScript,
+	codeBlocksScript,
+};
+
+// Static URLs for live code preview iframe (maps module specifiers to bundled URLs)
+export const staticURLs: Record<string, string> = {
+	"client.css": clientCSS,
+	"@b9g/crank": crankModule,
+	"@b9g/crank/dom": crankDomModule,
+	"@b9g/crank/standalone": crankStandaloneModule,
+	"@b9g/crank/jsx-runtime": crankJsxRuntimeModule,
+	"@b9g/crank/jsx-dev-runtime": crankJsxDevRuntimeModule,
+	"@b9g/crank/jsx-tag": crankJsxTagModule,
+	"@b9g/crank/async": crankAsyncModule,
+	"@b9g/crank/event-target": crankEventTargetModule,
+	"@b9g/crank/html": crankHtmlModule,
+	"@b9g/revise": reviseModule,
+	"@b9g/revise/contentarea.js": reviseContentAreaModule,
+	"@b9g/revise/edit.js": reviseEditModule,
+	"@b9g/revise/keyer.js": reviseKeyerModule,
+	"@b9g/revise/history.js": reviseHistoryModule,
+	"@b9g/revise/state.js": reviseStateModule,
+	"@b9g/crankeditable": crankEditableModule,
 };
 
 // Create router

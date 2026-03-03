@@ -4,7 +4,8 @@ import {extractCritical} from "@emotion/server";
 import {Navbar} from "./navbar.js";
 import {Footer} from "./footer.js";
 import {getColorSchemeScript} from "../utils/color-scheme.js";
-import {assets} from "../server.js";
+import {assets, staticURLs} from "../server.js";
+import {SerializeScript} from "./serialize-javascript.js";
 
 function ColorSchemeScript() {
 	const scriptText = `(() => { ${getColorSchemeScript()} })()`;
@@ -58,9 +59,11 @@ export function* Root(
 				</head>
 				<body>
 					<${ColorSchemeScript} />
+					<${SerializeScript} id="static-urls" value=${staticURLs} />
 					<${Raw} value=${html} />
 					<script type="module" src=${assets.demosScript}></script>
 					<script type="module" src=${assets.navbarScript}></script>
+					<script type="module" src=${assets.codeBlocksScript}></script>
 				</body>
 			</html>
 		`;
