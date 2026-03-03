@@ -213,6 +213,7 @@ export class Edit {
 				deleteSeq1 = S.shrink(deleteSeq1, toggleSeq);
 				inserted1 = erase(insertSeq1, inserted1, toggleSeq);
 				insertSeq1 = S.shrink(insertSeq1, toggleSeq);
+				deleted2 = erase(deleteSeq2, deleted2, toggleSeq);
 				deleteSeq2 = S.shrink(deleteSeq2, toggleSeq);
 				insertSeq2 = S.shrink(insertSeq2, toggleSeq);
 			}

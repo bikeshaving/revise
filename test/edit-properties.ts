@@ -138,4 +138,232 @@ test("transform then apply produces valid string", () => {
 	);
 });
 
+// --- apply ---
+
+test("apply: identity edit preserves string", () => {
+	fc.assert(
+		fc.property(fc.string({minLength: 0, maxLength: 50}), (base) => {
+			const identity = new Edit([base.length]);
+			Assert.is(identity.apply(base), base);
+		}),
+		{numRuns: 1000},
+	);
+});
+
+test("apply: edit produces string of expected length", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const result = edit.apply(base);
+				const expectedLen = base.length - edit.deleted.length + edit.inserted.length;
+				Assert.is(result.length, expectedLen);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+// --- invert ---
+
+test("invert: edit.invert().apply(edit.apply(s)) === s", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const inverted = edit.invert();
+				Assert.is(inverted.apply(edit.apply(base)), base);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("invert: double invert is identity", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const result = edit.invert().invert().apply(base);
+				Assert.is(result, edit.apply(base));
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("invert: swaps inserted and deleted", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const inverted = edit.invert();
+				Assert.is(inverted.inserted, edit.deleted);
+				Assert.is(inverted.deleted, edit.inserted);
+			},
+		),
+		{numRuns: 1000},
+	);
+});
+
+// --- compose ---
+
+test("compose: sequential apply equals composed apply", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).chain((edit1) => {
+					const mid = edit1.apply(base);
+					return arbitraryEdit(mid).map((edit2) => ({base, edit1, edit2}));
+				}),
+			),
+			({base, edit1, edit2}) => {
+				const composed = edit1.compose(edit2);
+				Assert.is(composed.apply(base), edit2.apply(edit1.apply(base)));
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("compose: composing with identity is no-op", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const mid = edit.apply(base);
+				const identity = new Edit([mid.length]);
+				const composed = edit.compose(identity);
+				Assert.is(composed.apply(base), edit.apply(base));
+			},
+		),
+		{numRuns: 1000},
+	);
+});
+
+test("compose: identity composed with edit equals edit", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const identity = new Edit([base.length]);
+				const composed = identity.compose(edit);
+				Assert.is(composed.apply(base), edit.apply(base));
+			},
+		),
+		{numRuns: 1000},
+	);
+});
+
+test("compose: associativity", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 15}).chain((base) =>
+				arbitraryEdit(base).chain((edit1) => {
+					const s1 = edit1.apply(base);
+					return arbitraryEdit(s1).chain((edit2) => {
+						const s2 = edit2.apply(s1);
+						return arbitraryEdit(s2).map((edit3) => ({base, edit1, edit2, edit3}));
+					});
+				}),
+			),
+			({base, edit1, edit2, edit3}) => {
+				const leftAssoc = edit1.compose(edit2).compose(edit3);
+				const rightAssoc = edit1.compose(edit2.compose(edit3));
+				Assert.is(leftAssoc.apply(base), rightAssoc.apply(base));
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+// --- compose + invert ---
+
+test("compose with invert: edit.compose(edit.invert()) is identity", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const composed = edit.compose(edit.invert());
+				Assert.is(composed.apply(base), base);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+// --- diff ---
+
+test("diff: diff(a, b).apply(a) === b", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}),
+			fc.string({minLength: 0, maxLength: 20}),
+			(a, b) => {
+				const edit = Edit.diff(a, b);
+				Assert.is(edit.apply(a), b);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("diff: diff(a, a) is identity", () => {
+	fc.assert(
+		fc.property(fc.string({minLength: 0, maxLength: 20}), (a) => {
+			const edit = Edit.diff(a, a);
+			Assert.is(edit.apply(a), a);
+			Assert.is(edit.inserted, "");
+			Assert.is(edit.deleted, "");
+		}),
+		{numRuns: 1000},
+	);
+});
+
+// --- normalize ---
+
+test("normalize: normalized edit produces same result", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				Assert.is(edit.normalize().apply(base), edit.apply(base));
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("normalize: double normalize is idempotent", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const once = edit.normalize();
+				const twice = once.normalize();
+				Assert.equal(once.parts, twice.parts);
+			},
+		),
+		{numRuns: 1000},
+	);
+});
+
 test.run();
