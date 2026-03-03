@@ -573,4 +573,30 @@ test("transform: left priority for same-position inserts", () => {
 	Assert.is(result, "aXYb");
 });
 
+test("transform: swapping arguments swaps priority", () => {
+	const text = "ab";
+	const editA = new Edit([1, "", "X", 2]);
+	const editB = new Edit([1, "", "Y", 2]);
+	// A.transform(B): A gets priority → "aXYb"
+	const [_ap1, bp1] = editA.transform(editB);
+	Assert.is(bp1.apply(editA.apply(text)), "aXYb");
+	// B.transform(A): B gets priority → "aYXb"
+	const [_bp2, ap2] = editB.transform(editA);
+	Assert.is(ap2.apply(editB.apply(text)), "aYXb");
+});
+
+test("transform: same-position inserts on empty base", () => {
+	// Exact counterexample found by fast-check fuzzer
+	const editA = new Edit([0, "", " ", 0]);
+	const editB = new Edit([0, "", "!", 0]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	// Both paths converge (A has priority)
+	Assert.is(bPrime.apply(editA.apply("")), " !");
+	Assert.is(aPrime.apply(editB.apply("")), " !");
+	// Swapped: B has priority
+	const [bPrime2, aPrime2] = editB.transform(editA);
+	Assert.is(aPrime2.apply(editB.apply("")), "! ");
+	Assert.is(bPrime2.apply(editA.apply("")), "! ");
+});
+
 test.run();
