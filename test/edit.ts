@@ -234,6 +234,38 @@ test("compose 10", () => {
 	Assert.equal(edit1.compose(edit2), result);
 });
 
+// compose where edit2 deletes characters that edit1 inserted
+test("compose 11: insert-then-delete cancellation", () => {
+	// base: "abcdef"
+	// edit1: insert "xyz" at 0, delete "def" at 3
+	//   "abcdef" → "xyzabc"
+	// edit2: delete "xyza" at 0, insert "hi"
+	//   "xyzabc" → "hibc"
+	// The 3 inserted chars "xyz" are deleted by edit2 and must cancel out.
+	// The remaining deletion "a" is a real base char.
+	const edit1 = new Edit([0, "", "xyz", 3, "def", "", 6]);
+	const edit2 = new Edit([0, "xyza", "hi", 6]);
+	const composed = edit1.compose(edit2);
+	Assert.is(composed.apply("abcdef"), "hibc");
+	Assert.is(composed.apply("abcdef"), edit2.apply(edit1.apply("abcdef")));
+});
+
+// compose associativity with insert-then-delete across three edits
+test("compose 12: associativity with cancellation", () => {
+	// base: "abcdefg"
+	// e1: insert "xyz" at 0               → "xyzabcdefg"
+	// e2: delete "efg" at 7, insert "hijk" → "xyzabcdhijk"
+	// e3: delete "xyza" at 0, insert "mn"  → "mnbcdhijk"
+	// (e1∘e2)∘e3 and e1∘(e2∘e3) must agree.
+	const e1 = new Edit([0, "", "xyz", 7]);
+	const e2 = new Edit([7, "efg", "hijk", 10]);
+	const e3 = new Edit([0, "xyza", "mn", 11]);
+	const expected = e3.apply(e2.apply(e1.apply("abcdefg")));
+	Assert.is(expected, "mnbcdhijk");
+	Assert.is(e1.compose(e2).compose(e3).apply("abcdefg"), expected);
+	Assert.is(e1.compose(e2.compose(e3)).apply("abcdefg"), expected);
+});
+
 test("invert 1", () => {
 	const text = "hello world";
 	const edit = Edit.builder(text).retain(5).insert("oo").build();
