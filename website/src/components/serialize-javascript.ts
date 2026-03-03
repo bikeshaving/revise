@@ -4,7 +4,7 @@ import serializeJavascript from "serialize-javascript";
 
 let nextID = 0;
 export function* SerializeScript(
-	this: Context,
+	this: Context<typeof SerializeScript>,
 	{name, value, ...scriptProps}: any,
 ): any {
 	const id = nextID++;

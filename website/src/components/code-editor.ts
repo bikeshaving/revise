@@ -86,7 +86,7 @@ function renderLines(value: string, language: string, keyer: any) {
 }
 
 export function* CodeEditor(
-	this: Context,
+	this: Context<typeof CodeEditor>,
 	{
 		value,
 		language,

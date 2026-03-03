@@ -17,7 +17,7 @@ function ColorSchemeScript() {
 }
 
 export function* Root(
-	this: Context,
+	this: Context<typeof Root>,
 	{
 		title,
 		children,

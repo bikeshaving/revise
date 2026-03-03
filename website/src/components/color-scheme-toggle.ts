@@ -36,7 +36,7 @@ const knobStyles = css`
 
 const IS_CLIENT = typeof window !== "undefined";
 
-export function* ColorSchemeToggle(this: Context) {
+export function* ColorSchemeToggle(this: Context<typeof ColorSchemeToggle>) {
 	const colorScheme = useColorScheme(this);
 
 	for ({} of this) {
