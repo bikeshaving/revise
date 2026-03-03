@@ -166,6 +166,116 @@ test("apply: edit produces string of expected length", () => {
 	);
 });
 
+test("apply: retained characters are preserved from base", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const result = edit.apply(base);
+				// Walk operations: retained spans must appear verbatim in output
+				let srcPos = 0;
+				let outPos = 0;
+				for (const op of edit.operations()) {
+					switch (op.type) {
+						case "retain": {
+							const len = op.end - op.start;
+							Assert.is(
+								result.slice(outPos, outPos + len),
+								base.slice(srcPos, srcPos + len),
+							);
+							srcPos += len;
+							outPos += len;
+							break;
+						}
+						case "delete":
+							srcPos += op.end - op.start;
+							break;
+						case "insert":
+							outPos += op.value.length;
+							break;
+					}
+				}
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("apply: inserted text appears verbatim in output", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const result = edit.apply(base);
+				let outPos = 0;
+				for (const op of edit.operations()) {
+					switch (op.type) {
+						case "retain":
+							outPos += op.end - op.start;
+							break;
+						case "delete":
+							break;
+						case "insert":
+							Assert.is(
+								result.slice(outPos, outPos + op.value.length),
+								op.value,
+							);
+							outPos += op.value.length;
+							break;
+					}
+				}
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("apply: deleted text matches base at the given positions", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				for (const op of edit.operations()) {
+					if (op.type === "delete") {
+						Assert.is(
+							base.slice(op.start, op.end),
+							op.value,
+						);
+					}
+				}
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("apply: pure insert edit prepends/appends without losing base", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}),
+			fc.string({minLength: 1, maxLength: 10}),
+			fc.boolean(),
+			(base, text, atEnd) => {
+				const builder = Edit.builder(base);
+				if (atEnd) {
+					builder.retain(base.length).insert(text);
+				} else {
+					builder.insert(text).retain(base.length);
+				}
+				const result = builder.build().apply(base);
+				Assert.is(result, atEnd ? base + text : text + base);
+			},
+		),
+		{numRuns: 1000},
+	);
+});
+
 // --- invert ---
 
 test("invert: edit.invert().apply(edit.apply(s)) === s", () => {
