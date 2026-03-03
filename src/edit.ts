@@ -232,6 +232,66 @@ export class Edit {
 		return synthesize(deleteSeq, deleted, insertSeq, inserted);
 	}
 
+	/**
+	 * Transforms two concurrent edits against the same base document.
+	 *
+	 * Given edits A and B both applicable to the same document s0, returns
+	 * [A', B'] such that:
+	 *   B'.apply(A.apply(s0)) === A'.apply(B.apply(s0))
+	 *
+	 * A' is A adjusted to apply after B has been applied.
+	 * B' is B adjusted to apply after A has been applied.
+	 *
+	 * When both edits insert at the same position, `this` (A) gets left
+	 * priority (its insertion appears first in the converged result).
+	 */
+	transform(that: Edit): [Edit, Edit] {
+		const [insertSeqA, insertedA, deleteSeqA, deletedA] = factor(this);
+		const [insertSeqB, insertedB, deleteSeqB, deletedB] = factor(that);
+
+		// Both insertSeqs have excludedLength == base length.
+		// Interleave to establish a combined coordinate space
+		// (base + insA + insB) and resolve insertion ordering.
+		const [insertSeqAI, insertSeqBI] = S.interleave(
+			insertSeqA,
+			insertSeqB,
+		);
+
+		// Lift deleteSeqs from base into the combined space.
+		// unionI.excludedLength == base length, matching deleteSeq lengths.
+		const unionI = S.union(insertSeqAI, insertSeqBI);
+		const deleteSeqAI = S.expand(deleteSeqA, unionI);
+		const deleteSeqBI = S.expand(deleteSeqB, unionI);
+
+		// Overlapping deletions: text both edits delete from s0.
+		// A' only deletes what B hasn't already deleted, and vice versa.
+		const deleteOnlyAI = S.difference(deleteSeqAI, deleteSeqBI);
+		const deleteOnlyBI = S.difference(deleteSeqBI, deleteSeqAI);
+
+		// Build deleted strings by erasing overlap in base coordinates.
+		const deleteOverlap = S.intersection(deleteSeqA, deleteSeqB);
+		const deletedAPrime = erase(deleteSeqA, deletedA, deleteOverlap);
+		const deletedBPrime = erase(deleteSeqB, deletedB, deleteOverlap);
+
+		// Build A' (operates on B's output = base + insB - delB).
+		// From combined space, shrink by deleteSeqBI to reach
+		// "base + insA + insB - delB" = "B_output + insA".
+		const insertSeqAPrime = S.shrink(insertSeqAI, deleteSeqBI);
+		const deleteOnlyAShifted = S.shrink(deleteOnlyAI, deleteSeqBI);
+		// Then shrink deleteSeq by insertSeqA' to get to "B_output" space.
+		const deleteSeqAPrime = S.shrink(deleteOnlyAShifted, insertSeqAPrime);
+
+		// Build B' (operates on A's output = base + insA - delA). Symmetric.
+		const insertSeqBPrime = S.shrink(insertSeqBI, deleteSeqAI);
+		const deleteOnlyBShifted = S.shrink(deleteOnlyBI, deleteSeqAI);
+		const deleteSeqBPrime = S.shrink(deleteOnlyBShifted, insertSeqBPrime);
+
+		return [
+			synthesize(insertSeqAPrime, insertedA, deleteSeqAPrime, deletedAPrime).normalize(),
+			synthesize(insertSeqBPrime, insertedB, deleteSeqBPrime, deletedBPrime).normalize(),
+		];
+	}
+
 	normalize(): Edit {
 		const insertSeq: Array<number> = [];
 		const deleteSeq: Array<number> = [];

@@ -402,4 +402,175 @@ test("validation: valid adjacent operations", () => {
 	Assert.is(edit.parts.length, 7);
 });
 
+test("transform: concurrent insertions at different positions", () => {
+	const text = "hello world";
+	const editA = new Edit([5, "", "oo", 11]);   // "hellooo world"
+	const editB = new Edit([11, "", "!", 11]);    // "hello world!"
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: concurrent deletions at different positions", () => {
+	const text = "hello world";
+	const editA = new Edit([1, "ell", "", 11]);   // "ho world"
+	const editB = new Edit([5, " wor", "", 11]);  // "hellold"
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: overlapping deletions", () => {
+	const text = "hello world";
+	const editA = new Edit([2, "llo", "", 11]);   // "he world"
+	const editB = new Edit([4, "o ", "", 11]);     // "hellworld"
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: insert vs delete at same position", () => {
+	const text = "hello world";
+	const editA = new Edit([5, "", "ooo", 11]);    // "helloooo world"
+	const editB = new Edit([5, " wor", "", 11]);   // "hellold"
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: both identity", () => {
+	const text = "hello";
+	const editA = new Edit([5]);
+	const editB = new Edit([5]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: one identity", () => {
+	const text = "hello world";
+	const editA = new Edit([5, "", "oo", 11]);
+	const editB = new Edit([11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: concurrent insertions at same position", () => {
+	const text = "hello";
+	const editA = new Edit([5, "", " world", 5]);
+	const editB = new Edit([5, "", "!", 5]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: replace same region", () => {
+	const text = "hello world";
+	const editA = new Edit([6, "world", "earth", 11]);
+	const editB = new Edit([6, "world", "mars", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: delete all vs insert", () => {
+	const text = "abc";
+	const editA = new Edit([0, "abc", "", 3]);
+	const editB = new Edit([1, "", "X", 3]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: multiple operations", () => {
+	const text = "hello world";
+	const editA = new Edit([0, "h", "H", 5, " ", "_", 11]);
+	const editB = new Edit([6, "world", "WORLD", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: fully overlapping deletion", () => {
+	const text = "hello world";
+	// Both delete the same region exactly
+	const editA = new Edit([5, " world", "", 11]);
+	const editB = new Edit([5, " world", "", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	const resultAB = bPrime.apply(editA.apply(text));
+	const resultBA = aPrime.apply(editB.apply(text));
+	Assert.is(resultAB, resultBA);
+	Assert.is(resultAB, "hello");
+});
+
+test("transform: subset deletion", () => {
+	const text = "hello world";
+	// A deletes "llo wor", B deletes "o w"
+	const editA = new Edit([2, "llo wor", "", 11]);
+	const editB = new Edit([4, "o w", "", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: insert at start", () => {
+	const text = "hello";
+	const editA = new Edit([0, "", "A", 5]);
+	const editB = new Edit([0, "", "B", 5]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: delete everything, both sides", () => {
+	const text = "abc";
+	const editA = new Edit([0, "abc", "", 3]);
+	const editB = new Edit([0, "abc", "", 3]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	const resultAB = bPrime.apply(editA.apply(text));
+	const resultBA = aPrime.apply(editB.apply(text));
+	Assert.is(resultAB, resultBA);
+	Assert.is(resultAB, "");
+});
+
+test("transform: replace with different lengths", () => {
+	const text = "abc";
+	const editA = new Edit([0, "abc", "ABCDEF", 3]);
+	const editB = new Edit([0, "abc", "X", 3]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: adjacent non-overlapping operations", () => {
+	const text = "abcdef";
+	// A deletes "abc", B deletes "def"
+	const editA = new Edit([0, "abc", "", 6]);
+	const editB = new Edit([3, "def", "", 6]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	const resultAB = bPrime.apply(editA.apply(text));
+	const resultBA = aPrime.apply(editB.apply(text));
+	Assert.is(resultAB, resultBA);
+	Assert.is(resultAB, "");
+});
+
+test("transform: empty base document", () => {
+	const text = "";
+	const editA = new Edit([0, "", "hello", 0]);
+	const editB = new Edit([0, "", "world", 0]);
+	const [aPrime, bPrime] = editA.transform(editB);
+	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+});
+
+test("transform: convergence with compose", () => {
+	// Verify that A.compose(B') === B.compose(A')
+	const text = "hello world";
+	const editA = new Edit([5, "", "oo", 11]);
+	const editB = new Edit([6, "world", "earth", 11]);
+	const [aPrime, bPrime] = editA.transform(editB);
+
+	// A then B' should produce the same edit as B then A'
+	const pathAB = editA.compose(bPrime);
+	const pathBA = editB.compose(aPrime);
+	Assert.is(pathAB.apply(text), pathBA.apply(text));
+});
+
+test("transform: left priority for same-position inserts", () => {
+	const text = "ab";
+	const editA = new Edit([1, "", "X", 2]);
+	const editB = new Edit([1, "", "Y", 2]);
+	const [_aPrime, bPrime] = editA.transform(editB);
+	const result = bPrime.apply(editA.apply(text));
+	// A gets left priority, so A's insert comes first
+	Assert.is(result, "aXYb");
+});
+
 test.run();
