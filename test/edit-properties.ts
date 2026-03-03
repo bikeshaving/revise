@@ -476,6 +476,93 @@ test("normalize: double normalize is idempotent", () => {
 	);
 });
 
+test("normalize: no adjacent same-type operations in parts", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const norm = edit.normalize();
+				const parts = norm.parts;
+				// Every triplet should have a non-empty deletion or insertion
+				for (let i = 0; i < parts.length - 1; i += 3) {
+					const deleted = parts[i + 1] as string;
+					const inserted = parts[i + 2] as string;
+					Assert.ok(
+						deleted !== "" || inserted !== "",
+						`empty operation at position ${parts[i]}`,
+					);
+				}
+				// Positions must be strictly increasing (no adjacent ops at same position)
+				for (let i = 3; i < parts.length - 1; i += 3) {
+					const prevEnd = (parts[i - 3] as number) + (parts[i - 2] as string).length;
+					const pos = parts[i] as number;
+					Assert.ok(prevEnd < pos, `adjacent operations not merged: ${prevEnd} >= ${pos}`);
+				}
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("normalize: no shared prefix/suffix between deleted and inserted", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const norm = edit.normalize();
+				for (let i = 0; i < norm.parts.length - 1; i += 3) {
+					const deleted = norm.parts[i + 1] as string;
+					const inserted = norm.parts[i + 2] as string;
+					if (deleted && inserted) {
+						Assert.is(deleted[0] !== inserted[0], true,
+							`shared prefix '${deleted[0]}' at position ${norm.parts[i]}`);
+						Assert.is(deleted[deleted.length - 1] !== inserted[inserted.length - 1], true,
+							`shared suffix '${deleted[deleted.length - 1]}' at position ${norm.parts[i]}`);
+					}
+				}
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("normalize: preserves inserted and deleted content", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}).chain((base) =>
+				arbitraryEdit(base).map((edit) => ({base, edit})),
+			),
+			({base, edit}) => {
+				const norm = edit.normalize();
+				// The actual text transformation must be identical
+				Assert.is(norm.apply(base), edit.apply(base));
+				// Inversion must also still work
+				Assert.is(norm.invert().apply(norm.apply(base)), base);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
+test("normalize + diff: diff always produces normalized output", () => {
+	fc.assert(
+		fc.property(
+			fc.string({minLength: 0, maxLength: 20}),
+			fc.string({minLength: 0, maxLength: 20}),
+			(a, b) => {
+				const edit = Edit.diff(a, b);
+				const norm = edit.normalize();
+				Assert.equal(edit.parts, norm.parts);
+			},
+		),
+		{numRuns: 2000},
+	);
+});
+
 // --- operations / builder roundtrip ---
 
 test("operations: rebuild from operations matches apply", () => {
