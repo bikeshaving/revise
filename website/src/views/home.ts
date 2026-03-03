@@ -365,18 +365,18 @@ export default function Home({url}: {url: string}) {
 				padding: 6rem 1rem 2rem;
 			`}>
 				<div id="hero-title" data-initial=${"Revise.js\n"}>
-					<h1 class=${css`
-						font-size: max(40px, 8vw);
-						color: var(--highlight-color);
-						margin: 0;
-					`}>Revise.js</h1>
+					<content-area>
+						<h1 contenteditable="true" spellcheck="false" style=${"font-size: max(40px, 8vw); color: var(--highlight-color); margin: 0; outline: none;"}>
+							<div>Revise.js</div>
+						</h1>
+					</content-area>
 				</div>
 				<div id="hero-tagline" data-initial=${"Rich text editing primitives for the web\n"}>
-					<p class=${css`
-						font-size: 1.25rem;
-						color: var(--text-muted);
-						margin: 0.5em 0 0;
-					`}>Rich text editing primitives for the web</p>
+					<content-area>
+						<p contenteditable="true" spellcheck="false" style=${"font-size: 1.25rem; color: var(--text-muted); margin: 0.5em 0 0; outline: none;"}>
+							<div>Rich text editing primitives for the web</div>
+						</p>
+					</content-area>
 				</div>
 			</header>
 
@@ -392,9 +392,11 @@ export default function Home({url}: {url: string}) {
 					<h2 class=${sectionHeading}>Simple Editable</h2>
 					<p class=${sectionDesc}>Plain text with undo/redo. The minimal setup.</p>
 					<div id="demo-simple" data-initial=${SIMPLE_INITIAL} class=${previewClass}>
-						<pre class="editable" contenteditable="true" spellcheck="false">
-							${renderInitialLines(SIMPLE_INITIAL)}
-						</pre>
+						<content-area>
+							<pre class="editable" contenteditable="true" spellcheck="false">
+								${renderInitialLines(SIMPLE_INITIAL)}
+							</pre>
+						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${SIMPLE_CODE} lang="tsx" editable=${true} previewId="demo-simple" />
@@ -406,9 +408,11 @@ export default function Home({url}: {url: string}) {
 					<h2 class=${sectionHeading}>Rainbow</h2>
 					<p class=${sectionDesc}>Per-character coloring with keyed lines.</p>
 					<div id="demo-rainbow" data-initial=${RAINBOW_INITIAL} class=${previewClass}>
-						<div class="editable" contenteditable="true" spellcheck="false">
-							${renderInitialLines(RAINBOW_INITIAL)}
-						</div>
+						<content-area>
+							<div class="editable" contenteditable="true" spellcheck="false">
+								${renderInitialLines(RAINBOW_INITIAL)}
+							</div>
+						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${RAINBOW_CODE} lang="tsx" editable=${true} previewId="demo-rainbow" />
@@ -420,9 +424,11 @@ export default function Home({url}: {url: string}) {
 					<h2 class=${sectionHeading}>Social Highlighting</h2>
 					<p class=${sectionDesc}><span style="color:#c084fc">#hashtags</span>, <span style="color:#60a5fa">@mentions</span>, and <span style="color:#34d399">https://links</span>.</p>
 					<div id="demo-social" data-initial=${SOCIAL_INITIAL} class=${previewClass}>
-						<div class="editable" contenteditable="true" spellcheck="false">
-							${renderInitialLines(SOCIAL_INITIAL)}
-						</div>
+						<content-area>
+							<div class="editable" contenteditable="true" spellcheck="false">
+								${renderInitialLines(SOCIAL_INITIAL)}
+							</div>
+						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${SOCIAL_CODE} lang="tsx" editable=${true} previewId="demo-social" />
@@ -434,9 +440,11 @@ export default function Home({url}: {url: string}) {
 					<h2 class=${sectionHeading}>Linkify</h2>
 					<p class=${sectionDesc}>URLs automatically become clickable <span style="color:#60a5fa">links</span>.</p>
 					<div id="demo-linkify" data-initial=${LINKIFY_INITIAL} class=${previewClass}>
-						<div class="editable" contenteditable="true" spellcheck="false">
-							${renderInitialLines(LINKIFY_INITIAL)}
-						</div>
+						<content-area>
+							<div class="editable" contenteditable="true" spellcheck="false">
+								${renderInitialLines(LINKIFY_INITIAL)}
+							</div>
+						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${LINKIFY_CODE} lang="tsx" editable=${true} previewId="demo-linkify" />
@@ -448,9 +456,11 @@ export default function Home({url}: {url: string}) {
 					<h2 class=${sectionHeading}>Twemoji</h2>
 					<p class=${sectionDesc}>Emoji replaced with SVG using <code>data-content</code>.</p>
 					<div id="demo-twemoji" data-initial=${TWEMOJI_INITIAL} class=${previewClass}>
-						<div class="editable" contenteditable="true" spellcheck="false">
-							${renderInitialLines(TWEMOJI_INITIAL)}
-						</div>
+						<content-area>
+							<div class="editable" contenteditable="true" spellcheck="false">
+								${renderInitialLines(TWEMOJI_INITIAL)}
+							</div>
+						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${TWEMOJI_CODE} lang="tsx" editable=${true} previewId="demo-twemoji" />
@@ -462,9 +472,11 @@ export default function Home({url}: {url: string}) {
 					<h2 class=${sectionHeading}>Code Editor</h2>
 					<p class=${sectionDesc}>Keyword highlighting with a simple regex tokenizer.</p>
 					<div id="demo-code" data-initial=${CODE_INITIAL} class=${previewClass}>
-						<pre class="editable" contenteditable="true" spellcheck="false">
-							${renderInitialLines(CODE_INITIAL)}
-						</pre>
+						<content-area>
+							<pre class="editable" contenteditable="true" spellcheck="false">
+								${renderInitialLines(CODE_INITIAL)}
+							</pre>
+						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${CODE_CODE} lang="tsx" editable=${true} previewId="demo-code" />

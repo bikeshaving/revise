@@ -10,11 +10,11 @@ import "prismjs/components/prism-typescript";
 
 /*** Demo 1: Simple Editable ***/
 function* SimpleEditable(
-	this: Context,
+	this: Context<typeof SimpleEditable>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = state.value.split(/\r\n|\r|\n/);
 		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
 			lines.pop();
@@ -51,11 +51,11 @@ const COLORS = [
 ];
 
 function* RainbowEditable(
-	this: Context,
+	this: Context<typeof RainbowEditable>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		let cursor = 0;
 		const lines = state.value.split(/\r\n|\r|\n/);
 		// Remove trailing empty from final newline
@@ -65,7 +65,7 @@ function* RainbowEditable(
 
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
 						cursor += line.length + 1;
@@ -114,16 +114,16 @@ function printTokens(tokens: Array<Token | string>): Array<Element | string> {
 }
 
 function* CodeEditable(
-	this: Context,
+	this: Context<typeof CodeEditable>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = tokenize(state.value, "typescript");
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<pre class="editable" contenteditable="true" spellcheck={false}>
+				<pre class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
 						const length = line.reduce((l, t) => l + t.length, 0);
@@ -176,11 +176,11 @@ function highlightSocial(text: string): Array<Element | string> {
 }
 
 function* SocialEditable(
-	this: Context,
+	this: Context<typeof SocialEditable>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = state.value.split(/\r\n|\r|\n/);
 		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
 			lines.pop();
@@ -189,7 +189,7 @@ function* SocialEditable(
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
 						cursor += line.length + 1;
@@ -233,11 +233,11 @@ function linkifyText(text: string): Array<Element | string> {
 }
 
 function* LinkifyEditable(
-	this: Context,
+	this: Context<typeof LinkifyEditable>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = state.value.split(/\r\n|\r|\n/);
 		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
 			lines.pop();
@@ -246,7 +246,7 @@ function* LinkifyEditable(
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
 						cursor += line.length + 1;
@@ -300,11 +300,11 @@ function renderTwemoji(text: string): Array<Element | string> {
 }
 
 function* TwemojiEditable(
-	this: Context,
+	this: Context<typeof TwemojiEditable>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = state.value.split(/\r\n|\r|\n/);
 		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
 			lines.pop();
@@ -313,7 +313,7 @@ function* TwemojiEditable(
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
 						cursor += line.length + 1;
@@ -331,11 +331,11 @@ function* TwemojiEditable(
 
 /*** Hero editables ***/
 function* EditableTitle(
-	this: Context,
+	this: Context<typeof EditableTitle>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = state.value.split(/\r\n|\r|\n/);
 		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
 			lines.pop();
@@ -370,11 +370,11 @@ function* EditableTitle(
 }
 
 function* EditableTagline(
-	this: Context,
+	this: Context<typeof EditableTagline>,
 	{initial}: {initial: string},
 ) {
 	const state = new EditableState({value: initial});
-	for (const {} of this) {
+	for ({} of this) {
 		const lines = state.value.split(/\r\n|\r|\n/);
 		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
 			lines.pop();
@@ -386,6 +386,7 @@ function* EditableTagline(
 				<p
 					contenteditable="true"
 					spellcheck={false}
+					hydrate="!children"
 					style={{
 						fontSize: "1.25rem",
 						color: "var(--text-muted)",
@@ -413,8 +414,7 @@ function hydrate(id: string, Component: any) {
 	const el = document.getElementById(id);
 	if (!el) return;
 	const initial = el.dataset.initial || "\n";
-	el.innerHTML = "";
-	renderer.render(
+	renderer.hydrate(
 		<Component initial={initial} />,
 		el,
 	);
