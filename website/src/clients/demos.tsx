@@ -156,15 +156,21 @@ function highlightSocial(text: string): Array<Element | string> {
 
 		const value = match[0];
 		let color: string;
+		let href: string;
 		if (match[1]) {
-			color = "#c084fc"; // purple for hashtags
+			color = "#c084fc";
+			href = `https://example.com/tags/${value.slice(1)}`;
 		} else if (match[2]) {
-			color = "#60a5fa"; // blue for mentions
+			color = "#60a5fa";
+			href = `https://example.com/${value.slice(1)}`;
 		} else {
-			color = "#34d399"; // green for links
+			color = "#34d399";
+			href = value;
 		}
 
-		result.push(<span style={{color}}>{value}</span>);
+		result.push(
+			<a href={href} target="_blank" rel="noopener" style={{color, textDecoration: "underline"}}>{value}</a>,
+		);
 		lastIndex = index + value.length;
 	}
 
@@ -205,64 +211,7 @@ function* SocialEditable(
 	}
 }
 
-/*** Demo 5: Linkify ***/
-const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
-
-function linkifyText(text: string): Array<Element | string> {
-	const result: Array<Element | string> = [];
-	let lastIndex = 0;
-	for (const match of text.matchAll(URL_PATTERN)) {
-		const index = match.index!;
-		if (index > lastIndex) {
-			result.push(text.slice(lastIndex, index));
-		}
-
-		result.push(
-			<a href={match[0]} target="_blank" rel="noopener" style={{color: "#60a5fa", textDecoration: "underline"}}>
-				{match[0]}
-			</a>,
-		);
-		lastIndex = index + match[0].length;
-	}
-
-	if (lastIndex < text.length) {
-		result.push(text.slice(lastIndex));
-	}
-
-	return result;
-}
-
-function* LinkifyEditable(
-	this: Context<typeof LinkifyEditable>,
-	{initial}: {initial: string},
-) {
-	const state = new EditableState({value: initial});
-	for ({} of this) {
-		const lines = state.value.split(/\r\n|\r|\n/);
-		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
-			lines.pop();
-		}
-
-		let cursor = 0;
-		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
-					{lines.map((line) => {
-						const key = state.keyer.keyAt(cursor);
-						cursor += line.length + 1;
-						return (
-							<div key={key}>
-								{line ? linkifyText(line) : <br />}
-							</div>
-						);
-					})}
-				</div>
-			</CrankEditable>
-		);
-	}
-}
-
-/*** Demo 6: Twemoji ***/
+/*** Demo 5: Twemoji ***/
 function renderTwemoji(text: string): Array<Element | string> {
 	const entities = parseEmoji(text);
 	if (!entities.length) return [text];
@@ -426,5 +375,4 @@ hydrate("demo-simple", SimpleEditable);
 hydrate("demo-rainbow", RainbowEditable);
 hydrate("demo-code", CodeEditable);
 hydrate("demo-social", SocialEditable);
-hydrate("demo-linkify", LinkifyEditable);
 hydrate("demo-twemoji", TwemojiEditable);

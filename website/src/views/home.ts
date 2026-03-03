@@ -10,7 +10,6 @@ const SIMPLE_INITIAL = `Hello World!\nTry typing here.\nUndo with ${modKey}+Z.\n
 const RAINBOW_INITIAL = "Hello\nWorld\nRainbow\nText\n";
 const SOCIAL_INITIAL = "Check out #revise by @bikeshaving\nIt's at https://revise.js.org\n#javascript #editing @everyone\n";
 const TWEMOJI_INITIAL = "Hello World! \u{1F44B}\nRevise.js is \u{1F525}\u{1F525}\u{1F525}\nType some emoji: \u{1F60E}\u{2764}\u{FE0F}\u{1F680}\n";
-const LINKIFY_INITIAL = "Check out https://revise.js.org\nAlso see http://example.com\nPlain text stays plain.\n";
 const CODE_INITIAL = "function greet(name) {\n  return 'Hello, ' + name;\n}\n\nconst message = greet('World');\nconsole.log(message);\n";
 
 const SIMPLE_CODE = `import type {Context} from "@b9g/crank";
@@ -113,11 +112,23 @@ function highlightSocial(text: string): (Element | string)[] {
   for (const match of text.matchAll(PATTERN)) {
     const index = match.index!;
     if (index > lastIndex) result.push(text.slice(lastIndex, index));
-    let color = "#34d399";
-    if (match[1]) color = "#c084fc";
-    else if (match[2]) color = "#60a5fa";
-    result.push(<span style={"color: " + color}>{match[0]}</span>);
-    lastIndex = index + match[0].length;
+    const value = match[0];
+    let color: string, href: string;
+    if (match[1]) {
+      color = "#c084fc";
+      href = "https://example.com/tags/" + value.slice(1);
+    } else if (match[2]) {
+      color = "#60a5fa";
+      href = "https://example.com/" + value.slice(1);
+    } else {
+      color = "#34d399";
+      href = value;
+    }
+    result.push(
+      <a href={href} target="_blank" rel="noopener"
+        style={"color: " + color + "; text-decoration: underline"}>{value}</a>
+    );
+    lastIndex = index + value.length;
   }
   if (lastIndex < text.length) result.push(text.slice(lastIndex));
   return result;
@@ -277,61 +288,6 @@ console.log(message);
 
 renderer.render(<CodeEditable />, document.body);`;
 
-const LINKIFY_CODE = `import type {Context, Element} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
-
-if (!customElements.get("content-area")) {
-  customElements.define("content-area", ContentAreaElement);
-}
-
-const URL_PATTERN = /(https?:\\/\\/[^\\s]+)/g;
-
-function linkify(text: string): (Element | string)[] {
-  const result: (Element | string)[] = [];
-  let lastIndex = 0;
-  for (const match of text.matchAll(URL_PATTERN)) {
-    const index = match.index!;
-    if (index > lastIndex) result.push(text.slice(lastIndex, index));
-    result.push(
-      <a href={match[0]} target="_blank" rel="noopener" style="color: #60a5fa; text-decoration: underline">
-        {match[0]}
-      </a>
-    );
-    lastIndex = index + match[0].length;
-  }
-  if (lastIndex < text.length) result.push(text.slice(lastIndex));
-  return result;
-}
-
-function* LinkifyEditable(this: Context) {
-  const state = new EditableState({
-    value: \`Check out https://revise.js.org
-Also see http://example.com
-Plain text stays plain.
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false">
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            return <div key={key}>{line ? linkify(line) : <br />}</div>;
-          })}
-        </div>
-      </CrankEditable>
-    );
-  }
-}
-
-renderer.render(<LinkifyEditable />, document.body);`;
-
 function renderInitialLines(text: string) {
 	const lines = text.split("\n");
 	if (lines[lines.length - 1] === "") lines.pop();
@@ -422,7 +378,7 @@ export default function Home({url}: {url: string}) {
 
 				<section>
 					<h2 class=${sectionHeading}>Social Highlighting</h2>
-					<p class=${sectionDesc}><span style="color:#c084fc">#hashtags</span>, <span style="color:#60a5fa">@mentions</span>, and <span style="color:#34d399">https://links</span>.</p>
+					<p class=${sectionDesc}>Clickable <span style="color:#c084fc">#hashtags</span>, <span style="color:#60a5fa">@mentions</span>, and <span style="color:#34d399">links</span>.</p>
 					<div id="demo-social" data-initial=${SOCIAL_INITIAL} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
@@ -433,22 +389,6 @@ export default function Home({url}: {url: string}) {
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${SOCIAL_CODE} lang="tsx" editable=${true} previewId="demo-social" />
 						<${SerializeScript} class="props" value=${{code: SOCIAL_CODE, lang: "tsx", editable: true, previewId: "demo-social"}} name="inline-code-block-props" />
-					</div>
-				</section>
-
-				<section>
-					<h2 class=${sectionHeading}>Linkify</h2>
-					<p class=${sectionDesc}>URLs automatically become clickable <span style="color:#60a5fa">links</span>.</p>
-					<div id="demo-linkify" data-initial=${LINKIFY_INITIAL} class=${previewClass}>
-						<content-area>
-							<div class="editable" contenteditable="true" spellcheck="false">
-								${renderInitialLines(LINKIFY_INITIAL)}
-							</div>
-						</content-area>
-					</div>
-					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${LINKIFY_CODE} lang="tsx" editable=${true} previewId="demo-linkify" />
-						<${SerializeScript} class="props" value=${{code: LINKIFY_CODE, lang: "tsx", editable: true, previewId: "demo-linkify"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
