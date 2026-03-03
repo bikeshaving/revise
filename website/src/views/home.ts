@@ -15,11 +15,6 @@ const CODE_INITIAL = "function greet(name) {\n  return 'Hello, ' + name;\n}\n\nc
 const SIMPLE_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
 import {CrankEditable, EditableState} from "@b9g/crankeditable";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
-
-if (!customElements.get("content-area")) {
-  customElements.define("content-area", ContentAreaElement);
-}
 
 function* SimpleEditable(this: Context) {
   const state = new EditableState({
@@ -51,11 +46,6 @@ renderer.render(<SimpleEditable />, document.body);`;
 const RAINBOW_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
 import {CrankEditable, EditableState} from "@b9g/crankeditable";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
-
-if (!customElements.get("content-area")) {
-  customElements.define("content-area", ContentAreaElement);
-}
 
 const COLORS = [
   "#FF0000", "#FFA500", "#FFDC00",
@@ -98,11 +88,6 @@ renderer.render(<RainbowEditable />, document.body);`;
 const SOCIAL_CODE = `import type {Context, Element} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
 import {CrankEditable, EditableState} from "@b9g/crankeditable";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
-
-if (!customElements.get("content-area")) {
-  customElements.define("content-area", ContentAreaElement);
-}
 
 const PATTERN = /(#\\w+)|(@\\w+)|(https?:\\/\\/[^\\s]+)/g;
 
@@ -167,8 +152,7 @@ renderer.render(<SocialEditable />, document.body);`;
 
 const TWEMOJI_CODE = `import type {Context, Element} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
+import {CrankEditable, EditableState, ContentAreaElement} from "@b9g/crankeditable";
 import {parse as parseEmoji} from "@twemoji/parser";
 
 if (!customElements.get("content-area")) {
@@ -232,11 +216,6 @@ renderer.render(<TwemojiEditable />, document.body);`;
 const CODE_CODE = `import type {Context, Element} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
 import {CrankEditable, EditableState} from "@b9g/crankeditable";
-import {ContentAreaElement} from "@b9g/revise/contentarea.js";
-
-if (!customElements.get("content-area")) {
-  customElements.define("content-area", ContentAreaElement);
-}
 
 const KW = /\\b(function|const|let|var|return|if|else|for|while|class|import|export|from|new|typeof)\\b/g;
 
