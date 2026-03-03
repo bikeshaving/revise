@@ -4,12 +4,9 @@ import {renderer} from "@b9g/crank/dom.js";
 import {CrankEditable, EditableState} from "@b9g/crankeditable";
 
 import {parse as parseEmoji} from "@twemoji/parser";
-import Prism from "prismjs";
 import type {Token} from "prismjs";
+import {tokenize} from "../utils/prism.js";
 import "prismjs/components/prism-typescript";
-
-// @ts-ignore
-Prism.manual = true;
 
 /*** Demo 1: Simple Editable ***/
 function* SimpleEditable(
@@ -92,83 +89,6 @@ function* RainbowEditable(
 }
 
 /*** Demo 3: Code Editor ***/
-// Prism line-splitting utilities
-function wrapContent(
-	content: Array<Token | string> | Token | string,
-): Array<Token | string> {
-	return Array.isArray(content) ? content : [content];
-}
-
-function unwrapContent(
-	content: Array<Token | string>,
-): Array<Token | string> | string {
-	if (content.length === 0) {
-		return "";
-	} else if (content.length === 1 && typeof content[0] === "string") {
-		return content[0];
-	}
-
-	return content;
-}
-
-function splitLinesRec(
-	tokens: Array<Token | string>,
-): Array<Array<Token | string>> {
-	let currentLine: Array<Token | string> = [];
-	const lines: Array<Array<Token | string>> = [currentLine];
-	for (let i = 0; i < tokens.length; i++) {
-		const token = tokens[i];
-		if (typeof token === "string") {
-			const split = token.split(/\r\n|\r|\n/);
-			for (let j = 0; j < split.length; j++) {
-				if (j > 0) {
-					lines.push((currentLine = []));
-				}
-
-				const token1 = split[j];
-				if (token1) {
-					currentLine.push(token1);
-				}
-			}
-		} else {
-			const split = splitLinesRec(wrapContent(token.content));
-			if (split.length > 1) {
-				for (let j = 0; j < split.length; j++) {
-					if (j > 0) {
-						lines.push((currentLine = []));
-					}
-
-					const line = split[j];
-					if (line.length) {
-						const token1 = new Prism.Token(
-							token.type,
-							unwrapContent(line),
-							token.alias,
-						);
-						token1.length = line.reduce((l, t) => l + t.length, 0);
-						currentLine.push(token1);
-					}
-				}
-			} else {
-				currentLine.push(token);
-			}
-		}
-	}
-
-	return lines;
-}
-
-function splitLines(
-	tokens: Array<Token | string>,
-): Array<Array<Token | string>> {
-	const lines = splitLinesRec(tokens);
-	if (!lines[lines.length - 1].length) {
-		lines.pop();
-	}
-
-	return lines;
-}
-
 function printTokens(tokens: Array<Token | string>): Array<Element | string> {
 	const result: Array<Element | string> = [];
 	for (let i = 0; i < tokens.length; i++) {
@@ -199,9 +119,7 @@ function* CodeEditable(
 ) {
 	const state = new EditableState({value: initial});
 	for (const {} of this) {
-		const lines = splitLines(
-			Prism.tokenize(state.value, Prism.languages.typescript),
-		);
+		const lines = tokenize(state.value, "typescript");
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
@@ -287,7 +205,64 @@ function* SocialEditable(
 	}
 }
 
-/*** Demo 5: Twemoji ***/
+/*** Demo 5: Linkify ***/
+const URL_PATTERN = /(https?:\/\/[^\s]+)/g;
+
+function linkifyText(text: string): Array<Element | string> {
+	const result: Array<Element | string> = [];
+	let lastIndex = 0;
+	for (const match of text.matchAll(URL_PATTERN)) {
+		const index = match.index!;
+		if (index > lastIndex) {
+			result.push(text.slice(lastIndex, index));
+		}
+
+		result.push(
+			<a href={match[0]} target="_blank" rel="noopener" style={{color: "#60a5fa", textDecoration: "underline"}}>
+				{match[0]}
+			</a>,
+		);
+		lastIndex = index + match[0].length;
+	}
+
+	if (lastIndex < text.length) {
+		result.push(text.slice(lastIndex));
+	}
+
+	return result;
+}
+
+function* LinkifyEditable(
+	this: Context,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for (const {} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<div class="editable" contenteditable="true" spellcheck={false}>
+					{lines.map((line) => {
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						return (
+							<div key={key}>
+								{line ? linkifyText(line) : <br />}
+							</div>
+						);
+					})}
+				</div>
+			</CrankEditable>
+		);
+	}
+}
+
+/*** Demo 6: Twemoji ***/
 function renderTwemoji(text: string): Array<Element | string> {
 	const entities = parseEmoji(text);
 	if (!entities.length) return [text];
@@ -354,19 +329,102 @@ function* TwemojiEditable(
 	}
 }
 
+/*** Hero editables ***/
+function* EditableTitle(
+	this: Context,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for (const {} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<h1
+					contenteditable="true"
+					spellcheck={false}
+					style={{
+						fontSize: "max(40px, 8vw)",
+						color: "var(--highlight-color)",
+						margin: "0",
+						outline: "none",
+					}}
+				>
+					{lines.map((line) => {
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						return (
+							<div key={key}>
+								{line || <br />}
+							</div>
+						);
+					})}
+				</h1>
+			</CrankEditable>
+		);
+	}
+}
+
+function* EditableTagline(
+	this: Context,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for (const {} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<p
+					contenteditable="true"
+					spellcheck={false}
+					style={{
+						fontSize: "1.25rem",
+						color: "var(--text-muted)",
+						margin: "0.5em 0 0",
+						outline: "none",
+					}}
+				>
+					{lines.map((line) => {
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						return (
+							<div key={key}>
+								{line || <br />}
+							</div>
+						);
+					})}
+				</p>
+			</CrankEditable>
+		);
+	}
+}
+
 /*** Hydrate demos ***/
 function hydrate(id: string, Component: any) {
 	const el = document.getElementById(id);
 	if (!el) return;
 	const initial = el.dataset.initial || "\n";
+	el.innerHTML = "";
 	renderer.render(
 		<Component initial={initial} />,
 		el,
 	);
 }
 
+hydrate("hero-title", EditableTitle);
+hydrate("hero-tagline", EditableTagline);
 hydrate("demo-simple", SimpleEditable);
 hydrate("demo-rainbow", RainbowEditable);
 hydrate("demo-code", CodeEditable);
 hydrate("demo-social", SocialEditable);
+hydrate("demo-linkify", LinkifyEditable);
 hydrate("demo-twemoji", TwemojiEditable);
