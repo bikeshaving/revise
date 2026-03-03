@@ -1,4 +1,6 @@
 import {jsx} from "@b9g/crank/standalone";
+import {InlineCodeBlock} from "./inline-code-block.js";
+import {SerializeScript} from "./serialize-javascript.js";
 
 function resolveMarkdownHref(href: string, basePath: string): string {
 	const baseParts = basePath.split("/").filter(Boolean);
@@ -31,5 +33,17 @@ export const components = {
 
 	codespan({token}: any) {
 		return jsx`<code class="inline">${token.text}</code>`;
+	},
+
+	code({token}: any) {
+		const {text: code, lang} = token;
+		const isLive = lang && lang.endsWith(" live");
+		const language = lang ? lang.replace(/ live$/, "") : "";
+		return jsx`
+			<div style="margin: 30px auto;" class="code-block-container ${isLive ? "code-block-live" : ""}">
+				<${InlineCodeBlock} value=${code} lang=${language} editable=${isLive} />
+				<${SerializeScript} class="props" value=${{code, lang: language, editable: isLive}} name="inline-code-block-props" />
+			</div>
+		`;
 	},
 };
