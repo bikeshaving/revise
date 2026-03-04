@@ -631,4 +631,54 @@ test("transform: same-position inserts on empty base", () => {
 	Assert.is(bPrime2.apply(editA.apply("")), "! ");
 });
 
+// --- normalize + transform interaction ---
+
+test("normalize + transform: append doesn't protect base from deletion", () => {
+	// Alice appends "d" to "abc" → "abcd"
+	// Bob deletes "abc" → ""
+	// Normalized Alice: retain "abc", insert "d" — she doesn't own "abc"
+	// Raw Alice: replace "abc" with "abcd" — she claims to own "abc"
+	const base = "abc";
+	const bob = new Edit([0, "abc", "", 3]);
+
+	const aliceNorm = Edit.diff(base, "abcd"); // [3, "", "d", 3]
+	const [_aPn, bPn] = aliceNorm.transform(bob);
+	Assert.is(bPn.apply(aliceNorm.apply(base)), "d");
+
+	const aliceRaw = new Edit([0, "abc", "abcd", 3]);
+	const [_aPr, bPr] = aliceRaw.transform(bob);
+	Assert.is(bPr.apply(aliceRaw.apply(base)), "abcd");
+});
+
+test("normalize + transform: prepend doesn't protect base from deletion", () => {
+	// Alice prepends "x" to "abc" → "xabc"
+	// Bob deletes "abc" → ""
+	const base = "abc";
+	const bob = new Edit([0, "abc", "", 3]);
+
+	const aliceNorm = Edit.diff(base, "xabc"); // [0, "", "x", 3]
+	const [_aPn, bPn] = aliceNorm.transform(bob);
+	Assert.is(bPn.apply(aliceNorm.apply(base)), "x");
+
+	const aliceRaw = new Edit([0, "abc", "xabc", 3]);
+	const [_aPr, bPr] = aliceRaw.transform(bob);
+	Assert.is(bPr.apply(aliceRaw.apply(base)), "xabc");
+});
+
+test("normalize + transform: interior insert doesn't protect surrounding text", () => {
+	// Alice inserts "-" in the middle: "abcd" → "ab-cd"
+	// Bob deletes "bc": "abcd" → "ad"
+	const base = "abcd";
+	const bob = new Edit([1, "bc", "", 4]);
+
+	const aliceNorm = Edit.diff(base, "ab-cd"); // [2, "", "-", 4]
+	const [_aPn, bPn] = aliceNorm.transform(bob);
+	Assert.is(bPn.apply(aliceNorm.apply(base)), "a-d");
+
+	// Raw: replace "bc" with "b-c" — Alice claims ownership of "b" and "c"
+	const aliceRaw = new Edit([1, "bc", "b-c", 4]);
+	const [_aPr, bPr] = aliceRaw.transform(bob);
+	Assert.is(bPr.apply(aliceRaw.apply(base)), "ab-cd");
+});
+
 test.run();
