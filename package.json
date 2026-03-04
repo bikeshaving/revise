@@ -5,6 +5,11 @@
   "type": "module",
   "main": "./dist/src/contentarea.cjs",
   "exports": {
+    "./subseq.js": {
+      "types": "./dist/src/subseq.d.ts",
+      "import": "./dist/src/subseq.js",
+      "require": "./dist/src/subseq.cjs"
+    },
     "./edit.js": {
       "types": "./dist/src/edit.d.ts",
       "import": "./dist/src/edit.js",
@@ -39,6 +44,11 @@
       "types": "./dist/src/contentarea.d.ts",
       "import": "./dist/src/contentarea.js",
       "require": "./dist/src/contentarea.cjs"
+    },
+    "./subseq": {
+      "types": "./dist/src/subseq.d.ts",
+      "import": "./dist/src/subseq.js",
+      "require": "./dist/src/subseq.cjs"
     },
     "./edit": {
       "types": "./dist/src/edit.d.ts",

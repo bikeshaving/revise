@@ -29,8 +29,8 @@
  * sequence is included. No other 0s will appear in a well-constructed
  * subsequence array.
  *
- * This module is private to the revise package and separate from "./edit.js"
- * for testing purposes.
+ * This module is separate from "./edit.js" so that it can be used
+ * independently for analysis on edits.
  */
 export type Subseq = Array<number>;
 
