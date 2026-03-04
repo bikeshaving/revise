@@ -1,5 +1,5 @@
-import * as S from "./_subseq.js";
-import type {Subseq} from "./_subseq.js";
+import * as S from "./subseq.js";
+import type {Subseq} from "./subseq.js";
 
 // For now, keep the flexible type but add helper functions for type-safe access
 type EditParts = Array<string | number>;

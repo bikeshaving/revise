@@ -322,36 +322,29 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
  * and some inclusion run [S, E) in subseq2 satisfies S < P < E.
  */
 export function mask(subseq1: Subseq, subseq2: Subseq): Subseq {
-	const totalExcluded = measure(subseq2).length;
-	// Precompute inclusion runs from subseq2 as [start, end) pairs.
-	const runs: Array<[number, number]> = [];
-	let pos = 0;
-	for (let i = 0; i < subseq2.length; i++) {
-		const len = subseq2[i];
-		if (i % 2 === 1) {
-			runs.push([pos, pos + len]);
-		}
-		pos += len;
-	}
-
+	const length2 = measure(subseq2).length;
 	const result: Subseq = [];
 	let excludedPos = 0;
+	// Cursor into subseq2: track which segment contains excludedPos.
+	let j = 0, pos2 = 0, included2 = false;
+	let remaining2 = subseq2.length > 0 ? subseq2[0] : 0;
+
 	for (let i = 0; i < subseq1.length; i++) {
 		const len = subseq1[i];
 		if (i % 2 === 0) {
 			pushSegment(result, len, false);
 			excludedPos += len;
 		} else {
-			let interior = false;
-			if (excludedPos > 0 && excludedPos < totalExcluded) {
-				for (const [s, e] of runs) {
-					if (s < excludedPos && excludedPos < e) {
-						interior = true;
-						break;
-					}
-				}
+			// Advance cursor past segments that end at or before excludedPos.
+			while (pos2 + remaining2 <= excludedPos && j < subseq2.length - 1) {
+				pos2 += remaining2;
+				j++;
+				included2 = j % 2 === 1;
+				remaining2 = subseq2[j];
 			}
-			pushSegment(result, len, interior);
+			pushSegment(result, len,
+				excludedPos > 0 && excludedPos < length2 &&
+				included2 && pos2 < excludedPos);
 		}
 	}
 	return result;
