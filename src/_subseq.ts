@@ -313,3 +313,46 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
 
 	return [result1, result2];
 }
+
+/**
+ * Returns a subseq over subseq1's coordinate space, marking included
+ * segments that are strictly interior to subseq2's inclusion runs.
+ *
+ * An included segment at excluded-offset P is marked when 0 < P < totalExcluded
+ * and some inclusion run [S, E) in subseq2 satisfies S < P < E.
+ */
+export function mask(subseq1: Subseq, subseq2: Subseq): Subseq {
+	const totalExcluded = measure(subseq2).length;
+	// Precompute inclusion runs from subseq2 as [start, end) pairs.
+	const runs: Array<[number, number]> = [];
+	let pos = 0;
+	for (let i = 0; i < subseq2.length; i++) {
+		const len = subseq2[i];
+		if (i % 2 === 1) {
+			runs.push([pos, pos + len]);
+		}
+		pos += len;
+	}
+
+	const result: Subseq = [];
+	let excludedPos = 0;
+	for (let i = 0; i < subseq1.length; i++) {
+		const len = subseq1[i];
+		if (i % 2 === 0) {
+			pushSegment(result, len, false);
+			excludedPos += len;
+		} else {
+			let interior = false;
+			if (excludedPos > 0 && excludedPos < totalExcluded) {
+				for (const [s, e] of runs) {
+					if (s < excludedPos && excludedPos < e) {
+						interior = true;
+						break;
+					}
+				}
+			}
+			pushSegment(result, len, interior);
+		}
+	}
+	return result;
+}

@@ -673,12 +673,113 @@ test("normalize + transform: interior insert doesn't protect surrounding text", 
 
 	const aliceNorm = Edit.diff(base, "ab-cd"); // [2, "", "-", 4]
 	const [_aPn, bPn] = aliceNorm.transform(bob);
-	Assert.is(bPn.apply(aliceNorm.apply(base)), "a-d");
+	// "-" at position 2 is interior to Bob's deletion [1,3) → orphaned
+	Assert.is(bPn.apply(aliceNorm.apply(base)), "ad");
 
 	// Raw: replace "bc" with "b-c" — Alice claims ownership of "b" and "c"
 	const aliceRaw = new Edit([1, "bc", "b-c", 4]);
 	const [_aPr, bPr] = aliceRaw.transform(bob);
 	Assert.is(bPr.apply(aliceRaw.apply(base)), "ab-cd");
+});
+
+// --- orphan deletion in transform ---
+
+test("transform orphan: insert interior to deletion is swallowed", () => {
+	// base "abcd", Alice inserts "-" at 2, Bob deletes "bc" at [1,3)
+	// Position 2 is interior to [1,3) → "-" is orphaned
+	const base = "abcd";
+	const alice = new Edit([2, "", "-", 4]);
+	const bob = new Edit([1, "bc", "", 4]);
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	Assert.is(converged, "ad");
+	Assert.is(aPrime.apply(bob.apply(base)), "ad");
+});
+
+test("transform orphan: insert at deletion start boundary survives", () => {
+	// base "abcd", Alice inserts "X" at 1, Bob deletes "bc" at [1,3)
+	// Position 1 == start of [1,3) → not interior, survives
+	const base = "abcd";
+	const alice = new Edit([1, "", "X", 4]);
+	const bob = new Edit([1, "bc", "", 4]);
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	Assert.is(converged, "aXd");
+	Assert.is(aPrime.apply(bob.apply(base)), "aXd");
+});
+
+test("transform orphan: insert at deletion end boundary survives", () => {
+	// base "abcd", Alice inserts "X" at 3, Bob deletes "bc" at [1,3)
+	// Position 3 == end of [1,3) → not interior, survives
+	const base = "abcd";
+	const alice = new Edit([3, "", "X", 4]);
+	const bob = new Edit([1, "bc", "", 4]);
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	Assert.is(converged, "aXd");
+	Assert.is(aPrime.apply(bob.apply(base)), "aXd");
+});
+
+test("transform orphan: insert at start of string survives total deletion", () => {
+	// base "abc", Alice inserts "X" at 0, Bob deletes all [0,3)
+	// Position 0 is not > 0 → not interior, survives
+	const base = "abc";
+	const alice = new Edit([0, "", "X", 3]);
+	const bob = new Edit([0, "abc", "", 3]);
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	Assert.is(converged, "X");
+	Assert.is(aPrime.apply(bob.apply(base)), "X");
+});
+
+test("transform orphan: insert at end of string survives total deletion", () => {
+	// base "abc", Alice inserts "X" at 3, Bob deletes all [0,3)
+	// Position 3 == baseLength → not interior, survives
+	const base = "abc";
+	const alice = new Edit([3, "", "X", 3]);
+	const bob = new Edit([0, "abc", "", 3]);
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	Assert.is(converged, "X");
+	Assert.is(aPrime.apply(bob.apply(base)), "X");
+});
+
+test("transform orphan: both sides have orphaned inserts", () => {
+	// base "abcdef", Alice deletes "bcde" [1,5) and has no inserts
+	// Bob inserts "X" at 2 and "Y" at 4 — both interior to [1,5)
+	// Meanwhile Bob deletes "bcde" [1,5) and Alice inserts "P" at 3 — interior to [1,5)
+	const base = "abcdef";
+	// Alice: insert "P" at 3, delete [4,5) "e"
+	// Bob: insert "Q" at 2, delete [1,4) "bcd"
+	// P at 3 is interior to Bob's deletion [1,4) → orphaned
+	// Q at 2 is interior to Alice's deletion [4,5)? No, 2 is not in [4,5).
+	// Let me use a cleaner example:
+	// Alice: delete [0,3) "abc"
+	// Bob: delete [3,6) "def"
+	// Alice: insert "X" at 4, which is interior to Bob's [3,6)
+	// Bob: insert "Y" at 2, which is interior to Alice's [0,3)
+	const alice = new Edit([0, "abc", "", 4, "", "X", 6]);
+	const bob = new Edit([2, "", "Y", 3, "def", "", 6]);
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	// X is orphaned (interior to Bob's [3,6)), Y is orphaned (interior to Alice's [0,3))
+	// Both orphans are swallowed → converged = ""
+	Assert.is(converged, "");
+	Assert.is(aPrime.apply(bob.apply(base)), "");
+});
+
+test("transform orphan: no orphans gives identical behavior to old transform", () => {
+	// Insertions at non-interior positions should not be affected
+	const base = "abcdef";
+	const alice = new Edit([0, "", "X", 3, "def", "", 6]); // insert at 0, delete [3,6)
+	const bob = new Edit([3, "", "Y", 6]);                  // insert at 3
+	// X at 0: not interior (0 not > 0), Y at 3: Bob's insert at 3, Alice deletes [3,6),
+	// 3 == start boundary → not interior
+	const [aPrime, bPrime] = alice.transform(bob);
+	const converged = bPrime.apply(alice.apply(base));
+	Assert.is(converged, aPrime.apply(bob.apply(base)));
+	// X survives (at start), Y survives (at boundary)
+	Assert.is(converged, "XabcY");
 });
 
 test.run();

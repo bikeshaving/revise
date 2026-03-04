@@ -247,22 +247,31 @@ export class Edit {
 	 * priority (its insertion appears first in the converged result).
 	 */
 	transform(that: Edit): [Edit, Edit] {
-		const [insertSeqA, insertedA, deleteSeqA, deletedA] = factor(this);
-		const [insertSeqB, insertedB, deleteSeqB, deletedB] = factor(that);
+		const [insA, insertedA, delA, deletedA] = factor(this);
+		const [insB, insertedB, delB, deletedB] = factor(that);
+
+		// Detect orphaned insertions (inserts interior to the other side's deletion).
+		const maskA = S.mask(insA, delB);
+		const maskB = S.mask(insB, delA);
+		const hasOrphansA = S.measure(maskA).includedLength > 0;
+		const hasOrphansB = S.measure(maskB).includedLength > 0;
+
+		// Clean orphaned insertions before transforming.
+		const cInsA = hasOrphansA ? S.shrink(insA, maskA) : insA;
+		const cInsertedA = hasOrphansA ? erase(insA, insertedA, maskA) : insertedA;
+		const cInsB = hasOrphansB ? S.shrink(insB, maskB) : insB;
+		const cInsertedB = hasOrphansB ? erase(insB, insertedB, maskB) : insertedB;
 
 		// Both insertSeqs have excludedLength == base length.
 		// Interleave to establish a combined coordinate space
 		// (base + insA + insB) and resolve insertion ordering.
-		const [insertSeqAI, insertSeqBI] = S.interleave(
-			insertSeqA,
-			insertSeqB,
-		);
+		const [insertSeqAI, insertSeqBI] = S.interleave(cInsA, cInsB);
 
 		// Lift deleteSeqs from base into the combined space.
 		// unionI.excludedLength == base length, matching deleteSeq lengths.
 		const unionI = S.union(insertSeqAI, insertSeqBI);
-		const deleteSeqAI = S.expand(deleteSeqA, unionI);
-		const deleteSeqBI = S.expand(deleteSeqB, unionI);
+		const deleteSeqAI = S.expand(delA, unionI);
+		const deleteSeqBI = S.expand(delB, unionI);
 
 		// Overlapping deletions: text both edits delete from s0.
 		// A' only deletes what B hasn't already deleted, and vice versa.
@@ -270,16 +279,13 @@ export class Edit {
 		const deleteOnlyBI = S.difference(deleteSeqBI, deleteSeqAI);
 
 		// Build deleted strings by erasing overlap in base coordinates.
-		const deleteOverlap = S.intersection(deleteSeqA, deleteSeqB);
-		const deletedAPrime = erase(deleteSeqA, deletedA, deleteOverlap);
-		const deletedBPrime = erase(deleteSeqB, deletedB, deleteOverlap);
+		const deleteOverlap = S.intersection(delA, delB);
+		const deletedAPrime = erase(delA, deletedA, deleteOverlap);
+		const deletedBPrime = erase(delB, deletedB, deleteOverlap);
 
 		// Build A' (operates on B's output = base + insB - delB).
-		// From combined space, shrink by deleteSeqBI to reach
-		// "base + insA + insB - delB" = "B_output + insA".
 		const insertSeqAPrime = S.shrink(insertSeqAI, deleteSeqBI);
 		const deleteOnlyAShifted = S.shrink(deleteOnlyAI, deleteSeqBI);
-		// Then shrink deleteSeq by insertSeqA' to get to "B_output" space.
 		const deleteSeqAPrime = S.shrink(deleteOnlyAShifted, insertSeqAPrime);
 
 		// Build B' (operates on A's output = base + insA - delA). Symmetric.
@@ -287,10 +293,22 @@ export class Edit {
 		const deleteOnlyBShifted = S.shrink(deleteOnlyBI, deleteSeqAI);
 		const deleteSeqBPrime = S.shrink(deleteOnlyBShifted, insertSeqBPrime);
 
-		return [
-			synthesize(insertSeqAPrime, insertedA, deleteSeqAPrime, deletedAPrime).normalize(),
-			synthesize(insertSeqBPrime, insertedB, deleteSeqBPrime, deletedBPrime).normalize(),
-		];
+		let aPrime = synthesize(insertSeqAPrime, cInsertedA, deleteSeqAPrime, deletedAPrime).normalize();
+		let bPrime = synthesize(insertSeqBPrime, cInsertedB, deleteSeqBPrime, deletedBPrime).normalize();
+
+		// Compose orphan-deletion edits to strip orphaned inserts from each side's output.
+		if (hasOrphansB) {
+			const orphanTextB = erase(insB, insertedB, S.difference(insB, maskB));
+			const orphanSeqB = S.shrink(maskB, S.expand(delB, insB));
+			aPrime = synthesize(S.clear(orphanSeqB), "", orphanSeqB, orphanTextB).compose(aPrime);
+		}
+		if (hasOrphansA) {
+			const orphanTextA = erase(insA, insertedA, S.difference(insA, maskA));
+			const orphanSeqA = S.shrink(maskA, S.expand(delA, insA));
+			bPrime = synthesize(S.clear(orphanSeqA), "", orphanSeqA, orphanTextA).compose(bPrime);
+		}
+
+		return [aPrime, bPrime];
 	}
 
 	normalize(): Edit {
@@ -767,6 +785,7 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 
 	return result;
 }
+
 
 function validateEditParts(parts: Array<string | number>): void {
 	// Check minimum length (must be at least final position)
