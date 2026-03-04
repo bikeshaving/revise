@@ -250,17 +250,17 @@ export class Edit {
 		const [insA, insertedA, delA, deletedA] = factor(this);
 		const [insB, insertedB, delB, deletedB] = factor(that);
 
-		// Detect orphaned insertions (inserts interior to the other side's deletion).
+		// Detect canceled insertions (inserts strictly inside the other side's deletion).
 		const maskA = S.mask(insA, delB);
 		const maskB = S.mask(insB, delA);
-		const hasOrphansA = S.measure(maskA).includedLength > 0;
-		const hasOrphansB = S.measure(maskB).includedLength > 0;
+		const hasCanceledA = S.measure(maskA).includedLength > 0;
+		const hasCanceledB = S.measure(maskB).includedLength > 0;
 
-		// Clean orphaned insertions before transforming.
-		const cInsA = hasOrphansA ? S.shrink(insA, maskA) : insA;
-		const cInsertedA = hasOrphansA ? erase(insA, insertedA, maskA) : insertedA;
-		const cInsB = hasOrphansB ? S.shrink(insB, maskB) : insB;
-		const cInsertedB = hasOrphansB ? erase(insB, insertedB, maskB) : insertedB;
+		// Clean canceled insertions before transforming.
+		const cInsA = hasCanceledA ? S.shrink(insA, maskA) : insA;
+		const cInsertedA = hasCanceledA ? erase(insA, insertedA, maskA) : insertedA;
+		const cInsB = hasCanceledB ? S.shrink(insB, maskB) : insB;
+		const cInsertedB = hasCanceledB ? erase(insB, insertedB, maskB) : insertedB;
 
 		// Both insertSeqs have excludedLength == base length.
 		// Interleave to establish a combined coordinate space
@@ -296,16 +296,16 @@ export class Edit {
 		let aPrime = synthesize(insertSeqAPrime, cInsertedA, deleteSeqAPrime, deletedAPrime).normalize();
 		let bPrime = synthesize(insertSeqBPrime, cInsertedB, deleteSeqBPrime, deletedBPrime).normalize();
 
-		// Compose orphan-deletion edits to strip orphaned inserts from each side's output.
-		if (hasOrphansB) {
-			const orphanTextB = erase(insB, insertedB, S.difference(insB, maskB));
-			const orphanSeqB = S.shrink(maskB, S.expand(delB, insB));
-			aPrime = synthesize(S.clear(orphanSeqB), "", orphanSeqB, orphanTextB).compose(aPrime);
+		// Compose deletion edits to strip canceled inserts from each side's output.
+		if (hasCanceledB) {
+			const canceledTextB = erase(insB, insertedB, S.difference(insB, maskB));
+			const canceledSeqB = S.shrink(maskB, S.expand(delB, insB));
+			aPrime = synthesize(S.clear(canceledSeqB), "", canceledSeqB, canceledTextB).compose(aPrime);
 		}
-		if (hasOrphansA) {
-			const orphanTextA = erase(insA, insertedA, S.difference(insA, maskA));
-			const orphanSeqA = S.shrink(maskA, S.expand(delA, insA));
-			bPrime = synthesize(S.clear(orphanSeqA), "", orphanSeqA, orphanTextA).compose(bPrime);
+		if (hasCanceledA) {
+			const canceledTextA = erase(insA, insertedA, S.difference(insA, maskA));
+			const canceledSeqA = S.shrink(maskA, S.expand(delA, insA));
+			bPrime = synthesize(S.clear(canceledSeqA), "", canceledSeqA, canceledTextA).compose(bPrime);
 		}
 
 		return [aPrime, bPrime];
