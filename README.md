@@ -2,7 +2,7 @@
 
 Revise is a JavaScript library for building rich-text editors on top of
 [`contenteditable`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contenteditable).
-It provides low-level primitives — a custom element, an edit data structure,
+It provides low-level foundations — a custom element, an edit data structure,
 a keyed reconciler, and a state coordinator — so that any framework can build
 editing experiences without fighting the DOM.
 

@@ -294,7 +294,7 @@ const previewClass = css`
 
 export default function Home({url}: {url: string}) {
 	return jsx`
-		<${Root} title="Revise" url=${url} description="A rich text editing primitives library">
+		<${Root} title="Revise" url=${url} description="A rich text editing foundations library">
 			<header class=${css`
 				text-align: center;
 				padding: 6rem 1rem 2rem;
@@ -306,10 +306,10 @@ export default function Home({url}: {url: string}) {
 						</h1>
 					</content-area>
 				</div>
-				<div id="hero-tagline" data-initial=${"Rich text editing primitives for the web\n"}>
+				<div id="hero-tagline" data-initial=${"Rich text editing foundations for the web\n"}>
 					<content-area>
 						<p contenteditable="true" spellcheck="false" style=${"font-size: 1.25rem; color: var(--text-muted); margin: 0.5em 0 0; outline: none;"}>
-							<div>Rich text editing primitives for the web</div>
+							<div>Rich text editing foundations for the web</div>
 						</p>
 					</content-area>
 				</div>
