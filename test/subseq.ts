@@ -338,4 +338,72 @@ test("contains complex", () => {
 	}
 });
 
+// --- mask ---
+
+test("mask: insert interior to inclusion run is marked", () => {
+	// subseq1: [2, 1, 2] — insert at excluded-offset 2
+	// subseq2: [1, 2, 1] — inclusion run [1, 3)
+	// Offset 2 is interior to [1, 3) → marked
+	Assert.equal(Subseq.mask([2, 1, 2], [1, 2, 1]), [2, 1, 2]);
+});
+
+test("mask: insert at inclusion run start boundary is not marked", () => {
+	// subseq1: [1, 1, 3] — insert at excluded-offset 1
+	// subseq2: [1, 2, 1] — inclusion run [1, 3)
+	// Offset 1 == start → not interior
+	Assert.equal(Subseq.mask([1, 1, 3], [1, 2, 1]), [5]);
+});
+
+test("mask: insert at inclusion run end boundary is not marked", () => {
+	// subseq1: [3, 1, 1] — insert at excluded-offset 3
+	// subseq2: [1, 2, 1] — inclusion run [1, 3)
+	// Offset 3 == end → not interior
+	Assert.equal(Subseq.mask([3, 1, 1], [1, 2, 1]), [5]);
+});
+
+test("mask: insert at offset 0 is not marked", () => {
+	// subseq1: [0, 1, 3] — insert at excluded-offset 0
+	// subseq2: [0, 3] — inclusion run [0, 3)
+	// Offset 0 is not > 0 → not interior
+	Assert.equal(Subseq.mask([0, 1, 3], [0, 3]), [4]);
+});
+
+test("mask: insert at end of sequence is not marked", () => {
+	// subseq1: [3, 1] — insert at excluded-offset 3
+	// subseq2: [0, 3] — inclusion run [0, 3), length 3
+	// Offset 3 == length → not interior
+	Assert.equal(Subseq.mask([3, 1], [0, 3]), [4]);
+});
+
+test("mask: no inclusions in subseq2 marks nothing", () => {
+	Assert.equal(Subseq.mask([2, 1, 2], [4]), [5]);
+});
+
+test("mask: no inclusions in subseq1 marks nothing", () => {
+	Assert.equal(Subseq.mask([4], [1, 2, 1]), [4]);
+});
+
+test("mask: multiple inserts, some interior", () => {
+	// subseq1: [1, 1, 1, 1, 1, 1, 1] — inserts at offsets 1, 2, 3
+	// subseq2: [1, 2, 1] — inclusion run [1, 3)
+	// Offset 1 == start → not marked
+	// Offset 2 interior → marked
+	// Offset 3 == end → not marked
+	Assert.equal(
+		Subseq.mask([1, 1, 1, 1, 1, 1, 1], [1, 2, 1]),
+		[3, 1, 3],
+	);
+});
+
+test("mask: multiple inclusion runs", () => {
+	// subseq1: [2, 1, 3, 1, 2] — inserts at offsets 2 and 5
+	// subseq2: [1, 2, 2, 2, 1] — runs [1, 3) and [5, 7)
+	// Offset 2 interior to [1, 3) → marked
+	// Offset 5 interior to [5, 7) → not marked (5 == start)
+	Assert.equal(
+		Subseq.mask([2, 1, 3, 1, 2], [1, 2, 2, 2, 1]),
+		[2, 1, 6],
+	);
+});
+
 test.run();
