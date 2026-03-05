@@ -257,7 +257,7 @@ test("compose 11: insert-then-delete cancellation", () => {
 	// iA:  +++======
 	// sA: "xyzabc"
 	// dB:  ----==
-	//     "hi"
+	//         "hi"
 	// iB:  ====++==
 	// sB: "hibc"
 	const editA = new Edit([0, "", "xyz", 3, "def", "", 6]);
@@ -274,11 +274,11 @@ test("compose 12: associativity with cancellation", () => {
 	// iA:  +++=======
 	// sA: "xyzabcdefg"
 	// dB:  =======---
-	//            "hijk"
+	//               "hijk"
 	// iB:  ==========++++
 	// sB: "xyzabcdhijk"
 	// dC:  ----=======
-	//     "mn"
+	//         "mn"
 	// iC:  ====++=======
 	// sC: "mnbcdhijk"
 	const eA = new Edit([0, "", "xyz", 7]);
