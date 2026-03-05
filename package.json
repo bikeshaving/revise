@@ -70,14 +70,15 @@
     "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
   },
   "devDependencies": {
-    "@b9g/crankeditable": "*",
     "@b9g/crank": "*",
+    "@b9g/crankeditable": "*",
     "@b9g/libuild": "^0.1.24",
     "@lexical/react": "*",
     "@tiptap/core": "*",
     "@tiptap/starter-kit": "*",
     "codemirror": "*",
     "esbuild": "*",
+    "fast-check": "^4.5.3",
     "lexical": "*",
     "playwright-test": "^8.1.1",
     "prosemirror-commands": "*",
@@ -90,7 +91,8 @@
     "slate-history": "*",
     "slate-react": "*",
     "svedit": "*",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "uvu": "^0.5.6"
   },
   "publishConfig": {
     "access": "public"

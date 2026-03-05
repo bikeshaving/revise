@@ -1,6 +1,8 @@
 import * as S from "./_subseq.js";
 import type {Subseq} from "./_subseq.js";
 
+export * as Subseq from "./_subseq.js";
+
 // For now, keep the flexible type but add helper functions for type-safe access
 type EditParts = Array<string | number>;
 
@@ -197,31 +199,32 @@ export class Edit {
 
 	/** Composes two consecutive edits. */
 	compose(that: Edit): Edit {
-		let [insertSeq1, inserted1, deleteSeq1, deleted1] = factor(this);
-		let [insertSeq2, inserted2, deleteSeq2, deleted2] = factor(that);
+		let [insertSeqA, insertedA, deleteSeqA, deletedA] = factor(this);
+		let [insertSeqB, insertedB, deleteSeqB, deletedB] = factor(that);
 		// Expand all subseqs so that they share the same coordinate space.
-		deleteSeq1 = S.expand(deleteSeq1, insertSeq1);
-		deleteSeq2 = S.expand(deleteSeq2, deleteSeq1);
-		[deleteSeq1, insertSeq2] = S.interleave(deleteSeq1, insertSeq2);
-		deleteSeq2 = S.expand(deleteSeq2, insertSeq2);
-		insertSeq1 = S.expand(insertSeq1, insertSeq2);
+		deleteSeqA = S.expand(deleteSeqA, insertSeqA);
+		deleteSeqB = S.expand(deleteSeqB, deleteSeqA);
+		[deleteSeqA, insertSeqB] = S.interleave(deleteSeqA, insertSeqB);
+		deleteSeqB = S.expand(deleteSeqB, insertSeqB);
+		insertSeqA = S.expand(insertSeqA, insertSeqB);
 
 		{
 			// Find insertions which have been deleted and remove them.
-			const toggleSeq = S.intersection(insertSeq1, deleteSeq2);
+			const toggleSeq = S.intersection(insertSeqA, deleteSeqB);
 			if (S.measure(toggleSeq).includedLength) {
-				deleteSeq1 = S.shrink(deleteSeq1, toggleSeq);
-				inserted1 = erase(insertSeq1, inserted1, toggleSeq);
-				insertSeq1 = S.shrink(insertSeq1, toggleSeq);
-				deleteSeq2 = S.shrink(deleteSeq2, toggleSeq);
-				insertSeq2 = S.shrink(insertSeq2, toggleSeq);
+				deleteSeqA = S.shrink(deleteSeqA, toggleSeq);
+				insertedA = erase(insertSeqA, insertedA, toggleSeq);
+				insertSeqA = S.shrink(insertSeqA, toggleSeq);
+				deletedB = erase(deleteSeqB, deletedB, toggleSeq);
+				deleteSeqB = S.shrink(deleteSeqB, toggleSeq);
+				insertSeqB = S.shrink(insertSeqB, toggleSeq);
 			}
 		}
 
-		const insertSeq = S.union(insertSeq1, insertSeq2);
-		const inserted = consolidate(insertSeq1, inserted1, insertSeq2, inserted2);
-		const deleteSeq = S.shrink(S.union(deleteSeq1, deleteSeq2), insertSeq);
-		const deleted = consolidate(deleteSeq1, deleted1, deleteSeq2, deleted2);
+		const insertSeq = S.union(insertSeqA, insertSeqB);
+		const inserted = consolidate(insertSeqA, insertedA, insertSeqB, insertedB);
+		const deleteSeq = S.shrink(S.union(deleteSeqA, deleteSeqB), insertSeq);
+		const deleted = consolidate(deleteSeqA, deletedA, deleteSeqB, deletedB);
 		return synthesize(insertSeq, inserted, deleteSeq, deleted).normalize();
 	}
 
@@ -230,6 +233,80 @@ export class Edit {
 		deleteSeq = S.expand(deleteSeq, insertSeq);
 		insertSeq = S.shrink(insertSeq, deleteSeq);
 		return synthesize(deleteSeq, deleted, insertSeq, inserted);
+	}
+
+	/**
+	 * Transforms two concurrent edits against the same base document.
+	 *
+	 * Given edits A and B both applicable to the same document s0, returns
+	 * [A', B'] such that:
+	 *   B'.apply(A.apply(s0)) === A'.apply(B.apply(s0))
+	 *
+	 * A' is A adjusted to apply after B has been applied.
+	 * B' is B adjusted to apply after A has been applied.
+	 *
+	 * When both edits insert at the same position, `this` (A) gets left
+	 * priority (its insertion appears first in the converged result).
+	 */
+	transform(that: Edit): [Edit, Edit] {
+		const [insertSeqL, insertedL, deleteSeqL, deletedL] = factor(this);
+		const [insertSeqR, insertedR, deleteSeqR, deletedR] = factor(that);
+
+		// Detect canceled insertions (inserts strictly inside the other side's deletion).
+		const maskL = S.mask(insertSeqL, deleteSeqR);
+		const maskR = S.mask(insertSeqR, deleteSeqL);
+		const hasCanceledL = S.measure(maskL).includedLength > 0;
+		const hasCanceledR = S.measure(maskR).includedLength > 0;
+
+		// Clean canceled insertions before transforming.
+		const insertSeqL1 = hasCanceledL ? S.shrink(insertSeqL, maskL) : insertSeqL;
+		const insertedL1 = hasCanceledL ? erase(insertSeqL, insertedL, maskL) : insertedL;
+		const insertSeqR1 = hasCanceledR ? S.shrink(insertSeqR, maskR) : insertSeqR;
+		const insertedR1 = hasCanceledR ? erase(insertSeqR, insertedR, maskR) : insertedR;
+
+		// Interleave to establish a combined coordinate space and resolve insertion ordering.
+		const [insertSeqL2, insertSeqR2] = S.interleave(insertSeqL1, insertSeqR1);
+
+		// Lift deleteSeqs from base into the combined space.
+		const insertSeqUnion = S.union(insertSeqL2, insertSeqR2);
+		const deleteSeqL1 = S.expand(deleteSeqL, insertSeqUnion);
+		const deleteSeqR1 = S.expand(deleteSeqR, insertSeqUnion);
+
+		// Each side only deletes what the other hasn't already deleted.
+		const deleteOnlyL = S.difference(deleteSeqL1, deleteSeqR1);
+		const deleteOnlyR = S.difference(deleteSeqR1, deleteSeqL1);
+
+		// Build deleted strings by erasing overlap in base coordinates.
+		const deleteOverlap = S.intersection(deleteSeqL, deleteSeqR);
+		const deletedL1 = erase(deleteSeqL, deletedL, deleteOverlap);
+		const deletedR1 = erase(deleteSeqR, deletedR, deleteOverlap);
+
+		// Build resultL (operates on R's output).
+		const insertSeqL3 = S.shrink(insertSeqL2, deleteSeqR1);
+		const deleteOnlyL1 = S.shrink(deleteOnlyL, deleteSeqR1);
+		const deleteSeqL2 = S.shrink(deleteOnlyL1, insertSeqL3);
+
+		// Build resultR (operates on L's output).
+		const insertSeqR3 = S.shrink(insertSeqR2, deleteSeqL1);
+		const deleteOnlyR1 = S.shrink(deleteOnlyR, deleteSeqL1);
+		const deleteSeqR2 = S.shrink(deleteOnlyR1, insertSeqR3);
+
+		let resultL = synthesize(insertSeqL3, insertedL1, deleteSeqL2, deletedL1).normalize();
+		let resultR = synthesize(insertSeqR3, insertedR1, deleteSeqR2, deletedR1).normalize();
+
+		// Compose deletion edits to strip canceled inserts from each side's output.
+		if (hasCanceledR) {
+			const canceledTextR = erase(insertSeqR, insertedR, S.difference(insertSeqR, maskR));
+			const canceledSeqR = S.shrink(maskR, S.expand(deleteSeqR, insertSeqR));
+			resultL = synthesize(S.clear(canceledSeqR), "", canceledSeqR, canceledTextR).compose(resultL);
+		}
+		if (hasCanceledL) {
+			const canceledTextL = erase(insertSeqL, insertedL, S.difference(insertSeqL, maskL));
+			const canceledSeqL = S.shrink(maskL, S.expand(deleteSeqL, insertSeqL));
+			resultR = synthesize(S.clear(canceledSeqL), "", canceledSeqL, canceledTextL).compose(resultR);
+		}
+
+		return [resultL, resultR];
 	}
 
 	normalize(): Edit {
@@ -706,6 +783,7 @@ function erase(subseq1: Subseq, str: string, subseq2: Subseq): string {
 
 	return result;
 }
+
 
 function validateEditParts(parts: Array<string | number>): void {
 	// Check minimum length (must be at least final position)

@@ -29,8 +29,9 @@
  * sequence is included. No other 0s will appear in a well-constructed
  * subsequence array.
  *
- * This module is private to the revise package and separate from "./edit.js"
- * for testing purposes.
+ * This module is separate from "./edit.js" so that its functions can be
+ * re-exported for analysis on edits. It is not a public entry point;
+ * consumers should import subseq utilities from "@b9g/revise/edit.js".
  */
 export type Subseq = Array<number>;
 
@@ -312,4 +313,40 @@ export function interleave(subseq1: Subseq, subseq2: Subseq): [Subseq, Subseq] {
 	}
 
 	return [result1, result2];
+}
+
+/**
+ * Returns a subseq over subseq1's coordinate space, marking included
+ * segments that are strictly interior to subseq2's inclusion runs.
+ *
+ * An included segment at excluded-offset P is marked when 0 < P < totalExcluded
+ * and some inclusion run [S, E) in subseq2 satisfies S < P < E.
+ */
+export function mask(subseq1: Subseq, subseq2: Subseq): Subseq {
+	const length2 = measure(subseq2).length;
+	const result: Subseq = [];
+	let excludedPos = 0;
+	// Cursor into subseq2: track which segment contains excludedPos.
+	let j = 0, pos2 = 0, included2 = false;
+	let remaining2 = subseq2.length > 0 ? subseq2[0] : 0;
+
+	for (let i = 0; i < subseq1.length; i++) {
+		const len = subseq1[i];
+		if (i % 2 === 0) {
+			pushSegment(result, len, false);
+			excludedPos += len;
+		} else {
+			// Advance cursor past segments that end at or before excludedPos.
+			while (pos2 + remaining2 <= excludedPos && j < subseq2.length - 1) {
+				pos2 += remaining2;
+				j++;
+				included2 = j % 2 === 1;
+				remaining2 = subseq2[j];
+			}
+			pushSegment(result, len,
+				excludedPos > 0 && excludedPos < length2 &&
+				included2 && pos2 < excludedPos);
+		}
+	}
+	return result;
 }
