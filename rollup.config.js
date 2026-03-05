@@ -55,7 +55,6 @@ function rewriteExports(exports) {
 }
 
 const input = [
-	"src/subseq.ts",
 	"src/edit.ts",
 	"src/contentarea.ts",
 	"src/keyer.ts",
