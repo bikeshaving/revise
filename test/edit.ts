@@ -186,6 +186,14 @@ test("compose 6", () => {
 });
 
 test("compose 7", () => {
+	// s0: "hello world"
+	// dA:  =====-=====
+	// iA:  ===========
+	// sA: "helloworld"
+	// dB:  ==========
+	//          "_"
+	// iB:  =====+=====
+	// sB: "hello_world"
 	const editA = new Edit([5, " ", "", 11]);
 	const editB = new Edit([5, "", "_", 10]);
 	const result = new Edit([5, " ", "_", 11]);
@@ -193,6 +201,14 @@ test("compose 7", () => {
 });
 
 test("compose 8", () => {
+	// s0: "hello world"
+	// dA:  =====-=====
+	// iA:  ===========
+	// sA: "helloworld"
+	// dB:  ==========
+	//          " "
+	// iB:  =====+=====
+	// sB: "hello world"
 	const editA = new Edit([5, " ", "", 11]);
 	const editB = new Edit([5, "", " ", 10]);
 	const result = new Edit([11]);
@@ -236,8 +252,14 @@ test("compose 10", () => {
 
 test("compose 11: insert-then-delete cancellation", () => {
 	// s0: "abcdef"
-	// eA: insert "xyz" at 0, delete "def" -> "xyzabc"
-	// eB: delete "xyza", insert "hi"      -> "hibc"
+	// dA:  ===---
+	//      "xyz"
+	// iA:  +++======
+	// sA: "xyzabc"
+	// dB:  ----==
+	//      "hi"
+	// iB:  ====++==
+	// sB: "hibc"
 	const editA = new Edit([0, "", "xyz", 3, "def", "", 6]);
 	const editB = new Edit([0, "xyza", "hi", 6]);
 	const composed = editA.compose(editB);
@@ -247,9 +269,18 @@ test("compose 11: insert-then-delete cancellation", () => {
 
 test("compose 12: associativity with cancellation", () => {
 	// s0: "abcdefg"
-	// eA: insert "xyz" at 0           -> "xyzabcdefg"
-	// eB: delete "efg", insert "hijk" -> "xyzabcdhijk"
-	// eC: delete "xyza", insert "mn"  -> "mnbcdhijk"
+	// dA:  =======
+	//      "xyz"
+	// iA:  +++=======
+	// sA: "xyzabcdefg"
+	// dB:  =======---
+	//             "hijk"
+	// iB:  ==========++++
+	// sB: "xyzabcdhijk"
+	// dC:  ----=======
+	//      "mn"
+	// iC:  ====++=======
+	// sC: "mnbcdhijk"
 	const eA = new Edit([0, "", "xyz", 7]);
 	const eB = new Edit([7, "efg", "hijk", 10]);
 	const eC = new Edit([0, "xyza", "mn", 11]);
