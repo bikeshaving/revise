@@ -191,21 +191,6 @@ test("compose 7", () => {
 	// iA:  ===========
 	// sA: "helloworld"
 	// dB:  ==========
-	//          "_"
-	// iB:  =====+=====
-	// sB: "hello_world"
-	const editA = new Edit([5, " ", "", 11]);
-	const editB = new Edit([5, "", "_", 10]);
-	const result = new Edit([5, " ", "_", 11]);
-	Assert.equal(editA.compose(editB), result);
-});
-
-test("compose 8", () => {
-	// s0: "hello world"
-	// dA:  =====-=====
-	// iA:  ===========
-	// sA: "helloworld"
-	// dB:  ==========
 	//          " "
 	// iB:  =====+=====
 	// sB: "hello world"
@@ -215,7 +200,7 @@ test("compose 8", () => {
 	Assert.equal(editA.compose(editB), result);
 });
 
-test("compose 9", () => {
+test("compose 8", () => {
 	// s0: "hello world"
 	// dA:  =====-=====
 	// iA:  =====++======
@@ -235,7 +220,7 @@ test("compose 9", () => {
 	Assert.equal(editA.compose(editB), result);
 });
 
-test("compose 10", () => {
+test("compose 9", () => {
 	// s0: "x"
 	// dA:  -
 	//      "ab"
@@ -250,7 +235,7 @@ test("compose 10", () => {
 	Assert.equal(editA.compose(editB), result);
 });
 
-test("compose 11: insert-then-delete cancellation", () => {
+test("compose 10: insert-then-delete cancellation", () => {
 	// s0: "abcdef"
 	// dA:  ===---
 	//     "xyz"
@@ -267,7 +252,7 @@ test("compose 11: insert-then-delete cancellation", () => {
 	Assert.is(composed.apply("abcdef"), editB.apply(editA.apply("abcdef")));
 });
 
-test("compose 12: associativity with cancellation", () => {
+test("compose 11: associativity with cancellation", () => {
 	// s0: "abcdefg"
 	// dA:  =======
 	//     "xyz"
