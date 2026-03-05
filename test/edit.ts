@@ -82,188 +82,181 @@ test("edit 7", () => {
 
 test("compose 1", () => {
 	// s0: "hello world"
-	// d1:  =--------==
+	// dA:  =--------==
 	//              "era"
-	// i1: "=========+++=="
-	// s1: "herald"
-	// d2:  ======
-	// i2:  ======+
-	// s2: "heralds"
-	const edit1 = new Edit([1, "ello wor", "era", 11]);
-	const edit2 = new Edit([6, "", "s", 6]);
+	// iA: "=========+++=="
+	// sA: "herald"
+	// dB:  ======
+	// iB:  ======+
+	// sB: "heralds"
+	const editA = new Edit([1, "ello wor", "era", 11]);
+	const editB = new Edit([6, "", "s", 6]);
 	const result = new Edit([2, "llo wor", "ra", 11, "", "s", 11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 2", () => {
 	// s0: "hello world"
-	// d1:  ===========
+	// dA:  ===========
 	//          "oo"
-	// i1: "=====++======"
-	// s1: "hellooo world"
-	// d2:  =====--======
-	// i2:  =============
-	// s2: "hello world"
-	const edit1 = new Edit([5, "", "oo", 11]);
-	const edit2 = new Edit([5, "oo", "", 13]);
+	// iA: "=====++======"
+	// sA: "hellooo world"
+	// dB:  =====--======
+	// iB:  =============
+	// sB: "hello world"
+	const editA = new Edit([5, "", "oo", 11]);
+	const editB = new Edit([5, "oo", "", 13]);
 	const result = new Edit([11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 3", () => {
 	// s0: "hello world"
-	// d1:  =====-=====
-	// i1:  ===========
-	// s1: "helloworld"
-	// d2:  ==========
+	// dA:  =====-=====
+	// iA:  ===========
+	// sA: "helloworld"
+	// dB:  ==========
 	//          "_"
-	// i2:  =====+=====
-	// s2: "hello_world"
-	const edit1 = new Edit([5, " ", "", 11]);
-	const edit2 = new Edit([5, "", "_", 10]);
+	// iB:  =====+=====
+	// sB: "hello_world"
+	const editA = new Edit([5, " ", "", 11]);
+	const editB = new Edit([5, "", "_", 10]);
 	const result = new Edit([5, " ", "_", 11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 4", () => {
 	// s0: "hello world"
-	// d1:  ==-------==
-	// i1:  ===========
-	// s1: "held"
-	// d2:  ===-
+	// dA:  ==-------==
+	// iA:  ===========
+	// sA: "held"
+	// dB:  ===-
 	//         "lo"
-	// i2:  ====++
-	// s2: "hello"
-	const edit1 = new Edit([2, "llo wor", "", 11]);
-	const edit2 = new Edit([3, "d", "lo", 4]);
+	// iB:  ====++
+	// sB: "hello"
+	const editA = new Edit([2, "llo wor", "", 11]);
+	const editB = new Edit([3, "d", "lo", 4]);
 	const result = new Edit([2, "llo wor", "", 10, "d", "lo", 11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 5", () => {
 	// s0: "hello world"
-	// d1:  =====------
-	// i1:  ===========
-	// s1: "hello"
-	// d2:  =====
+	// dA:  =====------
+	// iA:  ===========
+	// sA: "hello"
+	// dB:  =====
 	//          " world"
-	// i2:  =====++++++
-	// s2: "hello world"
-	const edit1 = new Edit([5, " world", "", 11]);
-	const edit2 = new Edit([5, "", " world", 5]);
+	// iB:  =====++++++
+	// sB: "hello world"
+	const editA = new Edit([5, " world", "", 11]);
+	const editB = new Edit([5, "", " world", 5]);
 	const result = new Edit([11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 6", () => {
 	// s0: "hello world"
-	// d1:  =====------
-	// i1:  ===========
-	// s1: "hello"
-	// d2:  =====
+	// dA:  =====------
+	// iA:  ===========
+	// sA: "hello"
+	// dB:  =====
 	//          " word"
-	// i2:  =====+++++
-	// s2: "hello word"
-	// d1:  =====------
-	// d2:  ===========
-	// d1:  =====------=====
-	// i2:  ===========+++++
-	// d2:  ================
+	// iB:  =====+++++
+	// sB: "hello word"
+	// dA:  =====------
+	// dB:  ===========
+	// dA:  =====------=====
+	// iB:  ===========+++++
+	// dB:  ================
 	//     "hello world word"
 	// do:  =====++++=======
 	// io:  ===========++++=
 	//     "hello worldd"
-	// d1:  =========--=
-	// i2:  ===========+
-	// d2:  ============
+	// dA:  =========--=
+	// iB:  ===========+
+	// dB:  ============
 	//                "d"
 	// ic:  ===========+
 	// dc:  =========--=
-	const edit1 = new Edit([5, " world", "", 11]);
-	const edit2 = new Edit([5, "", " word", 5]);
+	const editA = new Edit([5, " world", "", 11]);
+	const editB = new Edit([5, "", " word", 5]);
 	const result = new Edit([9, "l", "", 11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 7", () => {
-	const edit1 = new Edit([5, " ", "", 11]);
-	const edit2 = new Edit([5, "", "_", 10]);
+	const editA = new Edit([5, " ", "", 11]);
+	const editB = new Edit([5, "", "_", 10]);
 	const result = new Edit([5, " ", "_", 11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 8", () => {
-	const edit1 = new Edit([5, " ", "", 11]);
-	const edit2 = new Edit([5, "", " ", 10]);
+	const editA = new Edit([5, " ", "", 11]);
+	const editB = new Edit([5, "", " ", 10]);
 	const result = new Edit([11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 9", () => {
 	// s0: "hello world"
-	// d1:  =====-=====
-	// i1:  =====++======
-	// s1: "hello__world"
-	// d2:  =====--=====
+	// dA:  =====-=====
+	// iA:  =====++======
+	// sA: "hello__world"
+	// dB:  =====--=====
 	//          "    "
-	// i2:  =====++++=====
-	// s2: "hello     world"
+	// iB:  =====++++=====
+	// sB: "hello     world"
 	//
 	//      hello " "
-	// i2:  =====++++=====
+	// iB:  =====++++=====
 	//          "__"
-	// d2:  =====--======
-	const edit1 = new Edit([5, " ", "__", 11]);
-	const edit2 = new Edit([5, "__", "    ", 12]);
+	// dB:  =====--======
+	const editA = new Edit([5, " ", "__", 11]);
+	const editB = new Edit([5, "__", "    ", 12]);
 	const result = new Edit([6, "", "   ", 11]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
 test("compose 10", () => {
 	// s0: "x"
-	// d1:  -
+	// dA:  -
 	//      "ab"
-	// i1:  =++
-	// s1: "ab"
-	// d2:  ==
-	// i2:  =+=
-	// s2: "aab"
-	const edit1 = new Edit([0, "x", "ab", 1]);
-	const edit2 = new Edit([1, "", "a", 2]);
+	// iA:  =++
+	// sA: "ab"
+	// dB:  ==
+	// iB:  =+=
+	// sB: "aab"
+	const editA = new Edit([0, "x", "ab", 1]);
+	const editB = new Edit([1, "", "a", 2]);
 	const result = new Edit([0, "x", "aab", 1]);
-	Assert.equal(edit1.compose(edit2), result);
+	Assert.equal(editA.compose(editB), result);
 });
 
-// compose where edit2 deletes characters that edit1 inserted
 test("compose 11: insert-then-delete cancellation", () => {
-	// base: "abcdef"
-	// edit1: insert "xyz" at 0, delete "def" at 3
-	//   "abcdef" → "xyzabc"
-	// edit2: delete "xyza" at 0, insert "hi"
-	//   "xyzabc" → "hibc"
-	// The 3 inserted chars "xyz" are deleted by edit2 and must cancel out.
-	// The remaining deletion "a" is a real base char.
-	const edit1 = new Edit([0, "", "xyz", 3, "def", "", 6]);
-	const edit2 = new Edit([0, "xyza", "hi", 6]);
-	const composed = edit1.compose(edit2);
+	// s0: "abcdef"
+	// eA: insert "xyz" at 0, delete "def" -> "xyzabc"
+	// eB: delete "xyza", insert "hi"      -> "hibc"
+	const editA = new Edit([0, "", "xyz", 3, "def", "", 6]);
+	const editB = new Edit([0, "xyza", "hi", 6]);
+	const composed = editA.compose(editB);
 	Assert.is(composed.apply("abcdef"), "hibc");
-	Assert.is(composed.apply("abcdef"), edit2.apply(edit1.apply("abcdef")));
+	Assert.is(composed.apply("abcdef"), editB.apply(editA.apply("abcdef")));
 });
 
-// compose associativity with insert-then-delete across three edits
 test("compose 12: associativity with cancellation", () => {
-	// base: "abcdefg"
-	// e1: insert "xyz" at 0               → "xyzabcdefg"
-	// e2: delete "efg" at 7, insert "hijk" → "xyzabcdhijk"
-	// e3: delete "xyza" at 0, insert "mn"  → "mnbcdhijk"
-	// (e1∘e2)∘e3 and e1∘(e2∘e3) must agree.
-	const e1 = new Edit([0, "", "xyz", 7]);
-	const e2 = new Edit([7, "efg", "hijk", 10]);
-	const e3 = new Edit([0, "xyza", "mn", 11]);
-	const expected = e3.apply(e2.apply(e1.apply("abcdefg")));
+	// s0: "abcdefg"
+	// eA: insert "xyz" at 0           -> "xyzabcdefg"
+	// eB: delete "efg", insert "hijk" -> "xyzabcdhijk"
+	// eC: delete "xyza", insert "mn"  -> "mnbcdhijk"
+	const eA = new Edit([0, "", "xyz", 7]);
+	const eB = new Edit([7, "efg", "hijk", 10]);
+	const eC = new Edit([0, "xyza", "mn", 11]);
+	const expected = eC.apply(eB.apply(eA.apply("abcdefg")));
 	Assert.is(expected, "mnbcdhijk");
-	Assert.is(e1.compose(e2).compose(e3).apply("abcdefg"), expected);
-	Assert.is(e1.compose(e2.compose(e3)).apply("abcdefg"), expected);
+	Assert.is(eA.compose(eB).compose(eC).apply("abcdefg"), expected);
+	Assert.is(eA.compose(eB.compose(eC)).apply("abcdefg"), expected);
 });
 
 test("invert 1", () => {
@@ -327,10 +320,10 @@ test("createBuilder 4", () => {
 });
 
 test("createBuilder compose", () => {
-	const edit1 = Edit.builder("hello world").insert("je").delete(2).build();
-	const edit2 = Edit.builder("jello world").retain(5).delete(6).build();
+	const editA = Edit.builder("hello world").insert("je").delete(2).build();
+	const editB = Edit.builder("jello world").retain(5).delete(6).build();
 	Assert.equal(
-		edit1.compose(edit2),
+		editA.compose(editB),
 		new Edit([0, "h", "j", 5, " world", "", 11]),
 	);
 });
@@ -436,338 +429,316 @@ test("validation: valid adjacent operations", () => {
 
 test("transform: concurrent insertions at different positions", () => {
 	const text = "hello world";
-	const editA = new Edit([5, "", "oo", 11]);   // "hellooo world"
-	const editB = new Edit([11, "", "!", 11]);    // "hello world!"
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([5, "", "oo", 11]);
+	const right = new Edit([11, "", "!", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: concurrent deletions at different positions", () => {
 	const text = "hello world";
-	const editA = new Edit([1, "ell", "", 11]);   // "ho world"
-	const editB = new Edit([5, " wor", "", 11]);  // "hellold"
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([1, "ell", "", 11]);
+	const right = new Edit([5, " wor", "", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: overlapping deletions", () => {
 	const text = "hello world";
-	const editA = new Edit([2, "llo", "", 11]);   // "he world"
-	const editB = new Edit([4, "o ", "", 11]);     // "hellworld"
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([2, "llo", "", 11]);
+	const right = new Edit([4, "o ", "", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: insert vs delete at same position", () => {
 	const text = "hello world";
-	const editA = new Edit([5, "", "ooo", 11]);    // "helloooo world"
-	const editB = new Edit([5, " wor", "", 11]);   // "hellold"
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([5, "", "ooo", 11]);
+	const right = new Edit([5, " wor", "", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: both identity", () => {
 	const text = "hello";
-	const editA = new Edit([5]);
-	const editB = new Edit([5]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([5]);
+	const right = new Edit([5]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: one identity", () => {
 	const text = "hello world";
-	const editA = new Edit([5, "", "oo", 11]);
-	const editB = new Edit([11]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([5, "", "oo", 11]);
+	const right = new Edit([11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: concurrent insertions at same position", () => {
 	const text = "hello";
-	const editA = new Edit([5, "", " world", 5]);
-	const editB = new Edit([5, "", "!", 5]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([5, "", " world", 5]);
+	const right = new Edit([5, "", "!", 5]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: replace same region", () => {
 	const text = "hello world";
-	const editA = new Edit([6, "world", "earth", 11]);
-	const editB = new Edit([6, "world", "mars", 11]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([6, "world", "earth", 11]);
+	const right = new Edit([6, "world", "mars", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: delete all vs insert", () => {
 	const text = "abc";
-	const editA = new Edit([0, "abc", "", 3]);
-	const editB = new Edit([1, "", "X", 3]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([0, "abc", "", 3]);
+	const right = new Edit([1, "", "X", 3]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: multiple operations", () => {
 	const text = "hello world";
-	const editA = new Edit([0, "h", "H", 5, " ", "_", 11]);
-	const editB = new Edit([6, "world", "WORLD", 11]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([0, "h", "H", 5, " ", "_", 11]);
+	const right = new Edit([6, "world", "WORLD", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: fully overlapping deletion", () => {
 	const text = "hello world";
-	// Both delete the same region exactly
-	const editA = new Edit([5, " world", "", 11]);
-	const editB = new Edit([5, " world", "", 11]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	const resultAB = bPrime.apply(editA.apply(text));
-	const resultBA = aPrime.apply(editB.apply(text));
-	Assert.is(resultAB, resultBA);
-	Assert.is(resultAB, "hello");
+	const left = new Edit([5, " world", "", 11]);
+	const right = new Edit([5, " world", "", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	const resultLR = rPrime.apply(left.apply(text));
+	const resultRL = lPrime.apply(right.apply(text));
+	Assert.is(resultLR, resultRL);
+	Assert.is(resultLR, "hello");
 });
 
 test("transform: subset deletion", () => {
 	const text = "hello world";
-	// A deletes "llo wor", B deletes "o w"
-	const editA = new Edit([2, "llo wor", "", 11]);
-	const editB = new Edit([4, "o w", "", 11]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([2, "llo wor", "", 11]);
+	const right = new Edit([4, "o w", "", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: insert at start", () => {
 	const text = "hello";
-	const editA = new Edit([0, "", "A", 5]);
-	const editB = new Edit([0, "", "B", 5]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([0, "", "A", 5]);
+	const right = new Edit([0, "", "B", 5]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: delete everything, both sides", () => {
 	const text = "abc";
-	const editA = new Edit([0, "abc", "", 3]);
-	const editB = new Edit([0, "abc", "", 3]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	const resultAB = bPrime.apply(editA.apply(text));
-	const resultBA = aPrime.apply(editB.apply(text));
-	Assert.is(resultAB, resultBA);
-	Assert.is(resultAB, "");
+	const left = new Edit([0, "abc", "", 3]);
+	const right = new Edit([0, "abc", "", 3]);
+	const [lPrime, rPrime] = left.transform(right);
+	const resultLR = rPrime.apply(left.apply(text));
+	const resultRL = lPrime.apply(right.apply(text));
+	Assert.is(resultLR, resultRL);
+	Assert.is(resultLR, "");
 });
 
 test("transform: replace with different lengths", () => {
 	const text = "abc";
-	const editA = new Edit([0, "abc", "ABCDEF", 3]);
-	const editB = new Edit([0, "abc", "X", 3]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([0, "abc", "ABCDEF", 3]);
+	const right = new Edit([0, "abc", "X", 3]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: adjacent non-overlapping operations", () => {
 	const text = "abcdef";
-	// A deletes "abc", B deletes "def"
-	const editA = new Edit([0, "abc", "", 6]);
-	const editB = new Edit([3, "def", "", 6]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	const resultAB = bPrime.apply(editA.apply(text));
-	const resultBA = aPrime.apply(editB.apply(text));
-	Assert.is(resultAB, resultBA);
-	Assert.is(resultAB, "");
+	const left = new Edit([0, "abc", "", 6]);
+	const right = new Edit([3, "def", "", 6]);
+	const [lPrime, rPrime] = left.transform(right);
+	const resultLR = rPrime.apply(left.apply(text));
+	const resultRL = lPrime.apply(right.apply(text));
+	Assert.is(resultLR, resultRL);
+	Assert.is(resultLR, "");
 });
 
 test("transform: empty base document", () => {
 	const text = "";
-	const editA = new Edit([0, "", "hello", 0]);
-	const editB = new Edit([0, "", "world", 0]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	Assert.is(bPrime.apply(editA.apply(text)), aPrime.apply(editB.apply(text)));
+	const left = new Edit([0, "", "hello", 0]);
+	const right = new Edit([0, "", "world", 0]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply(text)), lPrime.apply(right.apply(text)));
 });
 
 test("transform: convergence with compose", () => {
-	// Verify that A.compose(B') === B.compose(A')
 	const text = "hello world";
-	const editA = new Edit([5, "", "oo", 11]);
-	const editB = new Edit([6, "world", "earth", 11]);
-	const [aPrime, bPrime] = editA.transform(editB);
-
-	// A then B' should produce the same edit as B then A'
-	const pathAB = editA.compose(bPrime);
-	const pathBA = editB.compose(aPrime);
-	Assert.is(pathAB.apply(text), pathBA.apply(text));
+	const left = new Edit([5, "", "oo", 11]);
+	const right = new Edit([6, "world", "earth", 11]);
+	const [lPrime, rPrime] = left.transform(right);
+	const pathLR = left.compose(rPrime);
+	const pathRL = right.compose(lPrime);
+	Assert.is(pathLR.apply(text), pathRL.apply(text));
 });
 
 test("transform: left priority for same-position inserts", () => {
 	const text = "ab";
-	const editA = new Edit([1, "", "X", 2]);
-	const editB = new Edit([1, "", "Y", 2]);
-	const [_aPrime, bPrime] = editA.transform(editB);
-	const result = bPrime.apply(editA.apply(text));
-	// A gets left priority, so A's insert comes first
+	const left = new Edit([1, "", "X", 2]);
+	const right = new Edit([1, "", "Y", 2]);
+	const [_lPrime, rPrime] = left.transform(right);
+	const result = rPrime.apply(left.apply(text));
 	Assert.is(result, "aXYb");
 });
 
 test("transform: swapping arguments swaps priority", () => {
 	const text = "ab";
-	const editA = new Edit([1, "", "X", 2]);
-	const editB = new Edit([1, "", "Y", 2]);
-	// A.transform(B): A gets priority → "aXYb"
-	const [_ap1, bp1] = editA.transform(editB);
-	Assert.is(bp1.apply(editA.apply(text)), "aXYb");
-	// B.transform(A): B gets priority → "aYXb"
-	const [_bp2, ap2] = editB.transform(editA);
-	Assert.is(ap2.apply(editB.apply(text)), "aYXb");
+	const left = new Edit([1, "", "X", 2]);
+	const right = new Edit([1, "", "Y", 2]);
+	// left.transform(right): left gets priority
+	const [_lp1, rp1] = left.transform(right);
+	Assert.is(rp1.apply(left.apply(text)), "aXYb");
+	// right.transform(left): right gets priority
+	const [_rp2, lp2] = right.transform(left);
+	Assert.is(lp2.apply(right.apply(text)), "aYXb");
 });
 
 test("transform: same-position inserts on empty base", () => {
-	// Exact counterexample found by fast-check fuzzer
-	const editA = new Edit([0, "", " ", 0]);
-	const editB = new Edit([0, "", "!", 0]);
-	const [aPrime, bPrime] = editA.transform(editB);
-	// Both paths converge (A has priority)
-	Assert.is(bPrime.apply(editA.apply("")), " !");
-	Assert.is(aPrime.apply(editB.apply("")), " !");
-	// Swapped: B has priority
-	const [bPrime2, aPrime2] = editB.transform(editA);
-	Assert.is(aPrime2.apply(editB.apply("")), "! ");
-	Assert.is(bPrime2.apply(editA.apply("")), "! ");
+	const left = new Edit([0, "", " ", 0]);
+	const right = new Edit([0, "", "!", 0]);
+	const [lPrime, rPrime] = left.transform(right);
+	Assert.is(rPrime.apply(left.apply("")), " !");
+	Assert.is(lPrime.apply(right.apply("")), " !");
+	// swapped: right gets priority
+	const [rPrime2, lPrime2] = right.transform(left);
+	Assert.is(lPrime2.apply(right.apply("")), "! ");
+	Assert.is(rPrime2.apply(left.apply("")), "! ");
 });
 
-// --- normalize + transform interaction ---
-
 test("normalize + transform: append doesn't protect base from deletion", () => {
-	// Alice appends "d" to "abc" → "abcd"
-	// Bob deletes "abc" → ""
-	// Normalized Alice: retain "abc", insert "d" — she doesn't own "abc"
-	// Raw Alice: replace "abc" with "abcd" — she claims to own "abc"
+	// Normalized: retain "abc", insert "d" -- doesn't own "abc"
+	// Raw: replace "abc" with "abcd" -- claims ownership of "abc"
 	const base = "abc";
-	const bob = new Edit([0, "abc", "", 3]);
+	const right = new Edit([0, "abc", "", 3]);
 
-	const aliceNorm = Edit.diff(base, "abcd"); // [3, "", "d", 3]
-	const [_aPn, bPn] = aliceNorm.transform(bob);
-	Assert.is(bPn.apply(aliceNorm.apply(base)), "d");
+	const leftNorm = Edit.diff(base, "abcd");
+	const [_lPn, rPn] = leftNorm.transform(right);
+	Assert.is(rPn.apply(leftNorm.apply(base)), "d");
 
-	const aliceRaw = new Edit([0, "abc", "abcd", 3]);
-	const [_aPr, bPr] = aliceRaw.transform(bob);
-	Assert.is(bPr.apply(aliceRaw.apply(base)), "abcd");
+	const leftRaw = new Edit([0, "abc", "abcd", 3]);
+	const [_lPr, rPr] = leftRaw.transform(right);
+	Assert.is(rPr.apply(leftRaw.apply(base)), "abcd");
 });
 
 test("normalize + transform: prepend doesn't protect base from deletion", () => {
-	// Alice prepends "x" to "abc" → "xabc"
-	// Bob deletes "abc" → ""
 	const base = "abc";
-	const bob = new Edit([0, "abc", "", 3]);
+	const right = new Edit([0, "abc", "", 3]);
 
-	const aliceNorm = Edit.diff(base, "xabc"); // [0, "", "x", 3]
-	const [_aPn, bPn] = aliceNorm.transform(bob);
-	Assert.is(bPn.apply(aliceNorm.apply(base)), "x");
+	const leftNorm = Edit.diff(base, "xabc");
+	const [_lPn, rPn] = leftNorm.transform(right);
+	Assert.is(rPn.apply(leftNorm.apply(base)), "x");
 
-	const aliceRaw = new Edit([0, "abc", "xabc", 3]);
-	const [_aPr, bPr] = aliceRaw.transform(bob);
-	Assert.is(bPr.apply(aliceRaw.apply(base)), "xabc");
+	const leftRaw = new Edit([0, "abc", "xabc", 3]);
+	const [_lPr, rPr] = leftRaw.transform(right);
+	Assert.is(rPr.apply(leftRaw.apply(base)), "xabc");
 });
 
 test("normalize + transform: interior insert doesn't protect surrounding text", () => {
-	// Alice inserts "-" in the middle: "abcd" → "ab-cd"
-	// Bob deletes "bc": "abcd" → "ad"
+	// Normalized: retain "ab", insert "-", retain "cd" -- insert at 2 is
+	// interior to right's deletion [1,3), so "-" is canceled
+	// Raw: replace "bc" with "b-c" -- claims ownership of "b" and "c"
 	const base = "abcd";
-	const bob = new Edit([1, "bc", "", 4]);
+	const right = new Edit([1, "bc", "", 4]);
 
-	const aliceNorm = Edit.diff(base, "ab-cd"); // [2, "", "-", 4]
-	const [_aPn, bPn] = aliceNorm.transform(bob);
-	// "-" at position 2 is interior to Bob's deletion [1,3) → canceled
-	Assert.is(bPn.apply(aliceNorm.apply(base)), "ad");
+	const leftNorm = Edit.diff(base, "ab-cd");
+	const [_lPn, rPn] = leftNorm.transform(right);
+	Assert.is(rPn.apply(leftNorm.apply(base)), "ad");
 
-	// Raw: replace "bc" with "b-c" — Alice claims ownership of "b" and "c"
-	const aliceRaw = new Edit([1, "bc", "b-c", 4]);
-	const [_aPr, bPr] = aliceRaw.transform(bob);
-	Assert.is(bPr.apply(aliceRaw.apply(base)), "ab-cd");
+	const leftRaw = new Edit([1, "bc", "b-c", 4]);
+	const [_lPr, rPr] = leftRaw.transform(right);
+	Assert.is(rPr.apply(leftRaw.apply(base)), "ab-cd");
 });
 
-// --- canceled inserts in transform ---
-
 test("transform canceled: insert interior to deletion is canceled", () => {
-	// base "abcd", Alice inserts "-" at 2, Bob deletes "bc" at [1,3)
-	// Position 2 is interior to [1,3) → "-" is canceled
+	// left inserts "-" at 2, right deletes "bc" at [1,3)
+	// position 2 is interior to [1,3) -- canceled
 	const base = "abcd";
-	const alice = new Edit([2, "", "-", 4]);
-	const bob = new Edit([1, "bc", "", 4]);
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
+	const left = new Edit([2, "", "-", 4]);
+	const right = new Edit([1, "bc", "", 4]);
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
 	Assert.is(converged, "ad");
-	Assert.is(aPrime.apply(bob.apply(base)), "ad");
+	Assert.is(lPrime.apply(right.apply(base)), "ad");
 });
 
 test("transform canceled: insert at deletion start boundary survives", () => {
-	// base "abcd", Alice inserts "X" at 1, Bob deletes "bc" at [1,3)
-	// Position 1 == start of [1,3) → not interior, survives
+	// left inserts "X" at 1, right deletes "bc" at [1,3)
+	// position 1 == start of [1,3) -- not interior, survives
 	const base = "abcd";
-	const alice = new Edit([1, "", "X", 4]);
-	const bob = new Edit([1, "bc", "", 4]);
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
+	const left = new Edit([1, "", "X", 4]);
+	const right = new Edit([1, "bc", "", 4]);
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
 	Assert.is(converged, "aXd");
-	Assert.is(aPrime.apply(bob.apply(base)), "aXd");
+	Assert.is(lPrime.apply(right.apply(base)), "aXd");
 });
 
 test("transform canceled: insert at deletion end boundary survives", () => {
-	// base "abcd", Alice inserts "X" at 3, Bob deletes "bc" at [1,3)
-	// Position 3 == end of [1,3) → not interior, survives
+	// left inserts "X" at 3, right deletes "bc" at [1,3)
+	// position 3 == end of [1,3) -- not interior, survives
 	const base = "abcd";
-	const alice = new Edit([3, "", "X", 4]);
-	const bob = new Edit([1, "bc", "", 4]);
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
+	const left = new Edit([3, "", "X", 4]);
+	const right = new Edit([1, "bc", "", 4]);
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
 	Assert.is(converged, "aXd");
-	Assert.is(aPrime.apply(bob.apply(base)), "aXd");
+	Assert.is(lPrime.apply(right.apply(base)), "aXd");
 });
 
 test("transform canceled: insert at start of string survives total deletion", () => {
-	// base "abc", Alice inserts "X" at 0, Bob deletes all [0,3)
-	// Position 0 is not > 0 → not interior, survives
+	// left inserts "X" at 0, right deletes all [0,3)
+	// position 0 is not > 0 -- not interior, survives
 	const base = "abc";
-	const alice = new Edit([0, "", "X", 3]);
-	const bob = new Edit([0, "abc", "", 3]);
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
+	const left = new Edit([0, "", "X", 3]);
+	const right = new Edit([0, "abc", "", 3]);
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
 	Assert.is(converged, "X");
-	Assert.is(aPrime.apply(bob.apply(base)), "X");
+	Assert.is(lPrime.apply(right.apply(base)), "X");
 });
 
 test("transform canceled: insert at end of string survives total deletion", () => {
-	// base "abc", Alice inserts "X" at 3, Bob deletes all [0,3)
-	// Position 3 == baseLength → not interior, survives
+	// left inserts "X" at 3, right deletes all [0,3)
+	// position 3 == baseLength -- not interior, survives
 	const base = "abc";
-	const alice = new Edit([3, "", "X", 3]);
-	const bob = new Edit([0, "abc", "", 3]);
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
+	const left = new Edit([3, "", "X", 3]);
+	const right = new Edit([0, "abc", "", 3]);
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
 	Assert.is(converged, "X");
-	Assert.is(aPrime.apply(bob.apply(base)), "X");
+	Assert.is(lPrime.apply(right.apply(base)), "X");
 });
 
 test("transform canceled: both sides have canceled inserts", () => {
-	// Alice: delete [0,3) "abc", insert "X" at 4 (canceled by Bob's [3,6))
-	// Bob: delete [3,6) "def", insert "Y" at 2 (canceled by Alice's [0,3))
+	// left: delete [0,3), insert "X" at 4 (canceled by right's [3,6))
+	// right: delete [3,6), insert "Y" at 2 (canceled by left's [0,3))
 	const base = "abcdef";
-	const alice = new Edit([0, "abc", "", 4, "", "X", 6]);
-	const bob = new Edit([2, "", "Y", 3, "def", "", 6]);
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
-	// Both canceled inserts are removed → converged = ""
+	const left = new Edit([0, "abc", "", 4, "", "X", 6]);
+	const right = new Edit([2, "", "Y", 3, "def", "", 6]);
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
 	Assert.is(converged, "");
-	Assert.is(aPrime.apply(bob.apply(base)), "");
+	Assert.is(lPrime.apply(right.apply(base)), "");
 });
 
 test("transform canceled: no canceled inserts gives identical behavior", () => {
-	// Insertions at non-interior positions should not be affected
 	const base = "abcdef";
-	const alice = new Edit([0, "", "X", 3, "def", "", 6]); // insert at 0, delete [3,6)
-	const bob = new Edit([3, "", "Y", 6]);                  // insert at 3
-	// X at 0: not interior (0 not > 0), Y at 3: Bob's insert at 3, Alice deletes [3,6),
-	// 3 == start boundary → not interior
-	const [aPrime, bPrime] = alice.transform(bob);
-	const converged = bPrime.apply(alice.apply(base));
-	Assert.is(converged, aPrime.apply(bob.apply(base)));
-	// X survives (at start), Y survives (at boundary)
+	const left = new Edit([0, "", "X", 3, "def", "", 6]);
+	const right = new Edit([3, "", "Y", 6]);
+	// X at 0: not interior, Y at 3: start boundary -- both survive
+	const [lPrime, rPrime] = left.transform(right);
+	const converged = rPrime.apply(left.apply(base));
+	Assert.is(converged, lPrime.apply(right.apply(base)));
 	Assert.is(converged, "XabcY");
 });
 
