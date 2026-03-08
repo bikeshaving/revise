@@ -126,6 +126,11 @@ const frameworks = [
 			"export * from '@tiptap/starter-kit';",
 		].join("\n"),
 	},
+	{
+		name: "Quill",
+		component: null,
+		entry: "export * from 'quill';",
+	},
 ];
 
 function formatKB(bytes: number): string {
