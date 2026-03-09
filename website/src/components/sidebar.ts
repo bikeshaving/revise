@@ -91,6 +91,25 @@ export function Main({children}: {children: unknown}) {
 			ol {
 				max-width: 800px;
 			}
+
+			figure {
+				margin: 1.5rem 0;
+				max-width: 800px;
+			}
+
+			figure img {
+				max-width: 100%;
+				height: auto;
+				border: 1px solid var(--border-color);
+				border-radius: 4px;
+			}
+
+			figcaption {
+				font-size: 0.9em;
+				color: var(--text-color);
+				opacity: 0.7;
+				margin-top: 0.5rem;
+			}
 		`}>
 			${children}
 		</main>

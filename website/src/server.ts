@@ -7,6 +7,8 @@ import {assets as assetsMiddleware} from "@b9g/assets/middleware";
 
 import HomeView from "./views/home.js";
 import GuideView from "./views/guide.js";
+import BlogHomeView from "./views/blog-home.js";
+import BlogView from "./views/blog.js";
 import NotFoundView from "./views/not-found.js";
 
 import {collectDocuments} from "./models/document.js";
@@ -105,8 +107,53 @@ export const staticURLs: Record<string, string> = {
 // Create router
 const router = new Router();
 
+// Request logging middleware
+const logger = self.loggers.get(["app", "revise-website"]);
+router.use(async (request) => {
+	const url = new URL(request.url);
+	logger.info("{method} {path}", {
+		method: request.method,
+		path: url.pathname,
+	});
+	return;
+});
+
 router.use(trailingSlash("append"));
 router.use(assetsMiddleware());
+
+// Serve raw static files (images, etc.) from the static directory
+const mimeTypes: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".svg": "image/svg+xml",
+	".ico": "image/x-icon",
+	".webp": "image/webp",
+};
+
+router.route("/static/:filename").get(async (request, context) => {
+	const {filename} = context.params;
+
+	try {
+		const staticDir = await self.directories.open("static");
+		const fileHandle = await staticDir.getFileHandle(filename);
+		const file = await fileHandle.getFile();
+		const content = await file.arrayBuffer();
+		const dotIndex = filename.lastIndexOf(".");
+		const ext = dotIndex !== -1 ? filename.slice(dotIndex).toLowerCase() : "";
+		const contentType = mimeTypes[ext] || "application/octet-stream";
+
+		return new Response(content, {
+			headers: {
+				"Content-Type": contentType,
+				"Cache-Control": "public, max-age=31536000",
+			},
+		});
+	} catch {
+		return new Response("Not Found", {status: 404});
+	}
+});
 
 // Helper to render a Crank view
 async function renderView(
@@ -137,6 +184,16 @@ router.route("/").get(async (request) => {
 router.route("/guides/:slug/").get(async (request) => {
 	const url = new URL(request.url);
 	return renderView(GuideView, url.pathname);
+});
+
+router.route("/blog/").get(async (request) => {
+	const url = new URL(request.url);
+	return renderView(BlogHomeView, url.pathname);
+});
+
+router.route("/blog/:slug/").get(async (request) => {
+	const url = new URL(request.url);
+	return renderView(BlogView, url.pathname);
 });
 
 // 404 catch-all
@@ -177,6 +234,19 @@ async function generateStaticSite() {
 			}
 		} catch (e: any) {
 			logger.info("No docs directory found, skipping guide routes");
+		}
+
+		// Add blog routes
+		try {
+			const docsDir = await self.directories.open("docs");
+			const blogDir = await docsDir.getDirectoryHandle("blog");
+			const docs = await collectDocuments(blogDir, "blog");
+			staticRoutes.push("/blog/");
+			for (const doc of docs) {
+				staticRoutes.push(doc.url);
+			}
+		} catch (e: any) {
+			logger.info("No blog directory found, skipping blog routes");
 		}
 
 		logger.info(`Pre-rendering ${staticRoutes.length} routes...`);
