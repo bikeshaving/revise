@@ -483,22 +483,10 @@ function diff(
 			// PRE-ORDER LOGIC
 			nodeInfo = cache.get(node)!;
 			if (nodeInfo === undefined) {
-				cache.set(node, (nodeInfo = new NodeInfo(offset)));
+				cache.set(node, (nodeInfo = new NodeInfo(0)));
 				if (isBlocklikeElement(node)) {
 					nodeInfo.f |= IS_BLOCKLIKE;
 				}
-			} else {
-				const expectedOffset = oldIndex - oldIndexRelative;
-				const deleteLength = nodeInfo.offset - expectedOffset;
-				if (deleteLength < 0) {
-					// this should never happen
-					throw new Error("cache offset error");
-				} else if (deleteLength > 0) {
-					// deletion detected
-					oldIndex += deleteLength;
-				}
-
-				nodeInfo.offset = offset;
 			}
 
 			if (offset && !hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
@@ -520,6 +508,19 @@ function diff(
 
 				nodeInfo.f &= ~PREPENDS_NEWLINE;
 			}
+
+			if (nodeInfo.f & IS_OLD) {
+				const expectedOffset = oldIndex - oldIndexRelative;
+				const deleteLength = nodeInfo.offset - expectedOffset;
+				if (deleteLength < 0) {
+					throw new Error("cache offset error");
+				} else if (deleteLength > 0) {
+					// deletion detected
+					oldIndex += deleteLength;
+				}
+			}
+
+			nodeInfo.offset = offset;
 
 			descending = false;
 			if (nodeInfo.f & IS_VALID) {
@@ -575,12 +576,6 @@ function diff(
 				throw new Error("Stack is empty");
 			}
 
-			// If the child node prepends a newline, add to offset to increase the
-			// length of the parent node.
-			if (nodeInfo!.f & PREPENDS_NEWLINE) {
-				offset += NEWLINE.length;
-			}
-
 			({nodeInfo, oldIndexRelative} = stack.pop()!);
 			offset = nodeInfo.offset + offset;
 		}
@@ -588,6 +583,17 @@ function diff(
 		if (!descending) {
 			// POST-ORDER LOGIC
 			if (!(nodeInfo.f & IS_VALID)) {
+				// Skip past the old appended newline in oldValue. Only needed
+				// for elements whose children were re-walked, since leaf-like
+				// nodes already include APPENDS_NEWLINE in nodeInfo.length.
+				if (
+					nodeInfo.f & APPENDS_NEWLINE &&
+					node.nodeType === Node.ELEMENT_NODE &&
+					!(node as Element).hasAttribute("data-content")
+				) {
+					oldIndex += NEWLINE.length;
+				}
+
 				// TODO: Figure out if we should always recalculate APPENDS_NEWLINE???
 				if (!hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
 					value += NEWLINE;
@@ -706,10 +712,7 @@ function indexAt(
 			} else {
 				node = child;
 				const nodeInfo = cache.get(node)!;
-				// If the offset references an element which prepends a newline
-				// ("hello<div>world</div>"), we have to start from -1 because the
-				// element’s info.offset will not account for the newline.
-				index = nodeInfo.f & PREPENDS_NEWLINE ? -1 : 0;
+				index = nodeInfo.f & PREPENDS_NEWLINE ? -NEWLINE.length : 0;
 			}
 		}
 	}
@@ -717,9 +720,6 @@ function indexAt(
 	for (; node !== _this; node = node.parentNode!) {
 		const nodeInfo = cache.get(node)!;
 		index += nodeInfo.offset;
-		if (nodeInfo.f & PREPENDS_NEWLINE) {
-			index += NEWLINE.length;
-		}
 	}
 
 	return index;
