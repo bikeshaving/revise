@@ -278,6 +278,276 @@ function* TwemojiEditable(
 	}
 }
 
+/*** Demo 6: Blockquote ***/
+function* BlockquoteEditable(
+	this: Context<typeof BlockquoteEditable>,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for ({} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children"
+					onkeydown={(ev: KeyboardEvent) => {
+						if (ev.key === "Enter" && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
+							const area = (ev.currentTarget as HTMLElement).closest("content-area") as any;
+							if (!area) return;
+							const pos = area.selectionStart as number;
+							const value = area.value as string;
+							const lineStart = value.lastIndexOf("\n", pos - 1) + 1;
+							const lineEnd = value.indexOf("\n", pos);
+							const line = value.slice(lineStart, lineEnd === -1 ? value.length : lineEnd);
+							if (line === "> ") {
+								ev.preventDefault();
+								state.setValue(
+									value.slice(0, lineStart) + value.slice(lineStart + 2),
+									"user",
+								);
+								this.refresh();
+							}
+						}
+					}}
+				>
+					{lines.map((line) => {
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						const match = line.match(/^(> )([\s\S]*)$/);
+						if (match) {
+							return (
+								<div key={key} data-contentbefore="> " style={{
+									borderLeft: "3px solid var(--highlight-color)",
+									paddingLeft: "0.5em",
+									marginLeft: "0.25em",
+									color: "var(--text-muted)",
+								}}>
+									{match[2] || <br />}
+								</div>
+							);
+						}
+						return (
+							<div key={key}>
+								{line || <br />}
+							</div>
+						);
+					})}
+				</div>
+			</CrankEditable>
+		);
+	}
+}
+
+/*** Demo 7: Todo ***/
+function* TodoEditable(
+	this: Context<typeof TodoEditable>,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for ({} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children"
+					onkeydown={(ev: KeyboardEvent) => {
+						if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
+						const area = (ev.currentTarget as HTMLElement).closest("content-area") as any;
+						if (!area) return;
+						const pos = area.selectionStart as number;
+						const end = area.selectionEnd as number;
+						if (pos !== end) return; // has selection, let browser handle
+						const value = area.value as string;
+						const lineStart = value.lastIndexOf("\n", pos - 1) + 1;
+						const lineEnd = value.indexOf("\n", pos);
+						const line = value.slice(lineStart, lineEnd === -1 ? value.length : lineEnd);
+						const todoMatch = line.match(/^(- \[[ x]\] )([\s\S]*)$/);
+						if (!todoMatch) return;
+						const prefix = todoMatch[1];
+						if ((ev.key === "Enter" && todoMatch[2] === "") ||
+							(ev.key === "Backspace" && pos === lineStart + prefix.length)) {
+							// Enter on empty todo or Backspace at start of content → remove prefix
+							ev.preventDefault();
+							state.setValue(
+								value.slice(0, lineStart) + value.slice(lineStart + prefix.length),
+								"user",
+							);
+							this.refresh();
+						}
+					}}
+				>
+					{lines.map((line) => {
+						const lineStart = cursor;
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						const match = line.match(/^(- \[[ x]\] )([\s\S]*)$/);
+						if (match) {
+							const prefix = match[1];
+							const checked = prefix === "- [x] ";
+							return (
+								<div key={key} data-contentbefore={prefix} style={{
+									paddingLeft: "1.5em",
+								}}>
+									<input
+										type="checkbox"
+										checked={checked}
+										data-content=""
+										contenteditable="false"
+										style={{
+											marginLeft: "-1.5em",
+											marginRight: "0.25em",
+											cursor: "pointer",
+										}}
+										onclick={(ev: Event) => {
+											const input = ev.target as HTMLInputElement;
+											input.checked = checked; // revert browser toggle
+											const newPrefix = checked ? "- [ ] " : "- [x] ";
+											state.setValue(
+												state.value.slice(0, lineStart) +
+												newPrefix +
+												state.value.slice(lineStart + prefix.length),
+												"user",
+											);
+											this.refresh();
+										}}
+									/>
+									<span style={checked ? {textDecoration: "line-through", opacity: "0.5"} : undefined}>
+										{match[2] || <br />}
+									</span>
+								</div>
+							);
+						}
+						return (
+							<div key={key}>
+								{line || <br />}
+							</div>
+						);
+					})}
+				</div>
+			</CrankEditable>
+		);
+	}
+}
+
+/*** Demo 8: Typora-light ***/
+function* TyporaEditable(
+	this: Context<typeof TyporaEditable>,
+	{initial}: {initial: string},
+) {
+	const state = new EditableState({value: initial});
+	for ({} of this) {
+		const lines = state.value.split(/\r\n|\r|\n/);
+		if (/(?:\r\n|\r|\n)$/.test(state.value)) {
+			lines.pop();
+		}
+
+		const cursorPos = state.selection?.start ?? 0;
+		let charCount = 0;
+		let cursorLine = 0;
+		for (let i = 0; i < lines.length; i++) {
+			if (cursorPos <= charCount + lines[i].length) {
+				cursorLine = i;
+				break;
+			}
+			charCount += lines[i].length + 1;
+		}
+
+		let cursor = 0;
+		yield (
+			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
+					{lines.map((line, lineIndex) => {
+						const key = state.keyer.keyAt(cursor);
+						cursor += line.length + 1;
+						const focused = lineIndex === cursorLine;
+
+						// When focused, show raw markdown
+						if (focused) {
+							return (
+								<div key={key}>
+									{line || <br />}
+								</div>
+							);
+						}
+
+						// Blockquote
+						const bqMatch = line.match(/^(> )([\s\S]*)$/);
+						if (bqMatch) {
+							return (
+								<div key={key} data-contentbefore="> " style={{
+									borderLeft: "3px solid var(--highlight-color)",
+									paddingLeft: "0.5em",
+									marginLeft: "0.25em",
+									color: "var(--text-muted)",
+									fontStyle: "italic",
+								}}>
+									{bqMatch[2] || <br />}
+								</div>
+							);
+						}
+
+						// Heading
+						const headingMatch = line.match(/^(#{1,3} )([\s\S]*)$/);
+						if (headingMatch) {
+							const level = headingMatch[1].trim().length;
+							const fontSize = level === 1 ? "1.5em" : level === 2 ? "1.25em" : "1.1em";
+							return (
+								<div key={key} data-contentbefore={headingMatch[1]} style={{
+									fontSize,
+									fontWeight: "bold",
+									color: "var(--highlight-color)",
+								}}>
+									{headingMatch[2] || <br />}
+								</div>
+							);
+						}
+
+						// Todo
+						const todoMatch = line.match(/^(- \[[ x]\] )([\s\S]*)$/);
+						if (todoMatch) {
+							const checked = todoMatch[1] === "- [x] ";
+							return (
+								<div key={key} data-contentbefore={todoMatch[1]} style={{
+									paddingLeft: "1.5em",
+								}}>
+									<input
+										type="checkbox"
+										checked={checked}
+										data-content=""
+										contenteditable="false"
+										style={{
+											marginLeft: "-1.5em",
+											marginRight: "0.25em",
+											pointerEvents: "none",
+										}}
+									/>
+									<span style={checked ? {textDecoration: "line-through", opacity: "0.5"} : undefined}>
+										{todoMatch[2] || <br />}
+									</span>
+								</div>
+							);
+						}
+
+						return (
+							<div key={key}>
+								{line || <br />}
+							</div>
+						);
+					})}
+				</div>
+			</CrankEditable>
+		);
+	}
+}
+
 /*** Hero editables ***/
 function* EditableTitle(
 	this: Context<typeof EditableTitle>,
@@ -376,3 +646,6 @@ hydrate("demo-rainbow", RainbowEditable);
 hydrate("demo-code", CodeEditable);
 hydrate("demo-social", SocialEditable);
 hydrate("demo-twemoji", TwemojiEditable);
+hydrate("demo-blockquote", BlockquoteEditable);
+hydrate("demo-todo", TodoEditable);
+hydrate("demo-typora", TyporaEditable);

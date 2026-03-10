@@ -5,3 +5,4 @@ dist
 build
 *.log
 package-lock.json
+.playwright-mcp/
