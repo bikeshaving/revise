@@ -1218,10 +1218,11 @@ let area!: ContentAreaElement;
 		const [node0, offset0] = area.nodeOffsetAt(0);
 		Assert.is(area.indexAt(node0, offset0), 0);
 
-		// Index inside prefix maps to inside the element, before first child
+		// Index inside prefix collapses to children/prefix boundary (lossy)
 		const [node1, offset1] = area.nodeOffsetAt(1);
 		Assert.is(node1, area.querySelector("span"));
 		Assert.is(offset1, 0);
+		Assert.is(area.indexAt(node1, offset1), 0);
 
 		// Index at start of "Hello" (after ">>> ")
 		const [node4, offset4] = area.nodeOffsetAt(4);

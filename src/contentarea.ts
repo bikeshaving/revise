@@ -741,6 +741,10 @@ function indexAt(
 		if (offset <= 0) {
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
+			// Virtual suffix text (data-contentafter, APPENDS_NEWLINE) has no DOM
+			// positions, so this maps to the end of real children, not the end
+			// of the suffix. Indices inside virtual text are lossy through DOM
+			// selection APIs by design.
 			const nodeInfo = cache.get(node)!;
 			index = nodeInfo.length - nodeInfo.afterLength;
 			if (nodeInfo.f & APPENDS_NEWLINE) {
