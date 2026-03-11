@@ -557,6 +557,8 @@ function diff(
 					hasNewline = text.endsWith(NEWLINE);
 				}
 
+				nodeInfo.beforeLength = 0;
+				nodeInfo.afterLength = 0;
 				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
