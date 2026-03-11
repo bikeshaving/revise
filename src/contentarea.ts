@@ -836,6 +836,8 @@ function findNodeOffset(
 				const ni = cache.get(node)!;
 				if (ni.beforeLength > 0) {
 					if (index < ni.beforeLength) {
+						// Virtual prefix text has no DOM positions, so indices
+						// inside it collapse to the start of the element.
 						return [node, 0];
 					}
 					index -= ni.beforeLength;
