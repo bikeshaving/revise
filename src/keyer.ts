@@ -4,7 +4,6 @@ export class Keyer {
 	nextKey: number;
 	keys: Map<number, number>;
 
-	// TODO: Accept a custom key function.
 	constructor() {
 		this.nextKey = 0;
 		this.keys = new Map();

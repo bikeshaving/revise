@@ -307,8 +307,8 @@ const APPENDS_NEWLINE = 1 << 4;
 class NodeInfo {
 	/** A bitmask (see flags above) */
 	declare f: number;
-	// TODO: explain the relationship of these numbers to newline stuff
-	/** The start of this node’s contents relative to the start of the parent. */
+	/** The start of this node’s contents relative to the start of the parent.
+	 * Includes PREPENDS_NEWLINE and data-contentbefore in the offset. */
 	declare offset: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
@@ -447,7 +447,6 @@ function clear(parent: Node, cache: NodeInfoCache): void {
 	}
 }
 
-// TODO: custom newlines?
 const NEWLINE = "\n";
 
 // THIS IS THE MOST COMPLICATED FUNCTION IN THE LIBRARY!
@@ -640,7 +639,6 @@ function diff(
 					oldIndex += NEWLINE.length;
 				}
 
-				// TODO: Figure out if we should always recalculate APPENDS_NEWLINE???
 				if (!hasNewline && nodeInfo.f & IS_BLOCKLIKE) {
 					value += NEWLINE;
 					offset += NEWLINE.length;
@@ -673,9 +671,10 @@ function diff(
 	}
 
 	const selectionStart = getSelectionRange(_this).start;
-	// TODO: Doing a diff over the entirety of both oldValue and value is a
-	// performance bottleneck. Figure out how to reduce the search for changed
-	// values.
+	// TODO: The cache knows which nodes changed (IS_VALID). In theory we could
+	// narrow the diff to just the invalidated region using nodeInfo.offset
+	// bounds, but PREPENDS/APPENDS_NEWLINE context sensitivity and multi-region
+	// invalidation make this hard to get right in practice.
 	return Edit.diff(
 		oldValue,
 		value,
@@ -797,7 +796,6 @@ function nodeOffsetAt(
 	return [node, offset];
 }
 
-// TODO: Can this function be inlined?
 function findNodeOffset(
 	_this: ContentAreaElement,
 	index: number,
