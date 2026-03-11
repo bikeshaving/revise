@@ -549,6 +549,14 @@ function diff(
 				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
+			} else if (node.nodeName === "BR") {
+				// BR always produces a newline; data-content* attributes are ignored.
+				value += NEWLINE;
+				offset += NEWLINE.length;
+				hasNewline = true;
+				if (nodeInfo.f & IS_OLD) {
+					oldIndex += nodeInfo.length;
+				}
 			} else if ((node as Element).hasAttribute("data-content")) {
 				const text = (node as Element).getAttribute("data-content") || "";
 				if (text.length) {
@@ -559,13 +567,6 @@ function diff(
 
 				nodeInfo.beforeLength = 0;
 				nodeInfo.afterLength = 0;
-				if (nodeInfo.f & IS_OLD) {
-					oldIndex += nodeInfo.length;
-				}
-			} else if (node.nodeName === "BR") {
-				value += NEWLINE;
-				offset += NEWLINE.length;
-				hasNewline = true;
 				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
@@ -612,6 +613,7 @@ function diff(
 				// data-contentafter: add virtual text after children
 				if (
 					node.nodeType === Node.ELEMENT_NODE &&
+					node.nodeName !== "BR" &&
 					!(node as Element).hasAttribute("data-content")
 				) {
 					const afterText = (node as Element).getAttribute("data-contentafter") || "";
