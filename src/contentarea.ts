@@ -557,7 +557,7 @@ function diff(
 				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
-			} else if ((node as Element).hasAttribute("data-content")) {
+			} else if (node !== _this && (node as Element).hasAttribute("data-content")) {
 				const text = (node as Element).getAttribute("data-content") || "";
 				if (text.length) {
 					value += text;
@@ -571,7 +571,7 @@ function diff(
 					oldIndex += nodeInfo.length;
 				}
 			} else {
-				const beforeText = (node as Element).getAttribute?.("data-contentbefore") || "";
+				const beforeText = node !== _this ? (node as Element).getAttribute?.("data-contentbefore") || "" : "";
 				descending = !!walker.firstChild();
 				if (descending) {
 					stack.push({nodeInfo, oldIndexRelative});
@@ -612,6 +612,7 @@ function diff(
 			if (!(nodeInfo.f & IS_VALID)) {
 				// data-contentafter: add virtual text after children
 				if (
+					node !== _this &&
 					node.nodeType === Node.ELEMENT_NODE &&
 					node.nodeName !== "BR" &&
 					!(node as Element).hasAttribute("data-content")
