@@ -738,10 +738,10 @@ function indexAt(
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
 			const nodeInfo = cache.get(node)!;
-			index =
-				nodeInfo.f & APPENDS_NEWLINE
-					? nodeInfo.length - NEWLINE.length
-					: nodeInfo.length;
+			index = nodeInfo.length - nodeInfo.afterLength;
+			if (nodeInfo.f & APPENDS_NEWLINE) {
+				index -= NEWLINE.length;
+			}
 		} else {
 			let child: Node | null = node.childNodes[offset];
 			while (child !== null && !cache.has(child)) {

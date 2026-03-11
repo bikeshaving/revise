@@ -1241,6 +1241,10 @@ let area!: ContentAreaElement;
 
 		const [node5, offset5] = area.nodeOffsetAt(5);
 		Assert.is(area.indexAt(node5, offset5), 5);
+
+		// Index inside suffix collapses to children/suffix boundary
+		const [node7, offset7] = area.nodeOffsetAt(7);
+		Assert.is(area.indexAt(node7, offset7), 5);
 	});
 
 	test("leaf element with data-contentbefore and data-contentafter", () => {
