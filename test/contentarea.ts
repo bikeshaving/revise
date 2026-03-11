@@ -986,3 +986,168 @@ let area!: ContentAreaElement;
 
 	test.run();
 }
+
+{
+	const test = suite("ContentAreaElement sibling cache invalidation");
+	test.before(() => {
+		if (!window.customElements.get("content-area")) {
+			window.customElements.define("content-area", ContentAreaElement);
+		}
+	});
+
+	test.before.each(() => {
+		document.body.innerHTML = "<content-area></content-area>";
+		area = document.body.firstChild as ContentAreaElement;
+	});
+
+	test("text mutation with trailing sibling text node", () => {
+		area.innerHTML = "<div><div>Hello</div></div>X";
+		Assert.is(area.value, "Hello\nX");
+
+		const textNode = area.firstChild!.firstChild!.firstChild as Text;
+		textNode.data = "Hello!";
+		Assert.is(area.value, "Hello!\nX");
+	});
+
+	test("text mutation with preceding sibling text node", () => {
+		area.innerHTML = "X<div><div>Hello</div></div>";
+		Assert.is(area.value, "X\nHello\n");
+
+		const textNode = area.querySelector("div div")!.firstChild as Text;
+		textNode.data = "Hello!";
+		Assert.is(area.value, "X\nHello!\n");
+	});
+
+	test("text mutation with both preceding and trailing siblings", () => {
+		area.innerHTML = "A<div><div>Hello</div></div>B";
+		Assert.is(area.value, "A\nHello\nB");
+
+		const textNode = area.querySelector("div div")!.firstChild as Text;
+		textNode.data = "Hello!";
+		Assert.is(area.value, "A\nHello!\nB");
+	});
+
+	test("content shrinks with trailing sibling", () => {
+		area.innerHTML = "<div><div>Hello</div></div>X";
+		Assert.is(area.value, "Hello\nX");
+
+		const textNode = area.firstChild!.firstChild!.firstChild as Text;
+		textNode.data = "Hi";
+		Assert.is(area.value, "Hi\nX");
+	});
+
+	test("multiple mutations with trailing sibling", () => {
+		area.innerHTML = "<div><div>Hi</div></div>Z";
+		Assert.is(area.value, "Hi\nZ");
+
+		const textNode = area.firstChild!.firstChild!.firstChild as Text;
+		textNode.data = "Hi!";
+		Assert.is(area.value, "Hi!\nZ");
+
+		textNode.data = "Hi!!";
+		Assert.is(area.value, "Hi!!\nZ");
+
+		textNode.data = "H";
+		Assert.is(area.value, "H\nZ");
+	});
+
+	test("innerHTML replace with trailing sibling text node", () => {
+		area.innerHTML = "<div><div>Hello</div><div>World</div></div>\n";
+		Assert.is(area.value, "Hello\nWorld\n\n");
+
+		const outer = area.firstChild as HTMLElement;
+		outer.innerHTML = "<div>Hello!</div><div>World</div>";
+		area.source("render");
+		Assert.is(area.value, "Hello!\nWorld\n\n");
+	});
+
+	test("innerHTML replace with whitespace siblings (the real-world case)", () => {
+		area.innerHTML = "\n\t<div><div>Hello</div><div>World</div></div>\n";
+		area.value;
+
+		const outer = area.querySelector("div") as HTMLElement;
+		outer.innerHTML = "<div>Hello!</div><div>World</div>";
+		area.source("render");
+		Assert.is(area.value.includes("Hello!"), true);
+	});
+
+	test("indexAt round-trip after mutation with trailing sibling", () => {
+		area.innerHTML = "A<div><div>Hello</div></div>B";
+		Assert.is(area.value, "A\nHello\nB");
+
+		const textNode = area.querySelector("div div")!.firstChild as Text;
+		textNode.data = "Hello!";
+		Assert.is(area.value, "A\nHello!\nB");
+
+		for (let i = -1; i < area.value.length + 1; i++) {
+			Assert.is(
+				area.indexAt(...area.nodeOffsetAt(i)),
+				Math.max(-1, Math.min(area.value.length, i)),
+			);
+		}
+	});
+
+	test("indexAt round-trip with text between blocks", () => {
+		area.innerHTML = "<div>X</div>mid<div>Y</div>";
+		Assert.is(area.value, "X\nmid\nY\n");
+
+		for (let i = -1; i < area.value.length + 1; i++) {
+			Assert.is(
+				area.indexAt(...area.nodeOffsetAt(i)),
+				Math.max(-1, Math.min(area.value.length, i)),
+			);
+		}
+
+		// Mutate and verify round-trip still holds
+		(area.querySelector("div")!.firstChild as Text).data = "XX";
+		Assert.is(area.value, "XX\nmid\nY\n");
+
+		for (let i = -1; i < area.value.length + 1; i++) {
+			Assert.is(
+				area.indexAt(...area.nodeOffsetAt(i)),
+				Math.max(-1, Math.min(area.value.length, i)),
+			);
+		}
+	});
+
+	test("indexAt round-trip with multiple consecutive blocks", () => {
+		area.innerHTML = "A<div>B</div><div>C</div>D";
+		Assert.is(area.value, "A\nB\nC\nD");
+
+		for (let i = -1; i < area.value.length + 1; i++) {
+			Assert.is(
+				area.indexAt(...area.nodeOffsetAt(i)),
+				Math.max(-1, Math.min(area.value.length, i)),
+			);
+		}
+
+		// Mutate first block and verify
+		(area.querySelector("div")!.firstChild as Text).data = "BB";
+		Assert.is(area.value, "A\nBB\nC\nD");
+
+		for (let i = -1; i < area.value.length + 1; i++) {
+			Assert.is(
+				area.indexAt(...area.nodeOffsetAt(i)),
+				Math.max(-1, Math.min(area.value.length, i)),
+			);
+		}
+	});
+
+	test("mutation does not trigger cache offset error", () => {
+		// Verify the assertion holds: no "cache offset error" thrown
+		area.innerHTML = "A<div><div>Hello</div></div>B";
+		Assert.is(area.value, "A\nHello\nB");
+
+		const textNode = area.querySelector("div div")!.firstChild as Text;
+		textNode.data = "Hello!";
+		Assert.is(area.value, "A\nHello!\nB");
+
+		textNode.data = "Hi";
+		Assert.is(area.value, "A\nHi\nB");
+
+		textNode.data = "Hello World";
+		Assert.is(area.value, "A\nHello World\nB");
+	});
+
+	test.run();
+}
