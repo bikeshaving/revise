@@ -1151,3 +1151,121 @@ let area!: ContentAreaElement;
 
 	test.run();
 }
+
+{
+	const test = suite("ContentAreaElement data-contentbefore/data-contentafter");
+	test.before(() => {
+		if (!window.customElements.get("content-area")) {
+			window.customElements.define("content-area", ContentAreaElement);
+		}
+	});
+
+	test.before.each(() => {
+		document.body.innerHTML = "<content-area></content-area>";
+		area = document.body.firstChild as ContentAreaElement;
+	});
+
+	test("data-contentbefore adds text before children", () => {
+		area.innerHTML = '<span data-contentbefore=">>> ">Hello</span>';
+		Assert.is(area.value, ">>> Hello");
+	});
+
+	test("data-contentafter adds text after children", () => {
+		area.innerHTML = '<span data-contentafter=" <<<">Hello</span>';
+		Assert.is(area.value, "Hello <<<");
+	});
+
+	test("both data-contentbefore and data-contentafter together", () => {
+		area.innerHTML = '<span data-contentbefore="[" data-contentafter="]">Hello</span>';
+		Assert.is(area.value, "[Hello]");
+	});
+
+	test("data-content takes precedence over data-contentbefore/data-contentafter", () => {
+		area.innerHTML = '<span data-content="replaced" data-contentbefore="[" data-contentafter="]">Hello</span>';
+		Assert.is(area.value, "replaced");
+	});
+
+	test("mutation inside element with data-contentbefore", () => {
+		area.innerHTML = '<span data-contentbefore=">>> ">Hello</span>';
+		Assert.is(area.value, ">>> Hello");
+
+		const textNode = area.querySelector("span")!.firstChild as Text;
+		textNode.data = "World";
+		Assert.is(area.value, ">>> World");
+	});
+
+	test("attribute change updates value", () => {
+		area.innerHTML = '<span data-contentbefore="A">Hello</span>';
+		Assert.is(area.value, "AHello");
+
+		area.querySelector("span")!.setAttribute("data-contentbefore", "BB");
+		Assert.is(area.value, "BBHello");
+	});
+
+	test("attribute removal detected as deletion", () => {
+		area.innerHTML = '<span data-contentbefore=">>> ">Hello</span>';
+		Assert.is(area.value, ">>> Hello");
+
+		area.querySelector("span")!.removeAttribute("data-contentbefore");
+		Assert.is(area.value, "Hello");
+	});
+
+	test("indexAt/nodeOffsetAt round-trip with data-contentbefore", () => {
+		area.innerHTML = '<span data-contentbefore=">>> ">Hello</span>';
+		Assert.is(area.value, ">>> Hello");
+
+		// Index 0 should round-trip
+		const [node0, offset0] = area.nodeOffsetAt(0);
+		Assert.is(area.indexAt(node0, offset0), 0);
+
+		// Index inside prefix collapses to children/prefix boundary (lossy)
+		const [node1, offset1] = area.nodeOffsetAt(1);
+		Assert.is(node1, area.querySelector("span"));
+		Assert.is(offset1, 0);
+		Assert.is(area.indexAt(node1, offset1), 0);
+
+		// Index at start of "Hello" (after ">>> ")
+		const [node4, offset4] = area.nodeOffsetAt(4);
+		Assert.is(area.indexAt(node4, offset4), 4);
+
+		// Index in middle of "Hello"
+		const [node6, offset6] = area.nodeOffsetAt(6);
+		Assert.is(area.indexAt(node6, offset6), 6);
+	});
+
+	test("indexAt/nodeOffsetAt round-trip with data-contentafter", () => {
+		area.innerHTML = '<span data-contentafter=" <<<">Hello</span>';
+		Assert.is(area.value, "Hello <<<");
+
+		const [node0, offset0] = area.nodeOffsetAt(0);
+		Assert.is(area.indexAt(node0, offset0), 0);
+
+		const [node5, offset5] = area.nodeOffsetAt(5);
+		Assert.is(area.indexAt(node5, offset5), 5);
+
+		// Index inside suffix collapses to children/suffix boundary
+		const [node7, offset7] = area.nodeOffsetAt(7);
+		Assert.is(area.indexAt(node7, offset7), 5);
+	});
+
+	test("leaf element with data-contentbefore and data-contentafter", () => {
+		area.innerHTML = '<span data-contentbefore="(" data-contentafter=")"></span>';
+		Assert.is(area.value, "()");
+
+		// nodeOffsetAt inside suffix of empty element must not return invalid offset
+		const [node, offset] = area.nodeOffsetAt(1);
+		Assert.ok(offset <= (node as Element).childNodes.length);
+	});
+
+	test("block element with data-contentbefore", () => {
+		area.innerHTML = '<div data-contentbefore="> ">Hello</div>';
+		Assert.is(area.value, "> Hello\n");
+	});
+
+	test("multiple siblings with data-contentbefore/after", () => {
+		area.innerHTML = '<span data-contentbefore="[" data-contentafter="]">A</span><span data-contentbefore="[" data-contentafter="]">B</span>';
+		Assert.is(area.value, "[A][B]");
+	});
+
+	test.run();
+}

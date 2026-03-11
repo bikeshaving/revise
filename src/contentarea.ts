@@ -65,9 +65,8 @@ export class ContentAreaElement extends HTMLElement {
 			attributeOldValue: true,
 			attributeFilter: [
 				"data-content",
-				// TODO: implement these attributes
-				//"data-contentbefore",
-				//"data-contentafter",
+				"data-contentbefore",
+				"data-contentafter",
 			],
 		});
 		document.addEventListener(
@@ -313,11 +312,17 @@ class NodeInfo {
 	declare offset: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
+	/** The string length of the data-contentbefore virtual text. */
+	declare beforeLength: number;
+	/** The string length of the data-contentafter virtual text. */
+	declare afterLength: number;
 
 	constructor(offset: number) {
 		this.f = 0;
 		this.offset = offset;
 		this.length = 0;
+		this.beforeLength = 0;
+		this.afterLength = 0;
 	}
 }
 
@@ -544,7 +549,15 @@ function diff(
 				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
-			} else if ((node as Element).hasAttribute("data-content")) {
+			} else if (node.nodeName === "BR") {
+				// BR always produces a newline; data-content* attributes are ignored.
+				value += NEWLINE;
+				offset += NEWLINE.length;
+				hasNewline = true;
+				if (nodeInfo.f & IS_OLD) {
+					oldIndex += nodeInfo.length;
+				}
+			} else if (node !== _this && (node as Element).hasAttribute("data-content")) {
 				const text = (node as Element).getAttribute("data-content") || "";
 				if (text.length) {
 					value += text;
@@ -552,22 +565,36 @@ function diff(
 					hasNewline = text.endsWith(NEWLINE);
 				}
 
-				if (nodeInfo.f & IS_OLD) {
-					oldIndex += nodeInfo.length;
-				}
-			} else if (node.nodeName === "BR") {
-				value += NEWLINE;
-				offset += NEWLINE.length;
-				hasNewline = true;
+				nodeInfo.beforeLength = 0;
+				nodeInfo.afterLength = 0;
 				if (nodeInfo.f & IS_OLD) {
 					oldIndex += nodeInfo.length;
 				}
 			} else {
+				const beforeText = node !== _this ? (node as Element).getAttribute?.("data-contentbefore") || "" : "";
 				descending = !!walker.firstChild();
 				if (descending) {
 					stack.push({nodeInfo, oldIndexRelative});
-					offset = 0;
 					oldIndexRelative = oldIndex;
+					if (nodeInfo.f & IS_OLD) {
+						oldIndex += nodeInfo.beforeLength;
+					}
+					nodeInfo.beforeLength = beforeText.length;
+					offset = beforeText.length;
+					if (beforeText.length) {
+						value += beforeText;
+						hasNewline = beforeText.endsWith(NEWLINE);
+					}
+				} else {
+					if (beforeText.length) {
+						value += beforeText;
+						offset += beforeText.length;
+						hasNewline = beforeText.endsWith(NEWLINE);
+					}
+					if (nodeInfo.f & IS_OLD) {
+						oldIndex += nodeInfo.beforeLength;
+					}
+					nodeInfo.beforeLength = beforeText.length;
 				}
 			}
 		} else {
@@ -583,6 +610,25 @@ function diff(
 		if (!descending) {
 			// POST-ORDER LOGIC
 			if (!(nodeInfo.f & IS_VALID)) {
+				// data-contentafter: add virtual text after children
+				if (
+					node !== _this &&
+					node.nodeType === Node.ELEMENT_NODE &&
+					node.nodeName !== "BR" &&
+					!(node as Element).hasAttribute("data-content")
+				) {
+					const afterText = (node as Element).getAttribute("data-contentafter") || "";
+					if (afterText.length) {
+						value += afterText;
+						offset += afterText.length;
+						hasNewline = afterText.endsWith(NEWLINE);
+					}
+					if (nodeInfo.f & IS_OLD) {
+						oldIndex += nodeInfo.afterLength;
+					}
+					nodeInfo.afterLength = afterText.length;
+				}
+
 				// Skip past the old appended newline in oldValue. Only needed
 				// for elements whose children were re-walked, since leaf-like
 				// nodes already include APPENDS_NEWLINE in nodeInfo.length.
@@ -696,11 +742,15 @@ function indexAt(
 		if (offset <= 0) {
 			index = 0;
 		} else if (offset >= node.childNodes.length) {
+			// Virtual suffix text (data-contentafter, APPENDS_NEWLINE) has no DOM
+			// positions, so this maps to the end of real children, not the end
+			// of the suffix. Indices inside virtual text are lossy through DOM
+			// selection APIs by design.
 			const nodeInfo = cache.get(node)!;
-			index =
-				nodeInfo.f & APPENDS_NEWLINE
-					? nodeInfo.length - NEWLINE.length
-					: nodeInfo.length;
+			index = nodeInfo.length - nodeInfo.afterLength;
+			if (nodeInfo.f & APPENDS_NEWLINE) {
+				index -= NEWLINE.length;
+			}
 		} else {
 			let child: Node | null = node.childNodes[offset];
 			while (child !== null && !cache.has(child)) {
@@ -785,17 +835,28 @@ function findNodeOffset(
 
 			node = nextSibling;
 		} else {
-			if (
-				node.nodeType === Node.ELEMENT_NODE &&
-				(node as Element).hasAttribute("data-content")
-			) {
-				return nodeOffsetFromChild(node, index > 0);
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				if ((node as Element).hasAttribute("data-content")) {
+					return nodeOffsetFromChild(node, index > 0);
+				}
+
+				const ni = cache.get(node)!;
+				if (ni.beforeLength > 0) {
+					if (index < ni.beforeLength) {
+						// Virtual prefix text has no DOM positions, so indices
+						// inside it collapse to the start of the element.
+						return [node, 0];
+					}
+					index -= ni.beforeLength;
+				}
 			}
 
 			const firstChild = walker.firstChild();
 			if (firstChild === null) {
 				const offset =
-					node.nodeType === Node.TEXT_NODE ? index : index > 0 ? 1 : 0;
+					node.nodeType === Node.TEXT_NODE
+						? index
+						: Math.min(index > 0 ? 1 : 0, getNodeLength(node));
 				return [node, offset];
 			} else {
 				node = firstChild;
