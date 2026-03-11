@@ -1250,6 +1250,10 @@ let area!: ContentAreaElement;
 	test("leaf element with data-contentbefore and data-contentafter", () => {
 		area.innerHTML = '<span data-contentbefore="(" data-contentafter=")"></span>';
 		Assert.is(area.value, "()");
+
+		// nodeOffsetAt inside suffix of empty element must not return invalid offset
+		const [node, offset] = area.nodeOffsetAt(1);
+		Assert.ok(offset <= (node as Element).childNodes.length);
 	});
 
 	test("block element with data-contentbefore", () => {

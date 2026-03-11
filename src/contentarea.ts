@@ -847,7 +847,9 @@ function findNodeOffset(
 			const firstChild = walker.firstChild();
 			if (firstChild === null) {
 				const offset =
-					node.nodeType === Node.TEXT_NODE ? index : index > 0 ? 1 : 0;
+					node.nodeType === Node.TEXT_NODE
+						? index
+						: Math.min(index > 0 ? 1 : 0, getNodeLength(node));
 				return [node, offset];
 			} else {
 				node = firstChild;
