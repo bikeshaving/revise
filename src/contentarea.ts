@@ -65,9 +65,8 @@ export class ContentAreaElement extends HTMLElement {
 			attributeOldValue: true,
 			attributeFilter: [
 				"data-content",
-				// TODO: implement these attributes
-				//"data-contentbefore",
-				//"data-contentafter",
+				"data-contentbefore",
+				"data-contentafter",
 			],
 		});
 		document.addEventListener(
@@ -313,11 +312,17 @@ class NodeInfo {
 	declare offset: number;
 	/** The string length of this node’s contents. */
 	declare length: number;
+	/** The string length of the data-contentbefore virtual text. */
+	declare beforeLength: number;
+	/** The string length of the data-contentafter virtual text. */
+	declare afterLength: number;
 
 	constructor(offset: number) {
 		this.f = 0;
 		this.offset = offset;
 		this.length = 0;
+		this.beforeLength = 0;
+		this.afterLength = 0;
 	}
 }
 
@@ -563,11 +568,30 @@ function diff(
 					oldIndex += nodeInfo.length;
 				}
 			} else {
+				const beforeText = (node as Element).getAttribute?.("data-contentbefore") || "";
 				descending = !!walker.firstChild();
 				if (descending) {
 					stack.push({nodeInfo, oldIndexRelative});
-					offset = 0;
 					oldIndexRelative = oldIndex;
+					if (nodeInfo.f & IS_OLD) {
+						oldIndex += nodeInfo.beforeLength;
+					}
+					nodeInfo.beforeLength = beforeText.length;
+					offset = beforeText.length;
+					if (beforeText.length) {
+						value += beforeText;
+						hasNewline = beforeText.endsWith(NEWLINE);
+					}
+				} else {
+					if (beforeText.length) {
+						value += beforeText;
+						offset += beforeText.length;
+						hasNewline = beforeText.endsWith(NEWLINE);
+					}
+					if (nodeInfo.f & IS_OLD) {
+						oldIndex += nodeInfo.beforeLength;
+					}
+					nodeInfo.beforeLength = beforeText.length;
 				}
 			}
 		} else {
@@ -583,6 +607,23 @@ function diff(
 		if (!descending) {
 			// POST-ORDER LOGIC
 			if (!(nodeInfo.f & IS_VALID)) {
+				// data-contentafter: add virtual text after children
+				if (
+					node.nodeType === Node.ELEMENT_NODE &&
+					!(node as Element).hasAttribute("data-content")
+				) {
+					const afterText = (node as Element).getAttribute("data-contentafter") || "";
+					if (afterText.length) {
+						value += afterText;
+						offset += afterText.length;
+						hasNewline = afterText.endsWith(NEWLINE);
+					}
+					if (nodeInfo.f & IS_OLD) {
+						oldIndex += nodeInfo.afterLength;
+					}
+					nodeInfo.afterLength = afterText.length;
+				}
+
 				// Skip past the old appended newline in oldValue. Only needed
 				// for elements whose children were re-walked, since leaf-like
 				// nodes already include APPENDS_NEWLINE in nodeInfo.length.
@@ -785,11 +826,18 @@ function findNodeOffset(
 
 			node = nextSibling;
 		} else {
-			if (
-				node.nodeType === Node.ELEMENT_NODE &&
-				(node as Element).hasAttribute("data-content")
-			) {
-				return nodeOffsetFromChild(node, index > 0);
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				if ((node as Element).hasAttribute("data-content")) {
+					return nodeOffsetFromChild(node, index > 0);
+				}
+
+				const ni = cache.get(node)!;
+				if (ni.beforeLength > 0) {
+					if (index < ni.beforeLength) {
+						return [node, 0];
+					}
+					index -= ni.beforeLength;
+				}
 			}
 
 			const firstChild = walker.firstChild();
