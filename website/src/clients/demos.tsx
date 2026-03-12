@@ -433,10 +433,9 @@ function* TodoEditable(
 											this.refresh();
 										}}
 									/>
-									<span style={checked ? {textDecoration: "line-through", opacity: "0.5"} : undefined}>
-										{match[2]}
-									</span>
-									{!match[2] && <br />}
+									{match[2]
+										? <span style={checked ? {textDecoration: "line-through", opacity: "0.5"} : undefined}>{match[2]}</span>
+										: <br />}
 								</div>
 							);
 						}
