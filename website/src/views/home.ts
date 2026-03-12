@@ -11,6 +11,7 @@ const RAINBOW_INITIAL = "Hello\nWorld\nRainbow\nText\n";
 const SOCIAL_INITIAL = "Check out #revise by @bikeshaving\nIt's at https://revise.js.org\n#javascript #editing @everyone\n";
 const TWEMOJI_INITIAL = "Hello World! \u{1F44B}\nRevise.js is \u{1F525}\u{1F525}\u{1F525}\nType some emoji: \u{1F60E}\u{2764}\u{FE0F}\u{1F680}\n";
 const CODE_INITIAL = "function greet(name) {\n  return 'Hello, ' + name;\n}\n\nconst message = greet('World');\nconsole.log(message);\n";
+const TODO_INITIAL = "- [x] Build content-area\n- [x] Build Edit data structure\n- [ ] Write documentation\n- [ ] Take over the world\n";
 
 const SIMPLE_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
@@ -267,12 +268,91 @@ console.log(message);
 
 renderer.render(<CodeEditable />, document.body);`;
 
+const TODO_CODE = `import type {Context} from "@b9g/crank";
+import {renderer} from "@b9g/crank/dom";
+import {CrankEditable, EditableState} from "@b9g/crankeditable";
+
+function* TodoEditable(this: Context) {
+  const state = new EditableState({
+    value: \`- [x] Build content-area
+- [x] Build Edit data structure
+- [ ] Write documentation
+- [ ] Take over the world
+\`,
+  });
+  for (const {} of this) {
+    const lines = state.value.split("\\n");
+    if (lines[lines.length - 1] === "") lines.pop();
+    let cursor = 0;
+    yield (
+      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+        <div class="editable" contenteditable="true" spellcheck="false">
+          {lines.map((line) => {
+            const lineStart = cursor;
+            const key = state.keyer.keyAt(cursor);
+            cursor += line.length + 1;
+            const match = line.match(/^(- \\[[ x]\\] )([\\s\\S]*)$/);
+            if (match) {
+              const prefix = match[1];
+              const checked = prefix === "- [x] ";
+              return (
+                <div key={key} data-contentbefore={prefix}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    data-content=""
+                    contenteditable="false"
+                    onclick={() => {
+                      const newPrefix = checked ? "- [ ] " : "- [x] ";
+                      state.setValue(
+                        state.value.slice(0, lineStart) +
+                        newPrefix +
+                        state.value.slice(lineStart + prefix.length),
+                        "user",
+                      );
+                      this.refresh();
+                    }}
+                  />
+                  <span style={checked
+                    ? {textDecoration: "line-through", opacity: "0.5"}
+                    : undefined}>
+                    {match[2] || <br />}
+                  </span>
+                </div>
+              );
+            }
+            return <div key={key}>{line || <br />}</div>;
+          })}
+        </div>
+      </CrankEditable>
+    );
+  }
+}
+
+renderer.render(<TodoEditable />, document.body);`;
+
 function renderInitialLines(text: string) {
 	const lines = text.split("\n");
 	if (lines[lines.length - 1] === "") lines.pop();
 	return lines.map((line: string) =>
 		jsx`<div>${line || jsx`<br />`}</div>`,
 	);
+}
+
+function renderTodoLines(text: string) {
+	const lines = text.split("\n");
+	if (lines[lines.length - 1] === "") lines.pop();
+	return lines.map((line: string) => {
+		const match = line.match(/^(- \[[ x]\] )([\s\S]*)$/);
+		if (match) {
+			const checked = match[1] === "- [x] ";
+			return jsx`<div data-contentbefore=${match[1]} style=${"padding-left:1.5em"}>
+				<input type="checkbox" checked=${checked} data-content="" contenteditable="false" style=${"margin-left:-1.5em;margin-right:0.25em;cursor:pointer"} />
+				<span style=${checked ? "text-decoration:line-through;opacity:0.5" : undefined}>${match[2] || jsx`<br />`}</span>
+			</div>`;
+		}
+		return jsx`<div>${line || jsx`<br />`}</div>`;
+	});
 }
 
 const sectionHeading = css`
@@ -400,6 +480,22 @@ export default function Home({url}: {url: string}) {
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${CODE_CODE} lang="tsx" editable=${true} previewId="demo-code" />
 						<${SerializeScript} class="props" value=${{code: CODE_CODE, lang: "tsx", editable: true, previewId: "demo-code"}} name="inline-code-block-props" />
+					</div>
+				</section>
+
+				<section>
+					<h2 class=${sectionHeading}>Todo List</h2>
+					<p class=${sectionDesc}>Checkbox prefixes with <code>data-contentbefore</code>.</p>
+					<div id="demo-todo" data-initial=${TODO_INITIAL} class=${previewClass}>
+						<content-area>
+							<div class="editable" contenteditable="true" spellcheck="false">
+								${renderTodoLines(TODO_INITIAL)}
+							</div>
+						</content-area>
+					</div>
+					<div class="code-block-container code-block-live">
+						<${InlineCodeBlock} value=${TODO_CODE} lang="tsx" editable=${true} previewId="demo-todo" />
+						<${SerializeScript} class="props" value=${{code: TODO_CODE, lang: "tsx", editable: true, previewId: "demo-todo"}} name="inline-code-block-props" />
 					</div>
 				</section>
 			</main>
