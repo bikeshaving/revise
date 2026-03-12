@@ -372,9 +372,23 @@ function* TodoEditable(
 						const todoMatch = line.match(/^(- \[[ x]\] )([\s\S]*)$/);
 						if (!todoMatch) return;
 						const prefix = todoMatch[1];
-						if ((ev.key === "Enter" && todoMatch[2] === "") ||
-							(ev.key === "Backspace" && pos === lineStart + prefix.length)) {
-							// Enter on empty todo or Backspace at start of content → remove prefix
+						if (ev.key === "Enter" && todoMatch[2] === "") {
+							// Enter on empty todo → remove prefix
+							ev.preventDefault();
+							state.setValue(
+								value.slice(0, lineStart) + value.slice(lineStart + prefix.length),
+								"user",
+							);
+							this.refresh();
+						} else if (ev.key === "Enter" && todoMatch[2] !== "") {
+							// Enter on non-empty todo → split and insert unchecked todo
+							ev.preventDefault();
+							const newValue =
+								value.slice(0, pos) + "\n- [ ] " + value.slice(pos);
+							state.setValue(newValue, "user");
+							this.refresh();
+						} else if (ev.key === "Backspace" && pos === lineStart + prefix.length) {
+							// Backspace at start of content → remove prefix
 							ev.preventDefault();
 							state.setValue(
 								value.slice(0, lineStart) + value.slice(lineStart + prefix.length),
