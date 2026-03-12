@@ -1,7 +1,7 @@
 import {jsx} from "@b9g/crank/standalone";
 import type {Context, Element as CrankElement} from "@b9g/crank";
 import {css} from "@emotion/css";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 import {Edit} from "@b9g/revise/edit.js";
 import type {Token} from "prismjs";
 import {tokenize} from "../utils/prism.js";
@@ -103,7 +103,7 @@ export function* CodeEditor(
 	}
 
 	if (!IS_CLIENT) {
-		// SSR: render static HTML matching CrankEditable's DOM structure
+		// SSR: render static HTML matching Editable's DOM structure
 		const keyer = {
 			_nextKey: 0,
 			keyAt() {
@@ -184,7 +184,7 @@ export function* CodeEditor(
 		value = state.value;
 
 		yield jsx`
-			<${CrankEditable}
+			<${Editable}
 				state=${state}
 				onstatechange=${() => this.refresh()}
 			>
@@ -198,7 +198,7 @@ export function* CodeEditor(
 				>
 					${renderLines(value, language, state.keyer)}
 				</pre>
-			</${CrankEditable}>
+			</${Editable}>
 		`;
 	}
 }

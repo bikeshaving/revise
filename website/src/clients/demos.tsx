@@ -1,7 +1,7 @@
 import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Element} from "@b9g/crank/crank.js";
 import {renderer} from "@b9g/crank/dom.js";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 import {parse as parseEmoji} from "@twemoji/parser";
 import type {Token} from "prismjs";
@@ -22,7 +22,7 @@ function* SimpleEditable(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<pre class="editable" contenteditable="true" spellcheck={false}>
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
@@ -34,7 +34,7 @@ function* SimpleEditable(
 						);
 					})}
 				</pre>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -64,7 +64,7 @@ function* RainbowEditable(
 		}
 
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
@@ -83,7 +83,7 @@ function* RainbowEditable(
 						);
 					})}
 				</div>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -122,7 +122,7 @@ function* CodeEditable(
 		const lines = tokenize(state.value, "typescript");
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<pre class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
@@ -136,7 +136,7 @@ function* CodeEditable(
 						);
 					})}
 				</pre>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -194,7 +194,7 @@ function* SocialEditable(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
@@ -206,7 +206,7 @@ function* SocialEditable(
 						);
 					})}
 				</div>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -261,7 +261,7 @@ function* TwemojiEditable(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children">
 					{lines.map((line) => {
 						const key = state.keyer.keyAt(cursor);
@@ -273,7 +273,7 @@ function* TwemojiEditable(
 						);
 					})}
 				</div>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -292,7 +292,7 @@ function* BlockquoteEditable(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div class="editable" contenteditable="true" spellcheck={false}					onkeydown={(ev: KeyboardEvent) => {
 						if (ev.key === "Enter" && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
 							const area = (ev.currentTarget as HTMLElement).closest("content-area") as any;
@@ -336,7 +336,7 @@ function* BlockquoteEditable(
 						);
 					})}
 				</div>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -355,7 +355,7 @@ function* TodoEditable(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div class="editable" contenteditable="true" spellcheck={false}					onkeydown={(ev: KeyboardEvent) => {
 						if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
 						const area = (ev.currentTarget as HTMLElement).closest("content-area") as any;
@@ -449,7 +449,7 @@ function* TodoEditable(
 						);
 					})}
 				</div>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -468,7 +468,7 @@ function* EditableTitle(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<h1
 					contenteditable="true"
 					spellcheck={false}
@@ -489,7 +489,7 @@ function* EditableTitle(
 						);
 					})}
 				</h1>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }
@@ -507,7 +507,7 @@ function* EditableTagline(
 
 		let cursor = 0;
 		yield (
-			<CrankEditable state={state} onstatechange={() => this.refresh()}>
+			<Editable state={state} onstatechange={() => this.refresh()}>
 				<p
 					contenteditable="true"
 					spellcheck={false}
@@ -529,7 +529,7 @@ function* EditableTagline(
 						);
 					})}
 				</p>
-			</CrankEditable>
+			</Editable>
 		);
 	}
 }

@@ -16,7 +16,7 @@ const BLOCKQUOTE_INITIAL = "> To be or not to be,\n> that is the question.\nHaml
 
 const SIMPLE_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 function* SimpleEditable(this: Context) {
   const state = new EditableState({
@@ -30,7 +30,7 @@ Undo with \${/Win|Linux/.test(navigator.platform) ? "Ctrl" : "Cmd"}+Z.
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <pre class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
@@ -38,7 +38,7 @@ Undo with \${/Win|Linux/.test(navigator.platform) ? "Ctrl" : "Cmd"}+Z.
             return <div key={key}>{line || <br />}</div>;
           })}
         </pre>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
@@ -47,7 +47,7 @@ renderer.render(<SimpleEditable />, document.body);`;
 
 const RAINBOW_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 const COLORS = [
   "#FF0000", "#FFA500", "#FFDC00",
@@ -67,7 +67,7 @@ Text
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <div class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
@@ -80,7 +80,7 @@ Text
             return <div key={key}>{chars}</div>;
           })}
         </div>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
@@ -89,7 +89,7 @@ renderer.render(<RainbowEditable />, document.body);`;
 
 const SOCIAL_CODE = `import type {Context, Element} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 const PATTERN = /(#\\w+)|(@\\w+)|(https?:\\/\\/[^\\s]+)/g;
 
@@ -133,7 +133,7 @@ Visit https://revise.js.org
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <div class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
@@ -145,7 +145,7 @@ Visit https://revise.js.org
             );
           })}
         </div>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
@@ -154,7 +154,7 @@ renderer.render(<SocialEditable />, document.body);`;
 
 const TWEMOJI_CODE = `import type {Context, Element} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState, ContentAreaElement} from "@b9g/crankeditable";
+import {Editable, EditableState, ContentAreaElement} from "@b9g/crankeditable";
 import {parse as parseEmoji} from "@twemoji/parser";
 
 if (!customElements.get("content-area")) {
@@ -196,7 +196,7 @@ Type some emoji: 😎❤️🚀
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <div class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
@@ -208,7 +208,7 @@ Type some emoji: 😎❤️🚀
             );
           })}
         </div>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
@@ -217,7 +217,7 @@ renderer.render(<TwemojiEditable />, document.body);`;
 
 const CODE_CODE = `import type {Context, Element} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 const KW = /\\b(function|const|let|var|return|if|else|for|while|class|import|export|from|new|typeof)\\b/g;
 
@@ -249,7 +249,7 @@ console.log(message);
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <pre class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
@@ -262,7 +262,7 @@ console.log(message);
             );
           })}
         </pre>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
@@ -271,7 +271,7 @@ renderer.render(<CodeEditable />, document.body);`;
 
 const TODO_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 function* TodoEditable(this: Context) {
   const state = new EditableState({
@@ -286,7 +286,7 @@ function* TodoEditable(this: Context) {
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <div class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const lineStart = cursor;
@@ -325,7 +325,7 @@ function* TodoEditable(this: Context) {
             return <div key={key}>{line || <br />}</div>;
           })}
         </div>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
@@ -334,7 +334,7 @@ renderer.render(<TodoEditable />, document.body);`;
 
 const BLOCKQUOTE_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
-import {CrankEditable, EditableState} from "@b9g/crankeditable";
+import {Editable, EditableState} from "@b9g/crankeditable";
 
 function* BlockquoteEditable(this: Context) {
   const state = new EditableState({
@@ -348,7 +348,7 @@ Hamlet, Act 3, Scene 1
     if (lines[lines.length - 1] === "") lines.pop();
     let cursor = 0;
     yield (
-      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+      <Editable state={state} onstatechange={() => this.refresh()}>
         <div class="editable" contenteditable="true" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
@@ -368,7 +368,7 @@ Hamlet, Act 3, Scene 1
             return <div key={key}>{line || <br />}</div>;
           })}
         </div>
-      </CrankEditable>
+      </Editable>
     );
   }
 }
