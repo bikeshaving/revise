@@ -293,8 +293,7 @@ function* BlockquoteEditable(
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children"
-					onkeydown={(ev: KeyboardEvent) => {
+				<div class="editable" contenteditable="true" spellcheck={false}					onkeydown={(ev: KeyboardEvent) => {
 						if (ev.key === "Enter" && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
 							const area = (ev.currentTarget as HTMLElement).closest("content-area") as any;
 							if (!area) return;
@@ -357,8 +356,7 @@ function* TodoEditable(
 		let cursor = 0;
 		yield (
 			<CrankEditable state={state} onstatechange={() => this.refresh()}>
-				<div class="editable" contenteditable="true" spellcheck={false} hydrate="!children"
-					onkeydown={(ev: KeyboardEvent) => {
+				<div class="editable" contenteditable="true" spellcheck={false}					onkeydown={(ev: KeyboardEvent) => {
 						if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
 						const area = (ev.currentTarget as HTMLElement).closest("content-area") as any;
 						if (!area) return;
@@ -383,10 +381,15 @@ function* TodoEditable(
 						} else if (ev.key === "Enter" && todoMatch[2] !== "") {
 							// Enter on non-empty todo → split and insert unchecked todo
 							ev.preventDefault();
+							const cursorPos = pos + "\n- [ ] ".length;
 							const newValue =
 								value.slice(0, pos) + "\n- [ ] " + value.slice(pos);
 							state.setValue(newValue, "user");
 							this.refresh();
+							// Fix cursor: selectionRangeFromEdit returns a range
+							// spanning the insert, but we want a collapsed cursor
+							// after the prefix.
+							setTimeout(() => area.setSelectionRange(cursorPos, cursorPos), 0);
 						} else if (ev.key === "Backspace" && pos === lineStart + prefix.length) {
 							// Backspace at start of content → remove prefix
 							ev.preventDefault();
@@ -433,9 +436,9 @@ function* TodoEditable(
 											this.refresh();
 										}}
 									/>
-									{match[2]
-										? <span style={checked ? {textDecoration: "line-through", opacity: "0.5"} : undefined}>{match[2]}</span>
-										: <br />}
+									<span style={checked ? {textDecoration: "line-through", opacity: "0.5"} : undefined}>
+										{match[2] || <br />}
+									</span>
 								</div>
 							);
 						}

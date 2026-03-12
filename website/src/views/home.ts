@@ -541,7 +541,7 @@ export default function Home({url}: {url: string}) {
 
 				<section>
 					<h2 class=${sectionHeading}>Blockquote</h2>
-					<p class=${sectionDesc}>Styled prefixes with <code>data-contentbefore</code>.</p>
+					<p class=${sectionDesc}>Styled prefixes with <code>data-contentbefore</code>. Lines starting with <code>${"> "}</code> become quotes.</p>
 					<div id="demo-blockquote" data-initial=${BLOCKQUOTE_INITIAL} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
@@ -557,7 +557,7 @@ export default function Home({url}: {url: string}) {
 
 				<section>
 					<h2 class=${sectionHeading}>Todo List</h2>
-					<p class=${sectionDesc}>Checkbox prefixes with <code>data-contentbefore</code>.</p>
+					<p class=${sectionDesc}>Checkbox prefixes with <code>data-contentbefore</code>. Lines starting with <code>${"- [ ] "}</code> or <code>${"- [x] "}</code> become todos.</p>
 					<div id="demo-todo" data-initial=${TODO_INITIAL} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
