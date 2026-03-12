@@ -100,6 +100,199 @@ Again, it’s hard to overstate what an engineering marvel the `Edit` data struc
 
 The vision behind the Edit data structure is one of data abundance. We live in a world of 4K video streaming and high-frequency trading. Surely we can afford to store every edit to a document, forever. When edits are first-class data, not ephemeral input events that vanish after being applied, you can replay history, sync across devices, audit changes, review deletions, or do things nobody has thought of yet. The goal is to make this not just possible but natural.
 
-## Crank integration
+## Declarative text editors
+
+Everything described so far is framework-agnostic. The `<content-area>` element and the `Edit` class are plain JavaScript: you could theoretically use them with React, Vue, or vanilla JS. But to actually build an editor, you need to render decorated content back into the DOM, and this is where things get tricky.
+
+Most editing libraries solve this by owning the entire rendering process. Vertically integrated editors like ProseMirror, CodeMirror and Quill each have their own rendering layer. Others like Draft.js, Slate, or the newer Svedit are tied to specific frameworks, but still own the rendering pipeline: you write Slate “elements” and “leaves,” not React components. Even “framework agnostic” editors do their own DOM manipulation and expose plugin APIs rather than letting you use your framework directly. Want to render an inline image with a tooltip? You’re writing a plugin, not a component.
+
+Revise takes the opposite approach. Rather than owning the render, it actually relies on the framework to perform DOM mutations. The `<content-area>` element dispatches a `contentchange` event, your framework updates the DOM however it likes, and `<content-area>` observes the result. The document is never a tree of editor-specific nodes, it’s whatever HTML your framework produces, parsed back into a string.
+
+This inversion is powerful but introduces two problems. First, when the framework re-renders, it mutates the DOM, and `<content-area>` can't tell the difference between a user typing and the framework correcting the DOM. Without intervention, every framework render would fire another `contentchange`, creating an infinite loop. Second, framework renders destroy and recreate DOM nodes, which means the browser's selection — the cursor — is lost after every render.
+
+The [Crank.js](https://crank.js.org) integration solves both problems. After each render, the `Editable` component calls `el.source("render")`, which tags the pending mutations so that `<content-area>` knows to suppress the `contentchange` event. And before the render, it captures the selection position and restores it afterward using `el.setSelectionRange()`. The full cycle looks like this:
+
+1. User types → `contentchange` fires with `source: null`
+2. The handler calls `preventDefault()`, which walks the mutation records backward to undo the DOM changes
+3. The edit is applied to an `EditableState` object, which manages the document value, undo history, and stable line keys
+4. The framework re-renders the decorated content
+5. `el.source("render")` tags the mutations → the resulting `contentchange` is suppressed
+6. `el.setSelectionRange()` restores the cursor
+
+The `EditableState` class deserves mention here. It holds the current value, maintains an undo/redo stack by composing edits, and provides a `Keyer` that assigns stable keys so that virtual DOM renderers like Crank don’t accidentally re-render every line when the user hits Enter.
+
+Here’s a complete rainbow editor in Crank.js — each character gets a color, and the whole thing is a normal Crank component:
+
+```tsx live
+import type {Context} from "@b9g/crank";
+import {renderer} from "@b9g/crank/dom";
+import {Editable, EditableState} from "@b9g/crankeditable";
+
+const COLORS = [
+  "#FF0000", "#FFA500", "#FFDC00",
+  "#008000", "#0000FF", "#4B0082", "#800080",
+];
+
+function* RainbowEditable(this: Context) {
+  const state = new EditableState({
+    value: `Hello
+World
+Rainbow
+Text
+`,
+  });
+  for (const {} of this) {
+    const lines = state.value.split("\n");
+    if (lines[lines.length - 1] === "") lines.pop();
+    let cursor = 0;
+    yield (
+      <Editable state={state} onstatechange={() => this.refresh()}>
+        <div class="editable" contenteditable="true" spellcheck="false">
+          {lines.map((line) => {
+            const key = state.keyer.keyAt(cursor);
+            cursor += line.length + 1;
+            const chars = line
+              ? [...line].map((char, i) => (
+                  <span style={"color: " + COLORS[i % COLORS.length]}>{char}</span>
+                ))
+              : <br />;
+            return <div key={key}>{chars}</div>;
+          })}
+        </div>
+      </Editable>
+    );
+  }
+}
+
+renderer.render(<RainbowEditable />, document.body);
+```
+
+There’s nothing editor-specific about the rendering — it’s just JSX. The `Editable` wrapper handles the `contentchange` cycle, and `EditableState` tracks the value and undo history. You split the string into lines, render each line however you want, and the framework takes care of the rest.
+
+Sometimes you want an element to represent text that isn’t its `textContent`. An emoji rendered as an `<img>` tag has no text content, but it should count as a character in the string. The `data-content` attribute tells `<content-area>` to use its value instead of walking the element’s children:
+
+```tsx live
+import type {Context, Element} from "@b9g/crank";
+import {renderer} from "@b9g/crank/dom";
+import {Editable, EditableState, ContentAreaElement} from "@b9g/crankeditable";
+import {parse as parseEmoji} from "@twemoji/parser";
+
+if (!customElements.get("content-area")) {
+  customElements.define("content-area", ContentAreaElement);
+}
+
+function renderTwemoji(text: string): (Element | string)[] {
+  const entities = parseEmoji(text);
+  if (!entities.length) return [text];
+  const result: (Element | string)[] = [];
+  let lastIndex = 0;
+  for (const entity of entities) {
+    const [start, end] = entity.indices;
+    if (start > lastIndex) result.push(text.slice(lastIndex, start));
+    result.push(
+      <img
+        data-content={entity.text}
+        src={entity.url}
+        alt={entity.text}
+        draggable={false}
+        style="height:1.2em;width:1.2em;vertical-align:middle;display:inline-block"
+      />
+    );
+    lastIndex = end;
+  }
+  if (lastIndex < text.length) result.push(text.slice(lastIndex));
+  return result;
+}
+
+function* TwemojiEditable(this: Context) {
+  const state = new EditableState({
+    value: `Hello World! 👋
+Revise.js is 🔥🔥🔥
+Type some emoji: 😎❤️🚀
+`,
+  });
+  for (const {} of this) {
+    const lines = state.value.split("\n");
+    if (lines[lines.length - 1] === "") lines.pop();
+    let cursor = 0;
+    yield (
+      <Editable state={state} onstatechange={() => this.refresh()}>
+        <div class="editable" contenteditable="true" spellcheck="false">
+          {lines.map((line) => {
+            const key = state.keyer.keyAt(cursor);
+            cursor += line.length + 1;
+            return (
+              <div key={key}>
+                {line ? renderTwemoji(line) : <br />}
+              </div>
+            );
+          })}
+        </div>
+      </Editable>
+    );
+  }
+}
+
+renderer.render(<TwemojiEditable />, document.body);
+```
+
+You could write your own integration for React or any other framework — the `source()` and `setSelectionRange()` APIs are public. Here’s a vanilla JS rainbow editor using `innerHTML`, no framework at all:
+
+```js live
+import {ContentAreaElement} from "@b9g/revise/contentarea.js";
+import {EditableState} from "@b9g/revise/state.js";
+
+if (!customElements.get("content-area")) {
+  customElements.define("content-area", ContentAreaElement);
+}
+
+const COLORS = [
+  "#FF0000", "#FFA500", "#FFDC00",
+  "#008000", "#0000FF", "#4B0082", "#800080",
+];
+
+const state = new EditableState({
+  value: `Hello
+World
+Rainbow
+Text
+`,
+});
+
+const container = document.body;
+container.innerHTML =
+  `<content-area><div class="editable" contenteditable="true" spellcheck="false"></div></content-area>`;
+
+const area = container.querySelector("content-area");
+const editable = container.querySelector("[contenteditable]");
+
+function render() {
+  const lines = state.value.split("\n");
+  if (lines[lines.length - 1] === "") lines.pop();
+  editable.innerHTML = lines.map((line) =>
+    `<div>${line
+      ? [...line].map((ch, i) =>
+          `<span style="color:${COLORS[i % COLORS.length]}">${ch}</span>`
+        ).join("")
+      : "<br>"}</div>`
+  ).join("");
+  // source() must be called immediately after DOM mutations,
+  // before any other content-area API (which would trigger validate).
+  area.source("render");
+}
+
+area.addEventListener("contentchange", (ev) => {
+  if (ev.detail.source === "render") return;
+  ev.preventDefault();
+  state.applyEdit(ev.detail.edit);
+  render();
+});
+
+requestAnimationFrame(() => render());
+```
+
+It’s slower (no diffing, no keyed reconciliation) and missing niceties like scroll-into-view, but it works. The handshake is the same: listen for `contentchange`, call `preventDefault()`, apply the edit, re-render, tag with `source("render")`, restore the selection.
 
 ## Crossing the river
+
+If you’re a framework author, I’d be happy to help you write adapters for your specific framework and Revise.js, so long as its execution model isn’t terrifying insanity *cough* `useLayoutEffect()` *cough*. It might involve a lot of debugging of DOM code, but it’s actually pretty easy to encapsulate the Revise.js handshake, and once you do, you can just say your editor supports `contenteditable`.

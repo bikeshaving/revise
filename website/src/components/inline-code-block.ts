@@ -81,6 +81,9 @@ export function* InlineCodeBlock(
 
 		executePreview = debounce(runPreview, 1500) as () => void;
 
+		// Run preview immediately on mount
+		runPreview();
+
 		this.cleanup(() => {
 			if (prevScript) {
 				prevScript.remove();
