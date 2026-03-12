@@ -12,6 +12,7 @@ const SOCIAL_INITIAL = "Check out #revise by @bikeshaving\nIt's at https://revis
 const TWEMOJI_INITIAL = "Hello World! \u{1F44B}\nRevise.js is \u{1F525}\u{1F525}\u{1F525}\nType some emoji: \u{1F60E}\u{2764}\u{FE0F}\u{1F680}\n";
 const CODE_INITIAL = "function greet(name) {\n  return 'Hello, ' + name;\n}\n\nconst message = greet('World');\nconsole.log(message);\n";
 const TODO_INITIAL = "- [x] Build content-area\n- [x] Build Edit data structure\n- [ ] Write documentation\n- [ ] Take over the world\n";
+const BLOCKQUOTE_INITIAL = "> To be or not to be,\n> that is the question.\nHamlet, Act 3, Scene 1\n";
 
 const SIMPLE_CODE = `import type {Context} from "@b9g/crank";
 import {renderer} from "@b9g/crank/dom";
@@ -331,6 +332,61 @@ function* TodoEditable(this: Context) {
 
 renderer.render(<TodoEditable />, document.body);`;
 
+const BLOCKQUOTE_CODE = `import type {Context} from "@b9g/crank";
+import {renderer} from "@b9g/crank/dom";
+import {CrankEditable, EditableState} from "@b9g/crankeditable";
+
+function* BlockquoteEditable(this: Context) {
+  const state = new EditableState({
+    value: \`> To be or not to be,
+> that is the question.
+Hamlet, Act 3, Scene 1
+\`,
+  });
+  for (const {} of this) {
+    const lines = state.value.split("\\n");
+    if (lines[lines.length - 1] === "") lines.pop();
+    let cursor = 0;
+    yield (
+      <CrankEditable state={state} onstatechange={() => this.refresh()}>
+        <div class="editable" contenteditable="true" spellcheck="false">
+          {lines.map((line) => {
+            const key = state.keyer.keyAt(cursor);
+            cursor += line.length + 1;
+            const match = line.match(/^(> )([\\s\\S]*)$/);
+            if (match) {
+              return (
+                <div key={key} data-contentbefore="> " style={{
+                  borderLeft: "3px solid currentColor",
+                  paddingLeft: "0.5em",
+                  opacity: 0.7,
+                }}>
+                  {match[2] || <br />}
+                </div>
+              );
+            }
+            return <div key={key}>{line || <br />}</div>;
+          })}
+        </div>
+      </CrankEditable>
+    );
+  }
+}
+
+renderer.render(<BlockquoteEditable />, document.body);`;
+
+function renderBlockquoteLines(text: string) {
+	const lines = text.split("\n");
+	if (lines[lines.length - 1] === "") lines.pop();
+	return lines.map((line: string) => {
+		const match = line.match(/^(> )([\s\S]*)$/);
+		if (match) {
+			return jsx`<div data-contentbefore="> " style=${"border-left:3px solid var(--highlight-color);padding-left:0.5em;margin-left:0.25em;color:var(--text-muted)"}>${match[2] || jsx`<br />`}</div>`;
+		}
+		return jsx`<div>${line || jsx`<br />`}</div>`;
+	});
+}
+
 function renderInitialLines(text: string) {
 	const lines = text.split("\n");
 	if (lines[lines.length - 1] === "") lines.pop();
@@ -480,6 +536,22 @@ export default function Home({url}: {url: string}) {
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${CODE_CODE} lang="tsx" editable=${true} previewId="demo-code" />
 						<${SerializeScript} class="props" value=${{code: CODE_CODE, lang: "tsx", editable: true, previewId: "demo-code"}} name="inline-code-block-props" />
+					</div>
+				</section>
+
+				<section>
+					<h2 class=${sectionHeading}>Blockquote</h2>
+					<p class=${sectionDesc}>Styled prefixes with <code>data-contentbefore</code>.</p>
+					<div id="demo-blockquote" data-initial=${BLOCKQUOTE_INITIAL} class=${previewClass}>
+						<content-area>
+							<div class="editable" contenteditable="true" spellcheck="false">
+								${renderBlockquoteLines(BLOCKQUOTE_INITIAL)}
+							</div>
+						</content-area>
+					</div>
+					<div class="code-block-container code-block-live">
+						<${InlineCodeBlock} value=${BLOCKQUOTE_CODE} lang="tsx" editable=${true} previewId="demo-blockquote" />
+						<${SerializeScript} class="props" value=${{code: BLOCKQUOTE_CODE, lang: "tsx", editable: true, previewId: "demo-blockquote"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
