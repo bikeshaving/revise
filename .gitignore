@@ -6,3 +6,4 @@ build
 *.log
 package-lock.json
 .playwright-mcp/
+test-results/

@@ -66,11 +66,13 @@
     "build": "libuild build",
     "publish": "libuild publish",
     "test": "playwright-test --runner uvu",
+    "test:e2e": "NODE_PATH=website/node_modules bun build e2e/fixtures/todo.tsx e2e/fixtures/blockquote.tsx --outdir e2e/fixtures/dist --bundle --target browser && playwright test",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
   },
   "devDependencies": {
     "@b9g/libuild": "^0.1.24",
+    "@playwright/test": "^1.58.2",
     "fast-check": "^4.5.3",
     "playwright-test": "^8.1.1",
     "typescript": "^5.0.0",
