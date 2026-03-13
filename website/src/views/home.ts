@@ -299,6 +299,7 @@ function* TodoEditable(this: Context) {
             const area = (ev.currentTarget as HTMLElement)
               .closest("content-area") as any;
             const pos = area.selectionStart;
+            if (pos !== area.selectionEnd) return;
             const val = state.value;
             const {start, end} = getLineAt(val, pos);
             const line = val.slice(start, end);
@@ -409,6 +410,7 @@ Hamlet, Act 3, Scene 1
             const area = (ev.currentTarget as HTMLElement)
               .closest("content-area") as any;
             const pos = area.selectionStart;
+            if (pos !== area.selectionEnd) return;
             const val = state.value;
             const {start, end} = getLineAt(val, pos);
             const line = val.slice(start, end);

@@ -59,6 +59,16 @@ test.describe("Todo demo", () => {
 		expect(value).not.toContain("- [x] Build content-area\n- [x] Build Edit data structure");
 	});
 
+	test("select all + delete removes all content", async ({page}) => {
+		const editable = page.locator("[contenteditable='true']");
+		await editable.click();
+		await page.keyboard.press("Meta+a");
+		await page.keyboard.press("Backspace");
+		const value = await areaValue(page);
+		// Only the virtual prefix of the surviving empty div remains
+		expect(value).toMatch(/^- \[[ x]\] \n$/);
+	});
+
 	test("clicking checkbox toggles checked state", async ({page}) => {
 		const checkbox = page.locator("input[type=checkbox]").nth(2);
 		await checkbox.click();
@@ -106,6 +116,16 @@ test.describe("Blockquote demo", () => {
 		const value = await areaValue(page);
 		const lines = value.split("\n");
 		expect(lines[1]).toBe("");
+	});
+
+	test("select all + delete removes all content", async ({page}) => {
+		const editable = page.locator("[contenteditable='true']");
+		await editable.click();
+		await page.keyboard.press("Meta+a");
+		await page.keyboard.press("Backspace");
+		const value = await areaValue(page);
+		// Only the virtual prefix of the surviving empty div remains
+		expect(value).toBe("> \n");
 	});
 
 	test("Backspace at start of blockquote content removes prefix", async ({page}) => {

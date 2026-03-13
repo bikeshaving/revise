@@ -32,6 +32,7 @@ function* TodoEditable(this: Context) {
 							"content-area",
 						) as any;
 						const pos = area.selectionStart;
+						if (pos !== area.selectionEnd) return;
 						const val = state.value;
 						const {start, end} = getLineAt(val, pos);
 						const line = val.slice(start, end);
