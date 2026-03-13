@@ -10,7 +10,7 @@
         "@b9g/crankeditable": "^0.1.0",
         "@b9g/platform": "^0.1.17",
         "@b9g/platform-bun": "^0.1.16",
-        "@b9g/revise": "^0.1.5",
+        "@b9g/revise": "^0.1.6",
         "@b9g/router": "^0.2.5",
         "@b9g/shovel": "^0.2.16",
         "@emotion/css": "^11.13.5",
@@ -62,7 +62,7 @@
 
     "@b9g/platform-node": ["@b9g/platform-node@0.1.17", "", { "dependencies": { "@b9g/cache": "^0.2.2", "@b9g/http-errors": "^0.2.1", "@b9g/node-webworker": "^0.2.1", "@b9g/platform": "^0.1.17", "@logtape/logtape": "^1.2.0" } }, "sha512-O6IjLNf42VlG8Knsge/DTgDWcL8Wf8T0F04VfhRw14o0MuOby51DLbRNU4HF9tEuncV4h0+d07JH9ROaUhc7sQ=="],
 
-    "@b9g/revise": ["@b9g/revise@0.1.5", "", {}, "sha512-MQcf1irLvtdgg0yp3kPtucPvLuTNLBhwZ6hCJ5O9/Caaf0bgn7EMj3IUfyaekk9ZF/SCO1E6YS4QxjpVAae83A=="],
+    "@b9g/revise": ["@b9g/revise@0.1.6", "", {}, "sha512-uB3NucDi48XGw4oAZhfVVNzaLoBfTUOgtqhMVJl/yXFIsoTGcfSWD073jqHqwTFyd0ivSeisv6SMq08M2K096A=="],
 
     "@b9g/router": ["@b9g/router@0.2.5", "", { "dependencies": { "@b9g/http-errors": "^0.2.1", "@b9g/match-pattern": "^0.2.1", "@logtape/logtape": "^2.0.0" } }, "sha512-KPYntpC6TxjlgQU/8nFcfsoOgH4u4RfLQTatGza3LXFNtZOX3tbnDTrfEgKSv/QXQ7t1YdABgqq1MtiW2OB5tQ=="],
 

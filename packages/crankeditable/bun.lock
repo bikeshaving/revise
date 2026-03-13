@@ -21,7 +21,7 @@
 
     "@b9g/libuild": ["@b9g/libuild@0.1.24", "", { "dependencies": { "commander": "^14.0.2", "esbuild": "^0.19.0", "expect": "^30.2.0", "glob": "^13.0.0" }, "peerDependencies": { "playwright": "^1.40.0", "typescript": "^5.0.0" }, "optionalPeers": ["playwright", "typescript"], "bin": { "libuild": "src/cli.js" } }, "sha512-DlHAXfXrIXSaIQle3PzjysXXC4sTE9rn2JxWK9HSO7S4HUyyGCSMpjyBFy1MrpZ7ZfT8nD9BXDNXt4nJEqUeWw=="],
 
-    "@b9g/revise": ["@b9g/revise@0.1.4", "", {}, "sha512-Dc1/KtSgy1P9eAW/gDvXyXuriB5ePFKUo+eTO8RGTgGRf/aqj2ZaIll/OXVEK68hqZipeGJNWYHGxykIJfHIbg=="],
+    "@b9g/revise": ["@b9g/revise@0.1.6", "", {}, "sha512-uB3NucDi48XGw4oAZhfVVNzaLoBfTUOgtqhMVJl/yXFIsoTGcfSWD073jqHqwTFyd0ivSeisv6SMq08M2K096A=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 
