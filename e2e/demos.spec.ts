@@ -59,14 +59,16 @@ test.describe("Todo demo", () => {
 		expect(value).not.toContain("- [x] Build content-area\n- [x] Build Edit data structure");
 	});
 
-	test("select all + delete removes all content", async ({page}) => {
+	test("select all + delete clears content", async ({page}) => {
 		const editable = page.locator("[contenteditable='true']");
 		await editable.click();
 		await page.keyboard.press("Meta+a");
 		await page.keyboard.press("Backspace");
+		// First backspace leaves the virtual prefix on the surviving div
+		await page.keyboard.press("Backspace");
+		// Second backspace removes the empty prefix
 		const value = await areaValue(page);
-		// Only the virtual prefix of the surviving empty div remains
-		expect(value).toMatch(/^- \[[ x]\] \n$/);
+		expect(value).toBe("\n");
 	});
 
 	test("clicking checkbox toggles checked state", async ({page}) => {
@@ -118,14 +120,16 @@ test.describe("Blockquote demo", () => {
 		expect(lines[1]).toBe("");
 	});
 
-	test("select all + delete removes all content", async ({page}) => {
+	test("select all + delete clears content", async ({page}) => {
 		const editable = page.locator("[contenteditable='true']");
 		await editable.click();
 		await page.keyboard.press("Meta+a");
 		await page.keyboard.press("Backspace");
+		// First backspace leaves the virtual prefix on the surviving div
+		await page.keyboard.press("Backspace");
+		// Second backspace removes the empty prefix
 		const value = await areaValue(page);
-		// Only the virtual prefix of the surviving empty div remains
-		expect(value).toBe("> \n");
+		expect(value).toBe("\n");
 	});
 
 	test("Backspace at start of blockquote content removes prefix", async ({page}) => {

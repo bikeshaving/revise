@@ -57,16 +57,24 @@ function* TodoEditable(this: Context) {
 								area.setSelectionRange(pos + 7, pos + 7);
 								return;
 							}
-						} else if (
-							ev.key === "Backspace" &&
-							pos === start + match[1].length
-						) {
-							ev.preventDefault();
-							state.setValue(
-								val.slice(0, Math.max(0, start - 1)) +
-									val.slice(start + match[1].length),
-								"user",
-							);
+						} else if (ev.key === "Backspace") {
+							if (line === match[1]) {
+								ev.preventDefault();
+								state.setValue(
+									val.slice(0, start) +
+										val.slice(start + match[1].length),
+									"user",
+								);
+							} else if (pos === start + match[1].length) {
+								ev.preventDefault();
+								state.setValue(
+									val.slice(0, Math.max(0, start - 1)) +
+										val.slice(start + match[1].length),
+									"user",
+								);
+							} else {
+								return;
+							}
 						} else {
 							return;
 						}

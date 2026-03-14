@@ -54,16 +54,24 @@ Hamlet, Act 3, Scene 1
 								area.setSelectionRange(pos + 3, pos + 3);
 								return;
 							}
-						} else if (
-							ev.key === "Backspace" &&
-							pos === start + 2
-						) {
-							ev.preventDefault();
-							state.setValue(
-								val.slice(0, Math.max(0, start - 1)) +
-									val.slice(start + 2),
-								"user",
-							);
+						} else if (ev.key === "Backspace") {
+							if (line === "> ") {
+								ev.preventDefault();
+								state.setValue(
+									val.slice(0, start) +
+										val.slice(start + 2),
+									"user",
+								);
+							} else if (pos === start + 2) {
+								ev.preventDefault();
+								state.setValue(
+									val.slice(0, Math.max(0, start - 1)) +
+										val.slice(start + 2),
+									"user",
+								);
+							} else {
+								return;
+							}
 						} else {
 							return;
 						}

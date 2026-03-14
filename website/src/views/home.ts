@@ -323,14 +323,25 @@ function* TodoEditable(this: Context) {
                 area.setSelectionRange(pos + 7, pos + 7);
                 return;
               }
-            } else if (ev.key === "Backspace" && pos === start + match[1].length) {
-              ev.preventDefault();
-              // Remove prefix and merge with previous line
-              state.setValue(
-                val.slice(0, Math.max(0, start - 1))
-                  + val.slice(start + match[1].length),
-                "user",
-              );
+            } else if (ev.key === "Backspace") {
+              if (line === match[1]) {
+                // Empty todo: remove prefix
+                ev.preventDefault();
+                state.setValue(
+                  val.slice(0, start) + val.slice(start + match[1].length),
+                  "user",
+                );
+              } else if (pos === start + match[1].length) {
+                ev.preventDefault();
+                // Remove prefix and merge with previous line
+                state.setValue(
+                  val.slice(0, Math.max(0, start - 1))
+                    + val.slice(start + match[1].length),
+                  "user",
+                );
+              } else {
+                return;
+              }
             } else {
               return;
             }
@@ -433,14 +444,25 @@ Hamlet, Act 3, Scene 1
                 area.setSelectionRange(pos + 3, pos + 3);
                 return;
               }
-            } else if (ev.key === "Backspace" && pos === start + 2) {
-              ev.preventDefault();
-              // Remove prefix and merge with previous line
-              state.setValue(
-                val.slice(0, Math.max(0, start - 1))
-                  + val.slice(start + 2),
-                "user",
-              );
+            } else if (ev.key === "Backspace") {
+              if (line === "> ") {
+                // Empty quote: remove prefix
+                ev.preventDefault();
+                state.setValue(
+                  val.slice(0, start) + val.slice(start + 2),
+                  "user",
+                );
+              } else if (pos === start + 2) {
+                ev.preventDefault();
+                // Remove prefix and merge with previous line
+                state.setValue(
+                  val.slice(0, Math.max(0, start - 1))
+                    + val.slice(start + 2),
+                  "user",
+                );
+              } else {
+                return;
+              }
             } else {
               return;
             }
