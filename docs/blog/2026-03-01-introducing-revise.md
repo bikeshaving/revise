@@ -1,6 +1,6 @@
 ---
 title: Introducing Revise.js
-description: Revise.js is a JavaScript library for building rich text editors using low-level foundations that work with contenteditable instead of against it.
+description: Introducing Revise.js, a foundational library for building contenteditable-based web text editors, with a web component that reads the DOM as a string, an algebraic edit data structure, and a declarative component model.
 publish: true
 author: Brian Kim
 authorURL: https://github.com/brainkim
@@ -15,24 +15,24 @@ To the product manager, these may sound like natural extensions to the behavior 
 
 If you’re pragmatic, what you typically don’t consider as a possibility is using `contenteditable`, an HTML attribute which turns any element into a freeform text editing surface. The libraries I’ve mentioned exist because working with `contenteditable` is notoriously difficult and frankly, not your problem to solve. You may have read the essay [Why ContentEditable is Terrible](https://medium.engineering/why-contenteditable-is-terrible-122d8a40e480) (2014), written by an engineer at Medium. If programmers at Medium, a firm dedicated to writing and publishing, find working with `contenteditable` so difficult, wouldn’t it be unwise to try for yourself?
 
-Cut to 2026. The situation has not measurably improved. New libraries have popped up, old ones have received updates, and browsers have even attempted to provide alternative APIs like [`EditContext`](https://developer.mozilla.org/en-US/docs/Web/API/EditContext_API). But there’s still the same old chasm between form elements like `<input>` and `<textarea>` and anything more than plaintext representations of them.
+Cut to 2026. The situation has not measurably improved. New libraries have popped up, old ones have received updates, and browsers have even attempted to provide alternative APIs like [`EditContext`](https://developer.mozilla.org/en-US/docs/Web/API/EditContext_API). But there’s still the same old chasm between form elements like `<input>` and `<textarea>` and anything more than basic plaintext representation.
 
-Revise.js is an attempt to bridge the gap. It’s not a full-fledged editor with toolbars; rather, it’s the missing standard library for `contenteditable`. It provides a small set of building blocks for working with `contenteditable` elements directly: a custom element that watches the DOM for changes and translates them into stringwise operations, a data structure for describing edits to text, and a [Crank.js](https://crank.js.org) integration which allows you to write declarative editable components. The following is a description of each of these parts.
+Revise.js is an attempt to bridge the gap. It’s not a full-fledged editor with toolbars; rather, it’s the missing standard library for `contenteditable`. It provides a small set of building blocks for working with `contenteditable` elements directly: a web component that watches the DOM for changes and translates them into stringwise operations, a data structure for describing edits to text, and a [Crank.js](https://crank.js.org) integration which allows you to write declarative editable components. The following is a description of each of these parts, as well as the design philosophy behind them.
 
 ## The `<content-area>` element
 
 The first problem you might encounter when working with `contenteditable` is how to represent the underlying document. Editing libraries can be cleanly divided into two main camps: code editors like CodeMirror, where the document is a string, and rich-text editors like ProseMirror, where the document is a tree of nodes, usually represented as JSON. Revise.js chooses to use the code editor approach, where the document is a string for simplicity.
 
-This is because while trees give you structure, they also bring their own problems. For instance, where is the cursor? In a string, the cursor is just an index into the string. In a tree, you need paths or traversal algorithms to determine where you are. Another difficulty is that tree structures require bespoke serialization and deserialization schemes. When users want to export their document, they want markdown or plaintext. Exporting your custom JSON tree would read as vendor lock-in. With strings, the document is already in a ready-made format for saving and exporting.
+This is because while trees give you structure, they also bring their own problems. For instance, where is the cursor? In a string, the cursor is just an index into the string. In a tree, you need paths or traversal algorithms to determine where you are. Another difficulty is that tree structures require custom serialization and deserialization schemes. When users want to export their document, they want markdown or plaintext. Exporting your bespoke JSON tree would read as vendor lock-in. With strings, the document is already in a ready-made format for saving and exporting.
 
 <figure>
 <img src="/static/prosemirror-indexing.png" alt="ProseMirror's token-based indexing scheme">
 <figcaption>How ProseMirror counts positions: tokens in a tree, not characters in a string.</figcaption>
 </figure>
 
-Unfortunately, the difficulty with the string approach is that there is no DOM API to help you. For instance, the `textContent` property is merely a concatenation of all the text nodes in an element; it does not include line breaks. The `innerHTML` property gives you the actual HTML markup, which is obviously not what we want either. The `innerText` property is probably the closest approximation; it’s described as what would be copied if you selected the element and copied its contents. However, its behavior is inconsistent across browsers, unconfigurable, and hard-codes weird conventions like adding extra newlines for `<p>` elements.
+Unfortunately, the difficulty with the string approach is that there is no DOM API to help you. For instance, the `textContent` property is merely a concatenation of all the text nodes in an element; it does not include line breaks. The `innerHTML` property gives you the actual HTML markup, which is obviously not what we want either. The `innerText` property is probably the closest approximation: it’s described as what would be copied if you selected the element and copied its contents. However, its behavior is inconsistent across browsers, unconfigurable, and hard-codes weird conventions like adding extra newlines for `<p>` elements.
 
-What’s missing is an analogue to `<textarea>`’s `.value`: a clean string that reflects the editable content. This is what the `<content-area>` custom element provides:
+What’s missing is an analogue to textarea\u2019s `value` property: a clean string that reflects the editable content. This is what the `<content-area>` custom element provides:
 
 ```html
 <content-area>
@@ -57,7 +57,7 @@ It is hard to overstate what an engineering marvel the `<content-area>` element 
 - `<div>Hello<br>World</div>`
 - `<div>Hello<div>World</div></div>`
 
-To read the DOM into a string, the content-area element walks its children and tracks `<br>` and block-like elements to determine where newlines should be placed. In essence, it’s a mini-layout algorithm which painstakingly identifies where line-breaks would go in the final rendered text. It also converts between the DOM selection, which is determined by node/offset pairs, and integers which reflect positions in the final string.
+To read the DOM into a string, the `<content-area>` element walks its children and tracks `<br>` and block-like elements to determine where newlines should be placed. In essence, it’s a mini-layout algorithm which painstakingly identifies where line-breaks would go in the final rendered text. It also converts between the DOM selection (node/offset pairs) and integers which reflect positions in the final string.
 
 This would be expensive to do on every keystroke, so the `<content-area>` element uses a `MutationObserver` under the hood to watch and selectively validate subtrees. Rather than re-reading the entire DOM, it only checks the parts that were actually mutated. And because the content-area element watches for mutations rather than intercepting input events, every input method works for free: spellcheck, IME, dictation, browser extensions. This approach is fail-safe: editor libraries which rely on events like `input` and `beforeinput` risk bugs where the DOM falls out of sync, especially in weird environments like mobile Android with custom keyboards. You can even make programmatic DOM mutations and have those changes reflected.
 
@@ -76,7 +76,7 @@ new Edit([5, "", ",", 11, "", "!", 11]);
 
 Retains are implicit: the gaps between positions represent text that is kept. This makes the common case, small edits to large documents, very compact. And the format is intuitive enough to read and write by hand, so long as you can calculate the indices of insertions and deletions.
 
-This data structure was not something I invented out of thin air. The `Edit` class is actually inspired by the subsequence arithmetic described in Raph Levien’s [detailed descriptions](https://xi-editor.io/docs/crdt-details.html) of the now defunct Xi editor’s conflict-free replicated data type (CRDT). The key insight from that work is that you can decompose any edit into two *subsequences*: one marking where insertions go, another marking where deletions go. These subsequences can then be manipulated with set-like operations — union, intersection, expansion, shrinking — to combine and transform edits algebraically. Revise borrows this decomposition without the full CRDT machinery, using it instead for operational transformation (OT).
+This data structure was not something I invented out of thin air. The `Edit` class is actually inspired by the subsequence arithmetic described in Raph Levien’s [detailed descriptions](https://xi-editor.io/docs/crdt-details.html) of the now defunct Xi editor’s conflict-free replicated data type (CRDT). The key insight from that work is that you can decompose any edit into two *subsequences*: one marking where insertions go, another marking where deletions go. These subsequences can then be manipulated with set-like operations — union, intersection, difference — to combine and transform edits algebraically. Revise borrows this decomposition without the full CRDT machinery, using it instead for operational transformation (OT).
 
 The `Edit` data structure provided by Revise provides a rich set of methods for working with changes:
 
@@ -118,7 +118,7 @@ state.redo(); // true — value is "Hello, World!\n" again
 state.keyer.keyAt(0); // consistent key for the line at offset 0
 ```
 
-Ultimately, the goal for the `Edit` data structure is to promote data abundance in document editing. We live in a world of 4K video streaming and high-frequency trading; surely, we can afford to store every edit to a document, forever. When edits are first-class data, not ephemeral input events that vanish after being applied, you can replay history, sync across devices, audit changes, review deletions, or do cool things nobody has thought of yet. The Edit data structure makes this all possible. If you’re interested in OT and CRDTs, you should read through the source and plunder it for ideas about collaborative sequences and strings.
+Ultimately, the goal for the `Edit` data structure is to promote an idea of data abundance in document editing. We live in a world of 4K video streaming and high-frequency trading; surely, we can afford to store every edit to a document, forever. When edits are first-class data, not ephemeral input events that vanish after being applied, you can replay history, sync across devices, audit changes, review deletions, or create cool editing UX nobody has thought of yet. The Edit data structure makes this all possible. If you’re interested in OT and CRDTs, you should read through the source and plunder it for ideas about collaborative sequences and strings.
 
 ## Declarative text editors
 
@@ -130,7 +130,7 @@ Revise.js takes the opposite approach. Rather than owning the render, it actuall
 
 This inversion is powerful but introduces two problems. First, when the framework re-renders, it mutates the DOM, and `<content-area>` can’t tell the difference between a user typing and the framework correcting the DOM. Without intervention, every framework render would fire another `contentchange`, creating an infinite loop. Second, framework renders can create and destroy DOM nodes, which means the browser’s selection is lost after every render.
 
-To make things concrete, here is how you might use `<content-area>` and `EditableState` with no framework at all via `innerHTML` to write a rainbow text editor.
+To make things concrete, here is how you might use `<content-area>` and `EditableState` with no framework at all to write a rainbow text editor, using `innerHTML` to render.
 
 ```js live
 import {ContentAreaElement} from "@b9g/revise/contentarea.js";
@@ -191,7 +191,7 @@ area.addEventListener("contentchange", (ev) => {
 requestAnimationFrame(() => render());
 ```
 
-This approach has its limits, as you probably do not want to be updating `.innerHTML` with large and unsanitized documents, but it outlines the responsibilities of a UI editor which uses Revise.js abstractions. The UI library must:
+This approach has its limits, as you probably do not want to be updating `.innerHTML` with large and unsanitized documents, but it outlines the responsibilities of a Revise.js integration. The abstraction must:
 
 1. listen for `contentchange`
 2. call `preventDefault()` to revert the DOM to the state before the change was made
@@ -247,9 +247,9 @@ Text
 renderer.render(<RainbowEditable />, document.body);
 ```
 
-There’s nothing editor-specific about the rendering: it’s just JSX. The `Editable` wrapper handles the `contentchange` cycle, and `EditableState` tracks the value and undo history. You split the string into lines, render each line however you want, and the framework takes care of the rest. This is a profoundly flexible and novel way to write text editors that hasn’t been explored.
+There’s nothing editor-specific about the rendering: it’s just JSX. The `Editable` wrapper handles the `contentchange` cycle, and `EditableState` tracks the value and undo history. You split the string into lines, render each line however you want, and the framework takes care of the rest. This is a profoundly flexible and novel way to write text editors that has yet to be explored.
 
-Sometimes you might want an element to represent text that isn’t its `textContent`. An emoji rendered as an `<img>` tag has no text content, but it should count as the represented emoji in the final string. The `data-content` attribute tells `<content-area>` to use its value instead of walking the element’s children:
+Sometimes you might want an element to represent text that isn’t its `textContent`. An emoji rendered as an `<img>` tag has no text content, but in a text editor it should count as the represented emoji in the final string. The `data-content` attribute tells `<content-area>` to use its value instead of walking the element’s children:
 
 ```tsx live
 import type {Context, Element} from "@b9g/crank";
@@ -316,12 +316,26 @@ Type some emoji: 😎❤️🚀
 renderer.render(<TwemojiEditable />, document.body);
 ```
 
-As you can see, this approach to editing is less about upfront definition of nodes or document structure, and more about experimentation and seeing what you can possibly render and make editable. The task of writing a custom editor then becomes parsing the document, and figuring out how to render the UI to correspond to the underlying string.
+As you can see, this approach to editing is less about upfront definition of nodes or document structure, and more about experimentation and seeing what you can possibly render and make editable. The task of writing a custom editor then becomes parsing the document and figuring out how to render the UI to correspond to the underlying string.
 
 ## Manifesting an editable web
 
-I’ve quietly worked on Revise in the open since 2018, and it’s a bit like a graduate thesis for what I think `contenteditable`-based editors on the web should look like. I called it “revise” because I believe that writing is often about countless revisions and rethinking, every essay is a journey that changes you just as much as it might change the world. This library is an expression of hope that we might make editors on the web less monolithic, more expressive, less traditional, more weird. It already powers the playground and interactive examples on the Crank.js website, as well as all of the examples on this website. And I can personally tell you that there is something magical and inspiring to being able to create a text editor with the component models you already use, a feeling that the scope of possible web applications has suddenly expanded.
+I’ve quietly worked on Revise in the open since 2018, and it’s a bit like a graduate thesis for what I think `contenteditable`-based editors on the web should look like. I called it “revise” because I believe that writing is often about countless revisions and rethinking. Every essay is a journey that changes you just as much as it might change the world. This library is an expression of hope that we might make editors on the web less monolithic, more expressive, less traditional, more weird. It already powers the playground and interactive examples on the Crank.js website, as well as all of the examples on this website. And I can personally tell you that there is something magical and inspiring to being able to create a text editor with the component models you already use.
 
-The core APIs have stabilized, and I’m planning on crafting specific web component-based editors for targeted use-cases like a [Typora-style](https://typora.io) Markdown editor for the web. I’m also eager to put the `Edit` data structure’s OT capabilities into production, with a collaborative/multiplayer text editor.
+The results of this approach are stunning for page weight. We bundled every major editor framework with ESBuild and measured the minified + gzipped output:
 
-If I can ask anything of you, dear reader, it’s that you should really see how much fun it is to write a custom text editor. Please check out the examples on the homepage, for instance, for ideas. I’d also be happy to help anyone looking to write a UI framework adapter for any framework that doesn’t end in “react.” The process might involve a bit of DOM debugging and rethinking how to write text editors, but I promise the effort will be worth your time.
+| Framework | Component | Minified | Gzipped |
+|---|---|---|---|
+| **Revise** | Crank (12.7 KB) | 103.2 KB | **32.8 KB** |
+| Quill | — | 200.3 KB | 58.6 KB |
+| Slate | React (58.9 KB) | 211.5 KB | 60.7 KB |
+| ProseMirror | — | 205.6 KB | 63.6 KB |
+| Lexical | React (58.9 KB) | 224.7 KB | 74.3 KB |
+| Tiptap | — | 363.4 KB | 114.7 KB |
+| CodeMirror 6 | — | 372.6 KB | 120.7 KB |
+
+At 32.8 KB gzipped, including the rendering framework, Revise is half the size of the next smallest option and up to 4x smaller than Tiptap or CodeMirror 6. To be fair, those libraries ship complete editors with features you’d need to build yourself with Revise. But if what you need is social @-mention highlighting, a custom code input, or a todo list with checkboxes — the kinds of editors shown on this website’s homepage — you’re shipping a fraction of the code.
+
+I’m eager to continue working on this library. The core APIs have stabilized, and I’m planning on crafting specific web component-based editors for targeted use-cases like a [Typora-style](https://typora.io) Markdown editor for the web. I’m also eager to put the `Edit` data structure’s OT capabilities into production, with a collaborative/multiplayer text editor.
+
+If I can ask anything of you, dear reader, it’s that you should really see how much fun it is to write a custom text editor. Please check out the examples on the homepage for ideas. I’d also be happy to help anyone looking to write a UI framework adapter for any framework that doesn’t end in “react.” The process might involve a bit of DOM debugging and rethinking how to write text editors, but I promise the effort will be worth your time.

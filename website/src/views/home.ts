@@ -100,7 +100,7 @@ export default async function Home({url}: {url: string}) {
 	const todoInitial = extractInitialValue(todoCode);
 
 	return jsx`
-		<${Root} title="Revise" url=${url} description="A rich text editing foundations library">
+		<${Root} title="Revise" url=${url} description="A foundational library for building contenteditable-based web text editors.">
 			<header class=${css`
 				text-align: center;
 				padding: 6rem 1rem 2rem;
