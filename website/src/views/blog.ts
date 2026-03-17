@@ -33,6 +33,7 @@ export default async function Blog({url}: {url: string}) {
 			year: "numeric",
 			month: "long",
 			day: "numeric",
+			timeZone: "UTC",
 		});
 	return jsx`
 		<${Root} title="Revise.js | ${title}" url=${url} description=${description}>
