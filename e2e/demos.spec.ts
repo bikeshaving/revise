@@ -88,8 +88,8 @@ test.describe("Blockquote demo", () => {
 	test("initial state", async ({page}) => {
 		const value = await areaValue(page);
 		expect(value).toBe(
-			"> To be or not to be,\n" +
-			"> that is the question.\n" +
+			"> To be, or not to be, that is the question\u2014\n" +
+			"> Whether 'tis nobler in the mind to suffer\n" +
 			"Hamlet, Act 3, Scene 1\n",
 		);
 	});
@@ -97,7 +97,7 @@ test.describe("Blockquote demo", () => {
 	test("Enter continues blockquote", async ({page}) => {
 		const area = page.locator("content-area");
 		await area.evaluate((el: any) => {
-			const len = "> To be or not to be,".length;
+			const len = "> To be, or not to be, that is the question\u2014".length;
 			el.setSelectionRange(len, len);
 		});
 		await page.keyboard.press("Enter");
@@ -109,7 +109,7 @@ test.describe("Blockquote demo", () => {
 	test("Enter on empty blockquote exits quote mode", async ({page}) => {
 		const area = page.locator("content-area");
 		await area.evaluate((el: any) => {
-			const len = "> To be or not to be,".length;
+			const len = "> To be, or not to be, that is the question\u2014".length;
 			el.setSelectionRange(len, len);
 		});
 		await page.keyboard.press("Enter");
@@ -135,13 +135,13 @@ test.describe("Blockquote demo", () => {
 	test("Backspace at start of blockquote content removes prefix", async ({page}) => {
 		const area = page.locator("content-area");
 		await area.evaluate((el: any) => {
-			const pos = "> To be or not to be,\n> ".length;
+			const pos = "> To be, or not to be, that is the question\u2014\n> ".length;
 			el.setSelectionRange(pos, pos);
 		});
 		await page.keyboard.press("Backspace");
 		const value = await areaValue(page);
-		expect(value).toContain("To be or not to be,");
-		expect(value).toContain("that is the question.");
-		expect(value).not.toContain("> To be or not to be,\n> that is the question.");
+		expect(value).toContain("question\u2014");
+		expect(value).toContain("Whether");
+		expect(value).not.toContain("\n> Whether");
 	});
 });

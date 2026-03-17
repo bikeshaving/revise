@@ -5,494 +5,19 @@ import {SerializeScript} from "../components/serialize-javascript.js";
 
 import {Root} from "../components/root.js";
 
-const modKey = typeof navigator !== "undefined" && /Win|Linux/.test(navigator.platform) ? "Ctrl" : "Cmd";
-const SIMPLE_INITIAL = `Hello World!\nTry typing here.\nUndo with ${modKey}+Z.\n`;
-const RAINBOW_INITIAL = "Hello\nWorld\nRainbow\nText\n";
-const SOCIAL_INITIAL = "Check out #revise by @bikeshaving\nIt's at https://revise.js.org\n#javascript #editing @everyone\n";
-const TWEMOJI_INITIAL = "Hello World! \u{1F44B}\nRevise.js is \u{1F525}\u{1F525}\u{1F525}\nType some emoji: \u{1F60E}\u{2764}\u{FE0F}\u{1F680}\n";
-const CODE_INITIAL = "function greet(name) {\n  return 'Hello, ' + name;\n}\n\nconst message = greet('World');\nconsole.log(message);\n";
-const TODO_INITIAL = "- [x] Build content-area\n- [x] Build Edit data structure\n- [ ] Write documentation\n- [ ] Take over the world\n";
-const BLOCKQUOTE_INITIAL = "> To be or not to be,\n> that is the question.\nHamlet, Act 3, Scene 1\n";
-
-const SIMPLE_CODE = `import type {Context} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState} from "@b9g/crankeditable";
-
-function* SimpleEditable(this: Context) {
-  const state = new EditableState({
-    value: \`Hello World!
-Try typing here.
-Undo with \${/Win|Linux/.test(navigator.platform) ? "Ctrl" : "Cmd"}+Z.
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <pre class="editable" contenteditable="true" spellcheck="false">
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            return <div key={key}>{line || <br />}</div>;
-          })}
-        </pre>
-      </Editable>
-    );
-  }
+async function readExample(name: string): Promise<string> {
+	const dir = await self.directories.open("examples");
+	const handle = await dir.getFileHandle(name);
+	const file = await handle.getFile();
+	return file.text();
 }
 
-renderer.render(<SimpleEditable />, document.body);`;
-
-const RAINBOW_CODE = `import type {Context} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState} from "@b9g/crankeditable";
-
-const COLORS = [
-  "#FF0000", "#FFA500", "#FFDC00",
-  "#008000", "#0000FF", "#4B0082", "#800080",
-];
-
-function* RainbowEditable(this: Context) {
-  const state = new EditableState({
-    value: \`Hello
-World
-Rainbow
-Text
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false">
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            const chars = line
-              ? [...line].map((char, i) => (
-                  <span style={"color: " + COLORS[i % COLORS.length]}>{char}</span>
-                ))
-              : <br />;
-            return <div key={key}>{chars}</div>;
-          })}
-        </div>
-      </Editable>
-    );
-  }
+function extractInitialValue(source: string): string {
+	const match = source.match(/value: `([\s\S]*?)`/);
+	if (!match) throw new Error("Could not extract initial value from source");
+	// Unescape template literal escapes
+	return match[1].replace(/\\\$/g, "$");
 }
-
-renderer.render(<RainbowEditable />, document.body);`;
-
-const SOCIAL_CODE = `import type {Context, Element} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState} from "@b9g/crankeditable";
-
-const PATTERN = /(#\\w+)|(@\\w+)|(https?:\\/\\/[^\\s]+)/g;
-
-function highlightSocial(text: string): (Element | string)[] {
-  const result: (Element | string)[] = [];
-  let lastIndex = 0;
-  for (const match of text.matchAll(PATTERN)) {
-    const index = match.index!;
-    if (index > lastIndex) result.push(text.slice(lastIndex, index));
-    const value = match[0];
-    let color: string, href: string;
-    if (match[1]) {
-      color = "#c084fc";
-      href = "https://example.com/tags/" + value.slice(1);
-    } else if (match[2]) {
-      color = "#60a5fa";
-      href = "https://example.com/" + value.slice(1);
-    } else {
-      color = "#34d399";
-      href = value;
-    }
-    result.push(
-      <a href={href} target="_blank" rel="noopener"
-        style={"color: " + color + "; text-decoration: underline"}>{value}</a>
-    );
-    lastIndex = index + value.length;
-  }
-  if (lastIndex < text.length) result.push(text.slice(lastIndex));
-  return result;
-}
-
-function* SocialEditable(this: Context) {
-  const state = new EditableState({
-    value: \`Check out #revise by @bikeshaving
-Visit https://revise.js.org
-#javascript #editing @everyone
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false">
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            return (
-              <div key={key}>
-                {line ? highlightSocial(line) : <br />}
-              </div>
-            );
-          })}
-        </div>
-      </Editable>
-    );
-  }
-}
-
-renderer.render(<SocialEditable />, document.body);`;
-
-const TWEMOJI_CODE = `import type {Context, Element} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState, ContentAreaElement} from "@b9g/crankeditable";
-import {parse as parseEmoji} from "@twemoji/parser";
-
-if (!customElements.get("content-area")) {
-  customElements.define("content-area", ContentAreaElement);
-}
-
-function renderTwemoji(text: string): (Element | string)[] {
-  const entities = parseEmoji(text);
-  if (!entities.length) return [text];
-  const result: (Element | string)[] = [];
-  let lastIndex = 0;
-  for (const entity of entities) {
-    const [start, end] = entity.indices;
-    if (start > lastIndex) result.push(text.slice(lastIndex, start));
-    result.push(
-      <img
-        data-content={entity.text}
-        src={entity.url}
-        alt={entity.text}
-        draggable={false}
-        style="height:1.2em;width:1.2em;vertical-align:middle;display:inline-block"
-      />
-    );
-    lastIndex = end;
-  }
-  if (lastIndex < text.length) result.push(text.slice(lastIndex));
-  return result;
-}
-
-function* TwemojiEditable(this: Context) {
-  const state = new EditableState({
-    value: \`Hello World! 👋
-Revise.js is 🔥🔥🔥
-Type some emoji: 😎❤️🚀
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false">
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            return (
-              <div key={key}>
-                {line ? renderTwemoji(line) : <br />}
-              </div>
-            );
-          })}
-        </div>
-      </Editable>
-    );
-  }
-}
-
-renderer.render(<TwemojiEditable />, document.body);`;
-
-const CODE_CODE = `import type {Context, Element} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState} from "@b9g/crankeditable";
-
-const KW = /\\b(function|const|let|var|return|if|else|for|while|class|import|export|from|new|typeof)\\b/g;
-
-function highlight(line: string): (Element | string)[] {
-  const result: (Element | string)[] = [];
-  let lastIndex = 0;
-  for (const match of line.matchAll(KW)) {
-    const index = match.index!;
-    if (index > lastIndex) result.push(line.slice(lastIndex, index));
-    result.push(<span style="color: #c084fc">{match[0]}</span>);
-    lastIndex = index + match[0].length;
-  }
-  if (lastIndex < line.length) result.push(line.slice(lastIndex));
-  return result;
-}
-
-function* CodeEditable(this: Context) {
-  const state = new EditableState({
-    value: \`function greet(name) {
-  return 'Hello, ' + name;
-}
-
-const message = greet('World');
-console.log(message);
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <pre class="editable" contenteditable="true" spellcheck="false">
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            return (
-              <div key={key}>
-                <code>{line ? highlight(line) : null}</code>
-                <br />
-              </div>
-            );
-          })}
-        </pre>
-      </Editable>
-    );
-  }
-}
-
-renderer.render(<CodeEditable />, document.body);`;
-
-const TODO_CODE = `import type {Context} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState} from "@b9g/crankeditable";
-
-function getLineAt(val: string, pos: number) {
-  const start = val.lastIndexOf("\\n", pos - 1) + 1;
-  const end = val.indexOf("\\n", pos);
-  return {start, end: end === -1 ? val.length : end};
-}
-
-function* TodoEditable(this: Context) {
-  const state = new EditableState({
-    value: \`- [x] Build content-area
-- [x] Build Edit data structure
-- [ ] Write documentation
-- [ ] Take over the world
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false"
-          onkeydown={(ev: KeyboardEvent) => {
-            if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
-            const area = (ev.currentTarget as HTMLElement)
-              .closest("content-area") as any;
-            const pos = area.selectionStart;
-            if (pos !== area.selectionEnd) return;
-            const val = state.value;
-            const {start, end} = getLineAt(val, pos);
-            const line = val.slice(start, end);
-            const match = line.match(/^(- \\[[ x]\\] )/);
-            if (!match) return;
-            if (ev.key === "Enter") {
-              ev.preventDefault();
-              if (line === match[1]) {
-                // Empty todo: remove prefix
-                state.setValue(
-                  val.slice(0, start) + val.slice(start + match[1].length),
-                  "user",
-                );
-              } else {
-                // Continue with new unchecked todo
-                state.setValue(
-                  val.slice(0, pos) + "\\n- [ ] " + val.slice(pos),
-                  "user",
-                );
-                this.refresh();
-                area.setSelectionRange(pos + 7, pos + 7);
-                return;
-              }
-            } else if (ev.key === "Backspace") {
-              if (line === match[1]) {
-                // Empty todo: remove prefix
-                ev.preventDefault();
-                state.setValue(
-                  val.slice(0, start) + val.slice(start + match[1].length),
-                  "user",
-                );
-              } else if (pos === start + match[1].length) {
-                ev.preventDefault();
-                // Remove prefix and merge with previous line
-                state.setValue(
-                  val.slice(0, Math.max(0, start - 1))
-                    + val.slice(start + match[1].length),
-                  "user",
-                );
-              } else {
-                return;
-              }
-            } else {
-              return;
-            }
-            this.refresh();
-          }}
-        >
-          {lines.map((line) => {
-            const lineStart = cursor;
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            const match = line.match(/^(- \\[[ x]\\] )([\\s\\S]*)$/);
-            if (match) {
-              const prefix = match[1];
-              const checked = prefix === "- [x] ";
-              return (
-                <div key={key} data-contentbefore={prefix}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    data-content=""
-                    contenteditable="false"
-                    onclick={() => {
-                      const newPrefix = checked ? "- [ ] " : "- [x] ";
-                      state.setValue(
-                        state.value.slice(0, lineStart) +
-                        newPrefix +
-                        state.value.slice(lineStart + prefix.length),
-                        "user",
-                      );
-                      this.refresh();
-                    }}
-                  />
-                  <span style={checked
-                    ? {textDecoration: "line-through", opacity: "0.5"}
-                    : undefined}>
-                    {match[2] || <br />}
-                  </span>
-                </div>
-              );
-            }
-            return <div key={key}>{line || <br />}</div>;
-          })}
-        </div>
-      </Editable>
-    );
-  }
-}
-
-renderer.render(<TodoEditable />, document.body);`;
-
-const BLOCKQUOTE_CODE = `import type {Context} from "@b9g/crank";
-import {renderer} from "@b9g/crank/dom";
-import {Editable, EditableState} from "@b9g/crankeditable";
-
-function getLineAt(val: string, pos: number) {
-  const start = val.lastIndexOf("\\n", pos - 1) + 1;
-  const end = val.indexOf("\\n", pos);
-  return {start, end: end === -1 ? val.length : end};
-}
-
-function* BlockquoteEditable(this: Context) {
-  const state = new EditableState({
-    value: \`> To be or not to be,
-> that is the question.
-Hamlet, Act 3, Scene 1
-\`,
-  });
-  for (const {} of this) {
-    const lines = state.value.split("\\n");
-    if (lines[lines.length - 1] === "") lines.pop();
-    let cursor = 0;
-    yield (
-      <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false"
-          onkeydown={(ev: KeyboardEvent) => {
-            if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
-            const area = (ev.currentTarget as HTMLElement)
-              .closest("content-area") as any;
-            const pos = area.selectionStart;
-            if (pos !== area.selectionEnd) return;
-            const val = state.value;
-            const {start, end} = getLineAt(val, pos);
-            const line = val.slice(start, end);
-            if (!/^> /.test(line)) return;
-            if (ev.key === "Enter") {
-              ev.preventDefault();
-              if (line === "> ") {
-                // Empty quote: remove prefix
-                state.setValue(
-                  val.slice(0, start) + val.slice(start + 2),
-                  "user",
-                );
-              } else {
-                // Continue blockquote
-                state.setValue(
-                  val.slice(0, pos) + "\\n> " + val.slice(pos),
-                  "user",
-                );
-                this.refresh();
-                area.setSelectionRange(pos + 3, pos + 3);
-                return;
-              }
-            } else if (ev.key === "Backspace") {
-              if (line === "> ") {
-                // Empty quote: remove prefix
-                ev.preventDefault();
-                state.setValue(
-                  val.slice(0, start) + val.slice(start + 2),
-                  "user",
-                );
-              } else if (pos === start + 2) {
-                ev.preventDefault();
-                // Remove prefix and merge with previous line
-                state.setValue(
-                  val.slice(0, Math.max(0, start - 1))
-                    + val.slice(start + 2),
-                  "user",
-                );
-              } else {
-                return;
-              }
-            } else {
-              return;
-            }
-            this.refresh();
-          }}
-        >
-          {lines.map((line) => {
-            const key = state.keyer.keyAt(cursor);
-            cursor += line.length + 1;
-            const match = line.match(/^(> )([\\s\\S]*)$/);
-            if (match) {
-              return (
-                <div key={key} data-contentbefore="> " style={{
-                  borderLeft: "3px solid currentColor",
-                  paddingLeft: "0.5em",
-                  opacity: 0.7,
-                }}>
-                  {match[2] || <br />}
-                </div>
-              );
-            }
-            return <div key={key}>{line || <br />}</div>;
-          })}
-        </div>
-      </Editable>
-    );
-  }
-}
-
-renderer.render(<BlockquoteEditable />, document.body);`;
 
 function renderBlockquoteLines(text: string) {
 	const lines = text.split("\n");
@@ -547,7 +72,33 @@ const previewClass = css`
 	border-radius: 4px;
 `;
 
-export default function Home({url}: {url: string}) {
+export default async function Home({url}: {url: string}) {
+	const [
+		simpleCode,
+		rainbowCode,
+		socialCode,
+		twemojiCode,
+		codeCode,
+		blockquoteCode,
+		todoCode,
+	] = await Promise.all([
+		readExample("simple.tsx"),
+		readExample("rainbow.tsx"),
+		readExample("social.tsx"),
+		readExample("twemoji.tsx"),
+		readExample("code.tsx"),
+		readExample("blockquote.tsx"),
+		readExample("todo.tsx"),
+	]);
+
+	const simpleInitial = extractInitialValue(simpleCode);
+	const rainbowInitial = extractInitialValue(rainbowCode);
+	const socialInitial = extractInitialValue(socialCode);
+	const twemojiInitial = extractInitialValue(twemojiCode);
+	const codeInitial = extractInitialValue(codeCode);
+	const blockquoteInitial = extractInitialValue(blockquoteCode);
+	const todoInitial = extractInitialValue(todoCode);
+
 	return jsx`
 		<${Root} title="Revise" url=${url} description="A rich text editing foundations library">
 			<header class=${css`
@@ -581,112 +132,112 @@ export default function Home({url}: {url: string}) {
 				<section>
 					<h2 class=${sectionHeading}>Simple Editable</h2>
 					<p class=${sectionDesc}>Plain text with undo/redo. The minimal setup.</p>
-					<div id="demo-simple" data-initial=${SIMPLE_INITIAL} class=${previewClass}>
+					<div id="demo-simple" data-initial=${simpleInitial} class=${previewClass}>
 						<content-area>
 							<pre class="editable" contenteditable="true" spellcheck="false">
-								${renderInitialLines(SIMPLE_INITIAL)}
+								${renderInitialLines(simpleInitial)}
 							</pre>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${SIMPLE_CODE} lang="tsx" editable=${true} previewId="demo-simple" />
-						<${SerializeScript} class="props" value=${{code: SIMPLE_CODE, lang: "tsx", editable: true, previewId: "demo-simple"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${simpleCode} lang="tsx" editable=${true} previewId="demo-simple" />
+						<${SerializeScript} class="props" value=${{code: simpleCode, lang: "tsx", editable: true, previewId: "demo-simple"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
 				<section>
 					<h2 class=${sectionHeading}>Rainbow</h2>
 					<p class=${sectionDesc}>Per-character coloring with keyed lines.</p>
-					<div id="demo-rainbow" data-initial=${RAINBOW_INITIAL} class=${previewClass}>
+					<div id="demo-rainbow" data-initial=${rainbowInitial} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
-								${renderInitialLines(RAINBOW_INITIAL)}
+								${renderInitialLines(rainbowInitial)}
 							</div>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${RAINBOW_CODE} lang="tsx" editable=${true} previewId="demo-rainbow" />
-						<${SerializeScript} class="props" value=${{code: RAINBOW_CODE, lang: "tsx", editable: true, previewId: "demo-rainbow"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${rainbowCode} lang="tsx" editable=${true} previewId="demo-rainbow" />
+						<${SerializeScript} class="props" value=${{code: rainbowCode, lang: "tsx", editable: true, previewId: "demo-rainbow"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
 				<section>
 					<h2 class=${sectionHeading}>Social Highlighting</h2>
 					<p class=${sectionDesc}>Clickable <span style="color:#c084fc">#hashtags</span>, <span style="color:#60a5fa">@mentions</span>, and <span style="color:#34d399">links</span>.</p>
-					<div id="demo-social" data-initial=${SOCIAL_INITIAL} class=${previewClass}>
+					<div id="demo-social" data-initial=${socialInitial} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
-								${renderInitialLines(SOCIAL_INITIAL)}
+								${renderInitialLines(socialInitial)}
 							</div>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${SOCIAL_CODE} lang="tsx" editable=${true} previewId="demo-social" />
-						<${SerializeScript} class="props" value=${{code: SOCIAL_CODE, lang: "tsx", editable: true, previewId: "demo-social"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${socialCode} lang="tsx" editable=${true} previewId="demo-social" />
+						<${SerializeScript} class="props" value=${{code: socialCode, lang: "tsx", editable: true, previewId: "demo-social"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
 				<section>
 					<h2 class=${sectionHeading}>Twemoji</h2>
 					<p class=${sectionDesc}>Emoji replaced with SVG using <code>data-content</code>.</p>
-					<div id="demo-twemoji" data-initial=${TWEMOJI_INITIAL} class=${previewClass}>
+					<div id="demo-twemoji" data-initial=${twemojiInitial} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
-								${renderInitialLines(TWEMOJI_INITIAL)}
+								${renderInitialLines(twemojiInitial)}
 							</div>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${TWEMOJI_CODE} lang="tsx" editable=${true} previewId="demo-twemoji" />
-						<${SerializeScript} class="props" value=${{code: TWEMOJI_CODE, lang: "tsx", editable: true, previewId: "demo-twemoji"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${twemojiCode} lang="tsx" editable=${true} previewId="demo-twemoji" />
+						<${SerializeScript} class="props" value=${{code: twemojiCode, lang: "tsx", editable: true, previewId: "demo-twemoji"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
 				<section>
 					<h2 class=${sectionHeading}>Code Editor</h2>
 					<p class=${sectionDesc}>Keyword highlighting with a simple regex tokenizer.</p>
-					<div id="demo-code" data-initial=${CODE_INITIAL} class=${previewClass}>
+					<div id="demo-code" data-initial=${codeInitial} class=${previewClass}>
 						<content-area>
 							<pre class="editable" contenteditable="true" spellcheck="false">
-								${renderInitialLines(CODE_INITIAL)}
+								${renderInitialLines(codeInitial)}
 							</pre>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${CODE_CODE} lang="tsx" editable=${true} previewId="demo-code" />
-						<${SerializeScript} class="props" value=${{code: CODE_CODE, lang: "tsx", editable: true, previewId: "demo-code"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${codeCode} lang="tsx" editable=${true} previewId="demo-code" />
+						<${SerializeScript} class="props" value=${{code: codeCode, lang: "tsx", editable: true, previewId: "demo-code"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
 				<section>
 					<h2 class=${sectionHeading}>Blockquote</h2>
 					<p class=${sectionDesc}>Styled prefixes with <code>data-contentbefore</code>. Lines starting with <code>${"> "}</code> become quotes.</p>
-					<div id="demo-blockquote" data-initial=${BLOCKQUOTE_INITIAL} class=${previewClass}>
+					<div id="demo-blockquote" data-initial=${blockquoteInitial} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
-								${renderBlockquoteLines(BLOCKQUOTE_INITIAL)}
+								${renderBlockquoteLines(blockquoteInitial)}
 							</div>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${BLOCKQUOTE_CODE} lang="tsx" editable=${true} previewId="demo-blockquote" />
-						<${SerializeScript} class="props" value=${{code: BLOCKQUOTE_CODE, lang: "tsx", editable: true, previewId: "demo-blockquote"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${blockquoteCode} lang="tsx" editable=${true} previewId="demo-blockquote" />
+						<${SerializeScript} class="props" value=${{code: blockquoteCode, lang: "tsx", editable: true, previewId: "demo-blockquote"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
 				<section>
 					<h2 class=${sectionHeading}>Todo List</h2>
 					<p class=${sectionDesc}>Checkbox prefixes with <code>data-contentbefore</code>. Lines starting with <code>${"- [ ] "}</code> or <code>${"- [x] "}</code> become todos.</p>
-					<div id="demo-todo" data-initial=${TODO_INITIAL} class=${previewClass}>
+					<div id="demo-todo" data-initial=${todoInitial} class=${previewClass}>
 						<content-area>
 							<div class="editable" contenteditable="true" spellcheck="false">
-								${renderTodoLines(TODO_INITIAL)}
+								${renderTodoLines(todoInitial)}
 							</div>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
-						<${InlineCodeBlock} value=${TODO_CODE} lang="tsx" editable=${true} previewId="demo-todo" />
-						<${SerializeScript} class="props" value=${{code: TODO_CODE, lang: "tsx", editable: true, previewId: "demo-todo"}} name="inline-code-block-props" />
+						<${InlineCodeBlock} value=${todoCode} lang="tsx" editable=${true} previewId="demo-todo" />
+						<${SerializeScript} class="props" value=${{code: todoCode, lang: "tsx", editable: true, previewId: "demo-todo"}} name="inline-code-block-props" />
 					</div>
 				</section>
 			</main>

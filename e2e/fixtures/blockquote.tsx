@@ -11,8 +11,8 @@ function getLineAt(val: string, pos: number) {
 
 function* BlockquoteEditable(this: Context) {
 	const state = new EditableState({
-		value: `> To be or not to be,
-> that is the question.
+		value: `> To be, or not to be, that is the question—
+> Whether 'tis nobler in the mind to suffer
 Hamlet, Act 3, Scene 1
 `,
 	});

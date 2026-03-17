@@ -9,6 +9,11 @@
 			"module": "@b9g/filesystem/node-fs",
 			"export": "NodeFSDirectory",
 			"path": "../docs"
+		},
+		"examples": {
+			"module": "@b9g/filesystem/node-fs",
+			"export": "NodeFSDirectory",
+			"path": "../examples"
 		}
 	}
 }
