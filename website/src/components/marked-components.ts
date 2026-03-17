@@ -21,6 +21,8 @@ function resolveMarkdownHref(href: string, basePath: string): string {
 	);
 }
 
+let liveCounter = 0;
+
 export const components = {
 	link({token, rootProps, children}: any) {
 		const {href, title} = token;
@@ -39,10 +41,23 @@ export const components = {
 		const {text: code, lang} = token;
 		const isLive = lang && lang.endsWith(" live");
 		const language = lang ? lang.replace(/ live$/, "") : "";
+		if (isLive) {
+			const previewId = `live-preview-${liveCounter++}`;
+			return jsx`
+				<div style="margin: 30px 0; max-width: 800px;">
+					<div id=${previewId} style="padding: 1em; border: 1px dashed var(--border-color); border-radius: 4px; margin-bottom: 1em;"></div>
+					<div class="code-block-container code-block-live">
+						<${InlineCodeBlock} value=${code} lang=${language} editable=${true} previewId=${previewId} />
+						<${SerializeScript} class="props" value=${{code, lang: language, editable: true, previewId}} name="inline-code-block-props" />
+					</div>
+				</div>
+			`;
+		}
+
 		return jsx`
-			<div style="margin: 30px auto;" class="code-block-container ${isLive ? "code-block-live" : ""}">
-				<${InlineCodeBlock} value=${code} lang=${language} editable=${isLive} />
-				<${SerializeScript} class="props" value=${{code, lang: language, editable: isLive}} name="inline-code-block-props" />
+			<div style="margin: 30px 0;" class="code-block-container">
+				<${InlineCodeBlock} value=${code} lang=${language} editable=${false} />
+				<${SerializeScript} class="props" value=${{code, lang: language, editable: false}} name="inline-code-block-props" />
 			</div>
 		`;
 	},

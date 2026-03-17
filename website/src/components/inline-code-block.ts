@@ -81,6 +81,9 @@ export function* InlineCodeBlock(
 
 		executePreview = debounce(runPreview, 1500) as () => void;
 
+		// Run preview immediately on mount
+		runPreview();
+
 		this.cleanup(() => {
 			if (prevScript) {
 				prevScript.remove();
@@ -100,10 +103,7 @@ export function* InlineCodeBlock(
 	for ({lang, editable, previewId} of this) {
 		if (editable) {
 			yield jsx`
-				<div hydrate="!class" class=${css`
-					max-width: min(100%, 1000px);
-					margin: 0 auto;
-				`}>
+				<div>
 					<div hydrate="!class" class=${css`
 						display: flex;
 						align-items: center;

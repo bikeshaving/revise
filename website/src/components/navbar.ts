@@ -60,6 +60,12 @@ export function Navbar({url}: {url: string}) {
 						aria-current=${url.startsWith("/guides") && "page"}
 					>Guides</a>
 				</div>
+				<div>
+					<a
+						href="/blog/"
+						aria-current=${url.startsWith("/blog") && "page"}
+					>Blog</a>
+				</div>
 			</div>
 			<div class=${navbarGroupLayout}>
 				<div>

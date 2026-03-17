@@ -3,6 +3,22 @@
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
+  "module": "./dist/src/crank-editable.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/crank-editable.d.ts",
+      "import": "./dist/src/crank-editable.js"
+    },
+    "./crank-editable": {
+      "types": "./dist/src/crank-editable.d.ts",
+      "import": "./dist/src/crank-editable.js"
+    },
+    "./crank-editable.js": {
+      "types": "./dist/src/crank-editable.d.ts",
+      "import": "./dist/src/crank-editable.js"
+    },
+    "./package.json": "./dist/package.json"
+  },
   "scripts": {
     "build": "libuild build",
     "publish": "libuild publish",
@@ -14,11 +30,12 @@
   },
   "devDependencies": {
     "@b9g/crank": "^0.7.8",
-    "@b9g/revise": "^0.1.4",
+    "@b9g/revise": "^0.1.6",
     "@b9g/libuild": "^0.1.24",
-    "typescript": "^5.0.0"
+    "typescript": "^5.9.3"
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "types": "./dist/src/crank-editable.d.ts"
 }
