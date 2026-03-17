@@ -53,9 +53,13 @@ export function* Root(
 					<link rel="stylesheet" type="text/css" href=${assets.clientCSS} />
 					<meta name="description" content=${description} />
 					<meta property="og:title" content=${title} />
+					<meta property="og:url" content=${`https://revise.js.org${url}`} />
 					<meta property="og:description" content=${description} />
 					<meta property="og:type" content="website" />
 					<meta property="og:site_name" content="Revise.js" />
+					<meta name="twitter:card" content="summary" />
+					<meta name="twitter:title" content=${title} />
+					<meta name="twitter:description" content=${description} />
 				</head>
 				<body>
 					<${ColorSchemeScript} />

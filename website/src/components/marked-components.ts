@@ -44,7 +44,7 @@ export const components = {
 		if (isLive) {
 			const previewId = `live-preview-${liveCounter++}`;
 			return jsx`
-				<div style="margin: 30px auto;">
+				<div style="margin: 30px 0; max-width: 800px;">
 					<div id=${previewId} style="padding: 1em; border: 1px dashed var(--border-color); border-radius: 4px; margin-bottom: 1em;"></div>
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${code} lang=${language} editable=${true} previewId=${previewId} />
@@ -55,7 +55,7 @@ export const components = {
 		}
 
 		return jsx`
-			<div style="margin: 30px auto;" class="code-block-container">
+			<div style="margin: 30px 0;" class="code-block-container">
 				<${InlineCodeBlock} value=${code} lang=${language} editable=${false} />
 				<${SerializeScript} class="props" value=${{code, lang: language, editable: false}} name="inline-code-block-props" />
 			</div>
