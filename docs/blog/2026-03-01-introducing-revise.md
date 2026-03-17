@@ -339,3 +339,7 @@ At 32.8 KB gzipped, including the rendering framework, Revise is half the size o
 I’m eager to continue working on this library. The core APIs have stabilized, and I’m planning on crafting specific web component-based editors for targeted use-cases like a [Typora-style](https://typora.io) Markdown editor for the web. I’m also eager to put the `Edit` data structure’s OT capabilities into production, with a collaborative/multiplayer text editor.
 
 If I can ask anything of you, dear reader, it’s that you should really see how much fun it is to write a custom text editor. Please check out the examples on the homepage for ideas. I’d also be happy to help anyone looking to write a UI framework adapter for any framework that doesn’t end in “react.” The process might involve a bit of DOM debugging and rethinking how to write text editors, but I promise the effort will be worth your time.
+
+---
+
+[Discuss on Hacker News](https://news.ycombinator.com/item?id=47414537)
