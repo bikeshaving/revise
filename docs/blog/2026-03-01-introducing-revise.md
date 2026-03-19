@@ -141,8 +141,8 @@ if (!customElements.get("content-area")) {
 }
 
 const COLORS = [
-  "#FF0000", "#FFA500", "#FFDC00",
-  "#008000", "#0000FF", "#4B0082", "#800080",
+  "#ef4444", "#f97316", "#eab308",
+  "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899",
 ];
 
 const state = new EditableState({
@@ -209,8 +209,8 @@ import {renderer} from "@b9g/crank/dom";
 import {Editable, EditableState} from "@b9g/crankeditable";
 
 const COLORS = [
-  "#FF0000", "#FFA500", "#FFDC00",
-  "#008000", "#0000FF", "#4B0082", "#800080",
+  "#ef4444", "#f97316", "#eab308",
+  "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899",
 ];
 
 function* RainbowEditable(this: Context) {
