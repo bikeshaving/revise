@@ -300,6 +300,29 @@ async function generateStaticSite() {
 			logger.error("Failed to generate 404:", e.message);
 		}
 
+		// Copy static files (images, etc.)
+		try {
+			const srcStatic = await self.directories.open("static");
+			let destStatic: FileSystemDirectoryHandle;
+			try {
+				destStatic = await staticBucket.getDirectoryHandle("static", {create: true});
+			} catch {
+				destStatic = await staticBucket.getDirectoryHandle("static", {create: true});
+			}
+			for await (const [name, handle] of (srcStatic as any).entries()) {
+				if (handle.kind === "file") {
+					const file = await handle.getFile();
+					const content = await file.arrayBuffer();
+					const destHandle = await destStatic.getFileHandle(name, {create: true});
+					const writable = await destHandle.createWritable();
+					await writable.write(content);
+					await writable.close();
+				}
+			}
+		} catch (e: any) {
+			logger.info("No static files to copy: " + e.message);
+		}
+
 		logger.info("Static site generation complete!");
 	} catch (error: any) {
 		logger.error("Static site generation failed:", error.message);
