@@ -7,6 +7,7 @@
       "dependencies": {
         "@b9g/assets": "^0.2.1",
         "@b9g/crank": "^0.7.8",
+        "@b9g/crankdown": "^0.1.2",
         "@b9g/crankeditable": "^0.1.0",
         "@b9g/platform": "^0.1.19",
         "@b9g/platform-bun": "^0.1.17",
@@ -43,6 +44,8 @@
     "@b9g/cache": ["@b9g/cache@0.2.2", "", {}, "sha512-1hLFB/1dFRfQj+rSyt3VnzDpJ8QjVO5ssfABNSjknMw0dykAKUoMeFmafpuNQMPJI0QVZ2jA6IZWPTHlOEjcMQ=="],
 
     "@b9g/crank": ["@b9g/crank@0.7.8", "", {}, "sha512-22osqQnltRa/ekYktqO5L0WQsY8MLXkcdqwfzIPW+3ZKNJCE0P4vuna4Y2WHCYVFtv9SO2xwjOxLa/gOcmjitw=="],
+
+    "@b9g/crankdown": ["@b9g/crankdown@0.1.2", "", { "peerDependencies": { "@b9g/crank": ">=0.7.0", "marked": ">=5.0.0" } }, "sha512-Ey7Vx5XPt1GP7cUsUVs//qmz6WiCdIybFwFJ9sokt9d7V03gk/qhSlJbpfdkq8/aRWSuqHvpxiXC0ntPIPanlg=="],
 
     "@b9g/crankeditable": ["@b9g/crankeditable@0.1.0", "", { "peerDependencies": { "@b9g/crank": ">=0.7.0", "@b9g/revise": ">=0.1.0" } }, "sha512-O9JMGyu5M0EsDs3GT3IZA0VMYzd12acNII2srxyF3AhRUldP0xTikLwpoACumoS8F+Dj6zoKayUfx82NAryKLg=="],
 
