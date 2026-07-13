@@ -13,7 +13,7 @@
         "@b9g/platform-bun": "^0.1.17",
         "@b9g/revise": "^0.1.6",
         "@b9g/router": "^0.2.5",
-        "@b9g/shovel": "^0.2.19",
+        "@b9g/shovel": "^0.2.20",
         "@emotion/css": "^11.13.5",
         "@emotion/server": "^11.11.0",
         "@sveltejs/acorn-typescript": "^1.0.9",
@@ -69,7 +69,7 @@
 
     "@b9g/router": ["@b9g/router@0.2.5", "", { "dependencies": { "@b9g/http-errors": "^0.2.1", "@b9g/match-pattern": "^0.2.1", "@logtape/logtape": "^2.0.0" } }, "sha512-KPYntpC6TxjlgQU/8nFcfsoOgH4u4RfLQTatGza3LXFNtZOX3tbnDTrfEgKSv/QXQ7t1YdABgqq1MtiW2OB5tQ=="],
 
-    "@b9g/shovel": ["@b9g/shovel@0.2.19", "", { "dependencies": { "@b9g/async-context": "^0.2.1", "@b9g/cache": "^0.2.2", "@b9g/filesystem": "^0.2.0", "@b9g/http-errors": "^0.2.1", "@b9g/node-webworker": "^0.2.1", "@b9g/platform": "^0.1.19", "@b9g/platform-bun": "^0.1.17", "@b9g/platform-cloudflare": "^0.1.17", "@b9g/platform-node": "^0.1.17", "@clack/prompts": "^0.7.0", "@logtape/logtape": "^2.0.0", "commander": "^13.1.0", "esbuild": "^0.27.2", "esbuild-plugins-node-modules-polyfill": "^1.8.1", "glob": "^13.0.6", "mime": "^4.0.4", "zod": "^3.23.0" }, "bin": { "shovel": "bin/cli.js", "create-shovel": "bin/create.js", "cli": "bin/cli.js", "create": "bin/create.js" } }, "sha512-6Bo1RFdyINz9JNnH0sdHofhBbh4hg1tCYWs0O0ijdbGuir/CknVVkt1IjdakmO8uPVEKe4W6H8oz4QaEyNX38A=="],
+    "@b9g/shovel": ["@b9g/shovel@0.2.20", "", { "dependencies": { "@b9g/async-context": "^0.2.1", "@b9g/cache": "^0.2.2", "@b9g/filesystem": "^0.2.0", "@b9g/http-errors": "^0.2.1", "@b9g/node-webworker": "^0.2.1", "@b9g/platform": "^0.1.19", "@b9g/platform-bun": "^0.1.17", "@b9g/platform-cloudflare": "^0.1.17", "@b9g/platform-node": "^0.1.17", "@clack/prompts": "^0.7.0", "@logtape/logtape": "^2.0.0", "commander": "^13.1.0", "esbuild": "^0.27.2", "esbuild-plugins-node-modules-polyfill": "^1.8.1", "glob": "^13.0.6", "mime": "^4.0.4", "zod": "^3.23.0" }, "bin": { "shovel": "bin/cli.js", "create-shovel": "bin/create.js", "cli": "bin/cli.js", "create": "bin/create.js" } }, "sha512-ChaVsV8zUO2yxzz8bQTLurNS/2GooY8tj1BHEx5OSBQSWc6GOeeaeDYckwQE+cE7jPFz/MyOgJ/qzj8fPU75Uw=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 
