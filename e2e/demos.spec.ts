@@ -132,6 +132,41 @@ test.describe("Blockquote demo", () => {
 		expect(value).toBe("\n");
 	});
 
+	test("Backspace during IME composition does not merge lines", async ({page}) => {
+		const area = page.locator("content-area");
+		// Put the cursor just past the second blockquote's "> " prefix. This is the
+		// position whose Backspace handler merges the line into the previous one,
+		// so it is where a stray Backspace does visible damage.
+		await area.evaluate((el: any) => {
+			const pos = "> To be, or not to be, that is the question—\n> ".length;
+			el.setSelectionRange(pos, pos);
+		});
+		const client = await page.context().newCDPSession(page);
+		// Begin a Pinyin composition: "ni" is a pending IME buffer, not committed
+		// text.
+		await client.send("Input.imeSetComposition", {
+			selectionStart: 2,
+			selectionEnd: 2,
+			text: "ni",
+		});
+		await page.waitForTimeout(50);
+		// This Backspace belongs to the IME: it edits the pending buffer down to
+		// "n" and must not reach the document as a line-level Backspace.
+		await page.keyboard.press("Backspace");
+		await client.send("Input.imeSetComposition", {
+			selectionStart: 1,
+			selectionEnd: 1,
+			text: "n",
+		});
+		await page.waitForTimeout(50);
+		const value = await areaValue(page);
+		// Both blockquote lines must survive with their prefixes intact. A merge
+		// shows up as the second line losing "> " and joining the first.
+		expect(value).toContain("question—\n> ");
+		expect(value.split("\n")[1]).toMatch(/^> /);
+		expect(value).toContain("Whether");
+	});
+
 	test("Backspace at start of blockquote content removes prefix", async ({page}) => {
 		const area = page.locator("content-area");
 		await area.evaluate((el: any) => {

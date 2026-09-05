@@ -26,7 +26,7 @@ Hamlet, Act 3, Scene 1
 					contenteditable="true"
 					spellcheck={false}
 					onkeydown={(ev: KeyboardEvent) => {
-						if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
+						if (ev.isComposing || ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
 						const area = (ev.currentTarget as HTMLElement).closest(
 							"content-area",
 						) as any;
