@@ -68,6 +68,11 @@ export function* Root(
 					<script type="module" src=${assets.demosScript}></script>
 					<script type="module" src=${assets.navbarScript}></script>
 					<script type="module" src=${assets.codeBlocksScript}></script>
+					<script
+						type="module"
+						src="https://static.cloudflareinsights.com/beacon.min.js"
+						data-cf-beacon='{"token": "421289fdd05241e784b3ab34b24cf3a4"}'
+					></script>
 				</body>
 			</html>
 		`;
