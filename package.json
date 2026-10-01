@@ -2,6 +2,10 @@
   "name": "@b9g/revise",
   "version": "0.1.6",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bikeshaving/revise.git"
+  },
   "type": "module",
   "main": "./dist/contentarea.cjs",
   "exports": {

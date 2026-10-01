@@ -2,6 +2,11 @@
   "name": "@b9g/crankeditable",
   "version": "0.1.1",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bikeshaving/revise.git",
+    "directory": "packages/crankeditable"
+  },
   "type": "module",
   "module": "./dist/crank-editable.js",
   "exports": {
