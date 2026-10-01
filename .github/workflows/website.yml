@@ -1,0 +1,54 @@
+name: Website
+
+# revise.js.org is the static site in website/, published to the gh-pages
+# branch. Every push to main rebuilds it. The home page reads the demos from
+# examples/ and the guides from docs/, so changes outside website/ change the
+# site too.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun install --frozen-lockfile
+        working-directory: website
+
+      - run: bun install --frozen-lockfile
+        working-directory: packages/crankeditable
+
+      # The site links crankeditable from packages/ and imports its build.
+      - name: Build crankeditable
+        run: npm run build
+        working-directory: packages/crankeditable
+
+      - name: Build
+        run: npm run static
+        working-directory: website
+
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: website/dist/public
+          cname: revise.js.org

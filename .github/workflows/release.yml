@@ -1,0 +1,74 @@
+name: Release
+
+# Publishing a GitHub Release stages a version on npm with provenance. It
+# goes live only when a person runs `npm stage approve`, which asks for 2FA.
+#
+# This repository publishes two packages. The tag picks which one:
+#   v1.2.3                 stages @b9g/revise from the repository root
+#   crankeditable-v1.2.3   stages @b9g/crankeditable from packages/crankeditable
+on:
+  release:
+    types: [published]
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Staged publishing needs npm 11.15 or later.
+      - run: npm install -g npm@latest
+
+      - name: Pick the package from the tag
+        id: pkg
+        run: |
+          case "$GITHUB_REF_NAME" in
+            crankeditable-v*)
+              echo "dir=packages/crankeditable" >> "$GITHUB_OUTPUT"
+              echo "version=${GITHUB_REF_NAME#crankeditable-v}" >> "$GITHUB_OUTPUT"
+              ;;
+            v*)
+              echo "dir=." >> "$GITHUB_OUTPUT"
+              echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Tag $GITHUB_REF_NAME does not name a package"
+              exit 1
+              ;;
+          esac
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun install --frozen-lockfile
+        working-directory: ${{ steps.pkg.outputs.dir }}
+
+      - name: Check the tag matches the version
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: |
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "${{ steps.pkg.outputs.version }}" != "$PKG" ]; then
+            echo "Tag version ${{ steps.pkg.outputs.version }} does not match package version $PKG"
+            exit 1
+          fi
+
+      - name: Unit tests
+        if: steps.pkg.outputs.dir == '.'
+        run: |
+          npx --no playwright-core install --with-deps chromium
+          npm test
+
+      - run: npx libuild stage --provenance
+        working-directory: ${{ steps.pkg.outputs.dir }}
