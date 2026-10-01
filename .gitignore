@@ -1,6 +1,0 @@
-node_modules
-coverage
-dist
-# snowpack...
-build
-*.log
