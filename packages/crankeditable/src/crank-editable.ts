@@ -26,6 +26,7 @@ export function* Editable(
 
 	let lastEditSelection: SelectionRange | undefined;
 	let pendingSelection: SelectionRange | undefined;
+	let historySelection: SelectionRange | undefined;
 	let area: ContentAreaElement | undefined;
 	// connectedCallback calls validate() with source=null before this.after()
 	// can call el.source("render"). Skip that initial contentchange.
@@ -68,7 +69,7 @@ export function* Editable(
 			case "historyUndo": {
 				ev.preventDefault();
 				if (state.undo()) {
-					lastEditSelection = state.selection;
+					historySelection = lastEditSelection = state.selection;
 					dispatchStateChange();
 				}
 				break;
@@ -76,7 +77,7 @@ export function* Editable(
 			case "historyRedo": {
 				ev.preventDefault();
 				if (state.redo()) {
-					lastEditSelection = state.selection;
+					historySelection = lastEditSelection = state.selection;
 					dispatchStateChange();
 				}
 				break;
@@ -100,7 +101,7 @@ export function* Editable(
 		}
 
 		if (handled) {
-			lastEditSelection = state.selection;
+			historySelection = lastEditSelection = state.selection;
 			dispatchStateChange();
 		}
 	});
@@ -125,13 +126,13 @@ export function* Editable(
 		document.removeEventListener("selectionchange", onselectionchange);
 	});
 
-	let oldSelectionRange: SelectionRange | undefined;
 	for ({state, children} of this) {
-		// pendingSelection: captured from DOM before preventDefault (user edits)
-		// state.selection: computed from edit operations (undo/redo)
-		// oldSelectionRange: saved from DOM after previous render (fallback)
-		const selectionRange = pendingSelection ?? state.selection ?? oldSelectionRange;
+		const selectionRange =
+			pendingSelection ??
+			historySelection ??
+			(area && liveSelectionRange(area));
 		pendingSelection = undefined;
+		historySelection = undefined;
 
 		this.after((el: ContentAreaElement) => {
 			area = el;
@@ -161,15 +162,33 @@ export function* Editable(
 			}
 		});
 
-		const areaEl: ContentAreaElement = yield createElement(
-			"content-area",
-			null,
-			children,
-		);
-
-		// Capture the DOM selection after render for the next iteration.
-		oldSelectionRange = areaEl.getSelectionRange();
+		yield createElement("content-area", null, children);
 	}
+}
+
+function liveSelectionRange(
+	area: ContentAreaElement,
+): SelectionRange | undefined {
+	const selection = document.getSelection();
+	if (
+		!selection ||
+		!selection.anchorNode ||
+		!selection.focusNode ||
+		!area.contains(selection.anchorNode) ||
+		!area.contains(selection.focusNode)
+	) {
+		return undefined;
+	}
+
+	const anchor = area.indexAt(selection.anchorNode, selection.anchorOffset);
+	const focus = area.indexAt(selection.focusNode, selection.focusOffset);
+	if (anchor === focus) {
+		return {start: anchor, end: anchor, direction: "none"};
+	} else if (anchor < focus) {
+		return {start: anchor, end: focus, direction: "forward"};
+	}
+
+	return {start: focus, end: anchor, direction: "backward"};
 }
 
 /** @deprecated Use `Editable` instead. */

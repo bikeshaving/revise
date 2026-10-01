@@ -180,3 +180,31 @@ test.describe("Blockquote demo", () => {
 		expect(value).not.toContain("\n> Whether");
 	});
 });
+
+test.describe("Parent re-render", () => {
+	test.beforeEach(async ({page}) => {
+		await page.goto("/rerender.html");
+		await page.locator("content-area").waitFor();
+	});
+
+	test("keeps the caret when the parent re-renders without an edit", async ({page}) => {
+		await page.locator("content-area [contenteditable]").click();
+		await page.keyboard.type("abcd");
+		await page.evaluate(() => (window as any).rerender());
+		await page.waitForTimeout(50);
+		const sel = await page.locator("content-area").evaluate((el: any) => el.getSelectionRange());
+		expect([sel.start, sel.end]).toEqual([4, 4]);
+		await page.keyboard.type("e");
+		expect(await areaValue(page)).toBe("abcde\n");
+	});
+
+	test("does not take focus when the parent re-renders while unfocused", async ({page}) => {
+		await page.locator("content-area [contenteditable]").click();
+		await page.keyboard.type("abcd");
+		await page.locator("#other").focus();
+		await page.evaluate(() => (window as any).rerender());
+		await page.waitForTimeout(50);
+		const activeId = await page.evaluate(() => document.activeElement?.id);
+		expect(activeId).toBe("other");
+	});
+});
