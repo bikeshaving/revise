@@ -62,7 +62,7 @@ test.describe("Todo demo", () => {
 	test("select all + delete clears content", async ({page}) => {
 		const editable = page.locator("[contenteditable='true']");
 		await editable.click();
-		await page.keyboard.press("Meta+a");
+		await page.keyboard.press("ControlOrMeta+a");
 		await page.keyboard.press("Backspace");
 		// First backspace leaves the virtual prefix on the surviving div
 		await page.keyboard.press("Backspace");
@@ -123,7 +123,7 @@ test.describe("Blockquote demo", () => {
 	test("select all + delete clears content", async ({page}) => {
 		const editable = page.locator("[contenteditable='true']");
 		await editable.click();
-		await page.keyboard.press("Meta+a");
+		await page.keyboard.press("ControlOrMeta+a");
 		await page.keyboard.press("Backspace");
 		// First backspace leaves the virtual prefix on the surviving div
 		await page.keyboard.press("Backspace");
