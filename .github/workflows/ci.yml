@@ -68,14 +68,15 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - run: bun install --frozen-lockfile
-        working-directory: website
-
-      - run: bun install --frozen-lockfile
         working-directory: packages/crankeditable
 
       - name: Build crankeditable
         run: npm run build
         working-directory: packages/crankeditable
+
+      # The website installs crankeditable from packages/, so it must be built first.
+      - run: bun install --frozen-lockfile
+        working-directory: website
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
