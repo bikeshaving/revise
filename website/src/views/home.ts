@@ -75,6 +75,7 @@ const previewClass = css`
 export default async function Home({url}: {url: string}) {
 	const [
 		simpleCode,
+		plainCode,
 		rainbowCode,
 		socialCode,
 		twemojiCode,
@@ -83,6 +84,7 @@ export default async function Home({url}: {url: string}) {
 		todoCode,
 	] = await Promise.all([
 		readExample("simple.tsx"),
+		readExample("plain.tsx"),
 		readExample("rainbow.tsx"),
 		readExample("social.tsx"),
 		readExample("twemoji.tsx"),
@@ -92,6 +94,7 @@ export default async function Home({url}: {url: string}) {
 	]);
 
 	const simpleInitial = extractInitialValue(simpleCode);
+	const plainInitial = extractInitialValue(plainCode);
 	const rainbowInitial = extractInitialValue(rainbowCode);
 	const socialInitial = extractInitialValue(socialCode);
 	const twemojiInitial = extractInitialValue(twemojiCode);
@@ -142,6 +145,20 @@ export default async function Home({url}: {url: string}) {
 					<div class="code-block-container code-block-live">
 						<${InlineCodeBlock} value=${simpleCode} lang="tsx" editable=${true} previewId="demo-simple" />
 						<${SerializeScript} class="props" value=${{code: simpleCode, lang: "tsx", editable: true, previewId: "demo-simple"}} name="inline-code-block-props" />
+					</div>
+				</section>
+
+				<section>
+					<h2 class=${sectionHeading}>Plain Text</h2>
+					<p class=${sectionDesc}>The whole value as a single text node. No lines, no keys.</p>
+					<div id="demo-plain" data-initial=${plainInitial} class=${previewClass}>
+						<content-area>
+							<pre class="editable" contenteditable="true" spellcheck="false">${plainInitial}</pre>
+						</content-area>
+					</div>
+					<div class="code-block-container code-block-live">
+						<${InlineCodeBlock} value=${plainCode} lang="tsx" editable=${true} previewId="demo-plain" />
+						<${SerializeScript} class="props" value=${{code: plainCode, lang: "tsx", editable: true, previewId: "demo-plain"}} name="inline-code-block-props" />
 					</div>
 				</section>
 
