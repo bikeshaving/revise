@@ -62,6 +62,14 @@ export function* Editable(
 		dispatchStateChange();
 	});
 
+	const recordPendingMutations = () => {
+		if (area && area.isConnected) {
+			area.getSelectionRange();
+		}
+	};
+	this.addEventListener("keydown", recordPendingMutations, {capture: true});
+	this.addEventListener("beforeinput", recordPendingMutations, {capture: true});
+
 	// beforeinput: intercept browser undo/redo
 	this.addEventListener("beforeinput", (ev: Event) => {
 		const {inputType} = ev as InputEvent;

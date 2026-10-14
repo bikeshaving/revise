@@ -42,6 +42,13 @@ export class ContentAreaElement extends HTMLElement {
 		this[_onselectionchange] = () => {
 			this[_selectionRange] = getSelectionRange(this);
 		};
+		const recordPendingMutations = () => {
+			if (this.isConnected) {
+				validate(this);
+			}
+		};
+		this.addEventListener("keydown", recordPendingMutations, true);
+		this.addEventListener("beforeinput", recordPendingMutations, true);
 
 		this[_value] = "";
 		this[_selectionRange] = {start: 0, end: 0, direction: "none"};
@@ -939,11 +946,11 @@ function setSelectionRange(
 		direction === "backward" ? [start, end] : [end, start];
 
 	if (focus === anchor) {
-		const [node, offset] = nodeOffsetAt(_this, focus);
+		const [node, offset] = editableNodeOffsetAt(_this, focus);
 		selection.collapse(node, offset);
 	} else {
-		const [anchorNode, anchorOffset] = nodeOffsetAt(_this, anchor);
-		const [focusNode, focusOffset] = nodeOffsetAt(_this, focus);
+		const [anchorNode, anchorOffset] = editableNodeOffsetAt(_this, anchor);
+		const [focusNode, focusOffset] = editableNodeOffsetAt(_this, focus);
 		if (anchorNode === null && focusNode === null) {
 			selection.collapse(null);
 		} else if (anchorNode === null) {
@@ -960,4 +967,19 @@ function setSelectionRange(
 			);
 		}
 	}
+	_this[_selectionRange] = getSelectionRange(_this);
+	_this[_staleSelectionRange] = undefined;
+}
+
+function editableNodeOffsetAt(
+	_this: ContentAreaElement,
+	index: number,
+): [Node | null, number] {
+	let [node, offset] = nodeOffsetAt(_this, index);
+	while (node === _this && index > 0 && !_this.isContentEditable) {
+		index--;
+		[node, offset] = nodeOffsetAt(_this, index);
+	}
+
+	return [node, offset];
 }
