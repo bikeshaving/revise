@@ -91,4 +91,27 @@ test.describe("pending mutations", () => {
 		});
 		expect(result).toEqual(["contentchange", "keydown"]);
 	});
+
+	test("are recorded before selectionchange reads the selection", async ({page}) => {
+		await mount(
+			page,
+			`<content-area><div contenteditable="true"><div>one</div><div>two</div></div></content-area>`,
+		);
+		const result = await page.locator("content-area").evaluate((el: any) => {
+			el.value;
+			const line = el.querySelectorAll("[contenteditable] > div")[1];
+			const text = line.firstChild;
+			const span = document.createElement("span");
+			line.replaceChild(span, text);
+			span.append(text);
+			document.getSelection()!.collapse(text, 1);
+			const errors: Array<string> = [];
+			const onerror = (ev: ErrorEvent) => errors.push(ev.message);
+			window.addEventListener("error", onerror);
+			document.dispatchEvent(new Event("selectionchange"));
+			window.removeEventListener("error", onerror);
+			return {errors, start: el.selectionStart};
+		});
+		expect(result).toEqual({errors: [], start: 5});
+	});
 });

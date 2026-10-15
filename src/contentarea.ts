@@ -40,6 +40,7 @@ export class ContentAreaElement extends HTMLElement {
 			validate(this, records);
 		});
 		this[_onselectionchange] = () => {
+			validate(this);
 			this[_selectionRange] = getSelectionRange(this);
 		};
 		const recordPendingMutations = () => {
