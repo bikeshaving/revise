@@ -39,12 +39,15 @@ export class EditableState {
 	#keyer: Keyer;
 	#selection: SelectionRange | undefined;
 	#source: string | null;
+	#edit: Edit | undefined;
 
 	get value(): string { return this.#value; }
 	get history(): EditHistory { return this.#history; }
 	get keyer(): Keyer { return this.#keyer; }
 	get selection(): SelectionRange | undefined { return this.#selection; }
 	get source(): string | null { return this.#source; }
+	/** The most recently applied edit, or undefined after construction or reset. */
+	get edit(): Edit | undefined { return this.#edit; }
 
 	constructor(options?: {value?: string}) {
 		this.#value = options?.value ?? "";
@@ -52,6 +55,7 @@ export class EditableState {
 		this.#keyer = new Keyer();
 		this.#selection = undefined;
 		this.#source = null;
+		this.#edit = undefined;
 	}
 
 	applyEdit(edit: Edit, options?: string | {source?: string; history?: boolean}): void {
@@ -72,6 +76,7 @@ export class EditableState {
 		}
 		this.#selection = selectionRangeFromEdit(edit);
 		this.#source = source ?? null;
+		this.#edit = edit;
 	}
 
 	setValue(newValue: string, options?: string | {source?: string; history?: boolean}): void {
@@ -111,5 +116,6 @@ export class EditableState {
 		this.#keyer = new Keyer();
 		this.#selection = undefined;
 		this.#source = "reset";
+		this.#edit = undefined;
 	}
 }

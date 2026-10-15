@@ -310,4 +310,31 @@ stateTest("reset defaults to empty string", () => {
 	Assert.is(state.value, "");
 });
 
+stateTest("edit is the last applied edit", () => {
+	const state = new EditableState({value: "hello"});
+	Assert.is(state.edit, undefined);
+	state.setValue("hello world");
+	Assert.ok(state.edit);
+	Assert.is(state.edit!.apply("hello"), "hello world");
+	state.checkpoint();
+	state.setValue("hi world");
+	Assert.is(state.edit!.apply("hello world"), "hi world");
+});
+
+stateTest("edit follows undo and redo", () => {
+	const state = new EditableState({value: "hello"});
+	state.setValue("hello world");
+	state.undo();
+	Assert.is(state.edit!.apply("hello world"), "hello");
+	state.redo();
+	Assert.is(state.edit!.apply("hello"), "hello world");
+});
+
+stateTest("reset clears edit", () => {
+	const state = new EditableState({value: "hello"});
+	state.setValue("hello world");
+	state.reset("new");
+	Assert.is(state.edit, undefined);
+});
+
 stateTest.run();
