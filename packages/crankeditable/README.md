@@ -59,7 +59,8 @@ wrapping your children. It listens for:
   without editing, so undo groups break at natural boundaries.
 
 After each render it calls `contentArea.source("render")` to tag the DOM
-update, restores the selection, and scrolls the cursor into view.
+update and restores the selection. After an edit, undo, or redo, it also
+scrolls the cursor into view. Other renders leave the scroll position alone.
 
 ## Props
 
@@ -73,3 +74,56 @@ update, restores the selection, and scrolls the cursor into view.
 | Event | Bubbles | Description |
 |-------|---------|-------------|
 | `statechange` | Yes | Dispatched after every edit, undo, or redo. Listen with `onstatechange` on the component element to trigger a parent re-render. |
+
+## Large documents
+
+`Lines` renders a value as lines inside stable chunks. Each chunk uses
+`content-visibility: auto`, so the browser skips layout and paint for chunks
+that are off screen, while every line stays in the DOM for find in page,
+selection, copy, and screen readers. On each edit, only the lines the edit
+touched are rendered again.
+
+```jsx
+import {Editable, EditableState, Lines} from "@b9g/crankeditable";
+
+function* CodeEditor() {
+  const state = new EditableState({value: source});
+  const tokenizer = createTokenizer(source);
+
+  for ({} of this) {
+    tokenizer.update(state.value);
+    yield (
+      <Editable state={state} onstatechange={() => this.refresh()}>
+        <pre contenteditable="plaintext-only" spellcheck="false">
+          <Lines
+            state={state}
+            revision={tokenizer.tree}
+            render={(text, start) => highlight(text, tokenizer.tokens(start, start + text.length))}
+            signature={(text, start) => describe(tokenizer.tokens(start, start + text.length))}
+          />
+        </pre>
+      </Editable>
+    );
+  }
+}
+```
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `state` | `EditableState` | The state to render. The value must be empty or end with a newline. |
+| `render` | `(text, start) => Children` | Renders the contents of one non-empty line. `start` is the line's index in the value. Empty lines render a `<br>`. |
+| `signature` | `(text, start) => unknown` | Optional. Describes how a line renders apart from its text, such as its tokens. Return `undefined` to keep a line's current rendering for now. |
+| `revision` | `unknown` | Optional. Change it whenever lines may render differently without their text changing, such as after the syntax tree changes. |
+| `chunkSize` | `number` | Optional. Lines per chunk. Defaults to 250. |
+
+When `revision` changes, chunks on screen and their neighbors check each
+line's signature right away and render the lines whose signature changed.
+Other chunks wait until they scroll into view. Their text is always current;
+only their decoration can be out of date while nobody can see it.
+
+`Lines` reads `state.edit` (revise 0.1.8 and later) to find which lines
+changed. With older versions it diffs the old and new value instead. Render
+after every state change, as in the example above, so no edit is skipped.
+
+Use `contenteditable="plaintext-only"`: with `contenteditable="true"`,
+Safari turns a space before a line break into a non-breaking space.

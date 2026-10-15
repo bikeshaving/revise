@@ -6,6 +6,8 @@ import {EditableState} from "@b9g/revise/state.js";
 
 export type {SelectionRange};
 export {ContentAreaElement, EditableState};
+export {Lines} from "./lines.js";
+export type {LinesProps} from "./lines.js";
 
 export interface EditableProps {
 	state: EditableState;
@@ -135,10 +137,9 @@ export function* Editable(
 	});
 
 	for ({state, children} of this) {
+		const changedSelection = pendingSelection ?? historySelection;
 		const selectionRange =
-			pendingSelection ??
-			historySelection ??
-			(area && liveSelectionRange(area));
+			changedSelection ?? (area && liveSelectionRange(area));
 		pendingSelection = undefined;
 		historySelection = undefined;
 
@@ -158,7 +159,7 @@ export function* Editable(
 
 				// Scroll cursor into view
 				const sel = document.getSelection();
-				if (sel && sel.focusNode) {
+				if (changedSelection && sel && sel.focusNode) {
 					const focusEl =
 						sel.focusNode.nodeType === Node.ELEMENT_NODE
 							? (sel.focusNode as Element)
