@@ -33,6 +33,17 @@ export function selectionRangeFromEdit(edit: Edit): SelectionRange | undefined {
 	return {start: start!, end: end!, direction: "none"};
 }
 
+function inputLength(edit: Edit): number {
+	let length = 0;
+	for (const op of edit.operations()) {
+		if (op.type !== "insert") {
+			length = op.end;
+		}
+	}
+
+	return length;
+}
+
 export class EditableState {
 	#value: string;
 	#history: EditHistory;
@@ -40,6 +51,7 @@ export class EditableState {
 	#selection: SelectionRange | undefined;
 	#source: string | null;
 	#edit: Edit | undefined;
+	#version: number;
 
 	get value(): string { return this.#value; }
 	get history(): EditHistory { return this.#history; }
@@ -48,6 +60,8 @@ export class EditableState {
 	get source(): string | null { return this.#source; }
 	/** The most recently applied edit, or undefined after construction or reset. */
 	get edit(): Edit | undefined { return this.#edit; }
+	/** Increases by one with every applied edit and every reset. */
+	get version(): number { return this.#version; }
 
 	constructor(options?: {value?: string}) {
 		this.#value = options?.value ?? "";
@@ -56,6 +70,7 @@ export class EditableState {
 		this.#selection = undefined;
 		this.#source = null;
 		this.#edit = undefined;
+		this.#version = 0;
 	}
 
 	applyEdit(edit: Edit, options?: string | {source?: string; history?: boolean}): void {
@@ -69,6 +84,13 @@ export class EditableState {
 		}
 
 		edit = edit.normalize();
+		const length = inputLength(edit);
+		if (length !== this.#value.length) {
+			throw new RangeError(
+				`Edit expects a value of length ${length}, but the value has length ${this.#value.length}`,
+			);
+		}
+
 		this.#value = edit.apply(this.#value);
 		this.#keyer.transform(edit);
 		if (recordHistory && source !== "history") {
@@ -77,6 +99,7 @@ export class EditableState {
 		this.#selection = selectionRangeFromEdit(edit);
 		this.#source = source ?? null;
 		this.#edit = edit;
+		this.#version++;
 	}
 
 	setValue(newValue: string, options?: string | {source?: string; history?: boolean}): void {
@@ -117,5 +140,6 @@ export class EditableState {
 		this.#selection = undefined;
 		this.#source = "reset";
 		this.#edit = undefined;
+		this.#version++;
 	}
 }

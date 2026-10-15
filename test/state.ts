@@ -337,4 +337,25 @@ stateTest("reset clears edit", () => {
 	Assert.is(state.edit, undefined);
 });
 
+stateTest("version counts edits and resets", () => {
+	const state = new EditableState({value: "hello"});
+	Assert.is(state.version, 0);
+	state.setValue("hello world");
+	state.undo();
+	Assert.is(state.version, 2);
+	state.reset("new");
+	Assert.is(state.version, 3);
+});
+
+stateTest("applyEdit rejects an edit for a different value without changing state", () => {
+	const state = new EditableState({value: "hello"});
+	const key = state.keyer.keyAt(4);
+	const edit = Edit.diff("hello world", "hello there");
+	Assert.throws(() => state.applyEdit(edit), RangeError);
+	Assert.is(state.value, "hello");
+	Assert.is(state.version, 0);
+	Assert.is(state.keyer.keyAt(4), key);
+	Assert.not.ok(state.canUndo());
+});
+
 stateTest.run();

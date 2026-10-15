@@ -150,6 +150,7 @@ together value, keyer, history, and selection.
 - `history: EditHistory` — The undo/redo history.
 - `selection: SelectionRange | undefined` — Selection computed from the last edit.
 - `edit: Edit | undefined` — The last edit applied, including undo and redo. Lets a renderer update only what changed instead of diffing the whole value. Undefined after construction or `reset()`.
+- `version: number` — Increases by one with every applied edit and every reset. A renderer that saw version `n` can use `edit` only if the version is now `n + 1`.
 - `applyEdit(edit, options?): void` — Apply an edit, updating value/keyer/history/selection.
 - `setValue(newValue, options?): void` — Set a new value by diffing against the current value.
 - `undo(): boolean` — Undo the last edit group.
