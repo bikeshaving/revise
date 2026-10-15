@@ -110,20 +110,23 @@ function* CodeEditor() {
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `state` | `EditableState` | The state to render. The value must be empty or end with a newline. |
+| `state` | `EditableState` | The state to render. The value must end with a newline. |
 | `render` | `(text, start) => Children` | Renders the contents of one non-empty line. `start` is the line's index in the value. Empty lines render a `<br>`. |
 | `signature` | `(text, start) => unknown` | Optional. Describes how a line renders apart from its text, such as its tokens. Return `undefined` to keep a line's current rendering for now. |
 | `revision` | `unknown` | Optional. Change it whenever lines may render differently without their text changing, such as after the syntax tree changes. |
 | `chunkSize` | `number` | Optional. Lines per chunk. Defaults to 250. |
 
-When `revision` changes, chunks on screen and their neighbors check each
-line's signature right away and render the lines whose signature changed.
-Other chunks wait until they scroll into view. Their text is always current;
-only their decoration can be out of date while nobody can see it.
+Chunks that have not been on screen yet hold plain text, and `render` runs
+for their lines the first time they scroll into view. When `revision`
+changes, chunks on screen and their neighbors check each line's signature
+right away and render the lines whose signature changed. Other chunks wait
+until they scroll into view. Their text is always current; only their
+decoration can be missing or out of date while nobody can see it.
 
-`Lines` reads `state.edit` (revise 0.1.8 and later) to find which lines
-changed. With older versions it diffs the old and new value instead. Render
-after every state change, as in the example above, so no edit is skipped.
+`Lines` reads `state.edit` and `state.version` (revise 0.1.8 and later) to
+find which lines changed. When it missed an edit, or with older versions of
+revise, it diffs the old and new value instead, which is slower in large
+documents.
 
 Use `contenteditable="plaintext-only"`: with `contenteditable="true"`,
 Safari turns a space before a line break into a non-breaking space.

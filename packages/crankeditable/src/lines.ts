@@ -47,7 +47,7 @@ interface Model {
 	state: EditableState | null;
 	keyer: Keyer | null;
 	value: string;
-	edit: Edit | undefined;
+	version: number;
 	revision: unknown;
 	chunkSize: number;
 	chunks: Array<Chunk>;
@@ -55,6 +55,11 @@ interface Model {
 }
 
 const UNKNOWN = Symbol("unknown");
+const COPY = Symbol("copy");
+const PLAIN = Symbol("plain");
+const OBSERVABLE =
+	typeof HTMLElement !== "undefined" &&
+	"oncontentvisibilityautostatechange" in HTMLElement.prototype;
 
 export function* Lines(this: Context<LinesProps>, props: LinesProps) {
 	const model: Model = {
@@ -62,7 +67,7 @@ export function* Lines(this: Context<LinesProps>, props: LinesProps) {
 		state: null,
 		keyer: null,
 		value: "",
-		edit: undefined,
+		version: -1,
 		revision: undefined,
 		chunkSize: 0,
 		chunks: [],
@@ -88,9 +93,9 @@ function* ChunkView(
 	{chunk, model}: {chunk: Chunk; model: Model},
 ) {
 	let area: ContentAreaElement | null = null;
-	this.after((el: HTMLElement) => {
-		area = el.closest("content-area") as ContentAreaElement | null;
-	});
+	let root: HTMLElement | null = null;
+	let generation = 0;
+	let mounted = false;
 
 	this.addEventListener("contentvisibilityautostatechange", (ev: Event) => {
 		chunk.visible = !(ev as Event & {skipped: boolean}).skipped;
@@ -106,8 +111,13 @@ function* ChunkView(
 	});
 
 	chunk.refresh = () => {
-		const focused = area !== null && area.contains(document.activeElement);
-		const selection = focused ? area!.getSelectionRange() : null;
+		const current = document.getSelection();
+		const inside =
+			area !== null &&
+			root !== null &&
+			current !== null &&
+			(root.contains(current.anchorNode) || root.contains(current.focusNode));
+		const selection = inside ? area!.getSelectionRange() : null;
 		this.refresh();
 		if (area !== null) {
 			area.source("render");
@@ -127,44 +137,86 @@ function* ChunkView(
 
 	for ({chunk, model} of this) {
 		const {render, signature} = model.props;
-		const recheck = chunk.stale && isActive(model, model.chunks.indexOf(chunk));
-		let ready = true;
-		const children = chunk.lines.map((line) => {
-			const start = chunk.start + line.offset;
-			let next: unknown = line.signature;
-			if (recheck && signature) {
-				next = signature(line.text, start);
-				if (next === undefined) {
-					ready = false;
-					next = line.signature;
+		const active = isActive(model, model.chunks.indexOf(chunk));
+		const recheck = active && chunk.stale;
+		let ready = active;
+		const plan: Array<unknown> = [];
+		let decorations = 0;
+		for (const line of chunk.lines) {
+			let action: unknown = COPY;
+			if (!active) {
+				if (line.dirty) {
+					action = PLAIN;
+				}
+			} else {
+				const plain = line.signature === PLAIN;
+				if (line.dirty || plain || recheck) {
+					if (!signature) {
+						action = UNKNOWN;
+					} else {
+						const next = signature(line.text, chunk.start + line.offset);
+						if (next === undefined) {
+							ready = false;
+							if (line.dirty) {
+								action = UNKNOWN;
+							}
+						} else if (line.dirty || plain || next !== line.signature) {
+							action = next;
+						}
+					}
 				}
 			}
 
-			const same = signature
-				? line.signature !== UNKNOWN && next === line.signature
-				: !recheck;
-			if (!line.dirty && same) {
+			plan.push(action);
+			if (action !== COPY && action !== PLAIN && line.signature === PLAIN) {
+				decorations++;
+			}
+		}
+
+		const fresh = mounted && decorations > chunk.lines.length / 4;
+		if (fresh) {
+			generation++;
+		}
+
+		const children = chunk.lines.map((line, i) => {
+			let action = plan[i];
+			if (fresh && action === COPY) {
+				action = !active || line.signature === PLAIN ? PLAIN : line.signature;
+			}
+
+			if (action === COPY) {
 				return createElement("div", {key: line.key, copy: true});
 			}
 
 			line.dirty = false;
-			line.signature = signature
-				? next === UNKNOWN ? signature(line.text, start) ?? UNKNOWN : next
-				: undefined;
+			line.signature = action;
+			if (action === PLAIN) {
+				return createElement(
+					"div",
+					{key: line.key},
+					line.text || createElement("br"),
+				);
+			}
+
 			return createElement(
 				"div",
 				{key: line.key},
-				line.text ? render(line.text, start) : createElement("br"),
+				line.text
+					? render(line.text, chunk.start + line.offset)
+					: createElement("br"),
 			);
 		});
 
-		if (recheck && ready) {
-			chunk.stale = false;
-		}
-
+		mounted = true;
+		chunk.stale = !ready;
+		this.after((el: HTMLElement) => {
+			root = el;
+			area = el.closest("content-area") as ContentAreaElement | null;
+		});
 		yield createElement(
 			"div",
 			{
+				key: generation,
 				style:
 					"content-visibility: auto; contain-intrinsic-size: auto " +
 					`calc(${chunk.lines.length} * 1lh)`,
@@ -186,7 +238,7 @@ function isActive(model: Model, i: number): boolean {
 function sync(model: Model): void {
 	const {state, revision, chunkSize = 250} = model.props;
 	const value = state.value;
-	const edit = (state as {edit?: Edit}).edit;
+	const {edit, version} = state as {edit?: Edit; version?: number};
 	for (const chunk of model.chunks) {
 		chunk.changed = false;
 	}
@@ -202,15 +254,20 @@ function sync(model: Model): void {
 		rebuild(model, value);
 	} else if (value !== model.value) {
 		const change =
-			(edit !== model.edit && edit && changeFromEdit(edit, value, model.value)) ||
-			changeFromDiff(model.value, value);
-		if (!apply(model, value, change)) {
+			edit && version === model.version + 1
+				? changeFromEdit(edit, value, model.value)
+				: null;
+		if (!apply(model, value, change || changeFromDiff(model.value, value))) {
 			rebuild(model, value);
+		} else if (!change) {
+			rekey(model);
 		}
+	} else if (version !== undefined && version !== model.version) {
+		rekey(model);
 	}
 
 	model.value = value;
-	model.edit = edit;
+	model.version = version ?? -1;
 	if (!Object.is(revision, model.revision)) {
 		model.revision = revision;
 		for (const chunk of model.chunks) {
@@ -277,12 +334,26 @@ function changeFromDiff(oldValue: string, value: string): Change {
 	};
 }
 
+function rekey(model: Model): void {
+	const keyer = model.keyer!;
+	for (const chunk of model.chunks) {
+		for (const line of chunk.lines) {
+			const key = keyer.keyAt(chunk.start + line.offset);
+			if (key !== line.key) {
+				line.key = key;
+				line.dirty = true;
+				chunk.changed = true;
+			}
+		}
+	}
+}
+
 function createChunk(model: Model, lines: Array<Line>): Chunk {
 	return {
 		key: model.nextChunkKey++,
 		start: 0,
 		lines,
-		visible: true,
+		visible: !OBSERVABLE,
 		stale: false,
 		changed: true,
 		refresh: null,
@@ -315,9 +386,9 @@ function rebuild(model: Model, value: string): void {
 	if (value) {
 		const lines = createLines(model.keyer!, body(value), 0);
 		for (let i = 0; i < lines.length; i += model.chunkSize) {
-			model.chunks.push(
-				createChunk(model, lines.slice(i, i + model.chunkSize)),
-			);
+			const chunk = createChunk(model, lines.slice(i, i + model.chunkSize));
+			chunk.visible ||= i < model.chunkSize * 2;
+			model.chunks.push(chunk);
 		}
 	}
 
@@ -392,11 +463,12 @@ function apply(model: Model, value: string, change: Change): boolean {
 	const regionStart = first.start + first.lines[li].offset;
 	let cj: number;
 	let lj: number;
-	let text: string;
+	let text: string | null;
 	if (to > bodyEnd) {
 		cj = chunks.length - 1;
 		lj = chunks[cj].lines.length - 1;
-		text = body(value).slice(regionStart);
+		const tail = value.slice(regionStart);
+		text = tail ? body(tail) : null;
 	} else {
 		[cj, lj] = find(model, to);
 		const line = chunks[cj].lines[lj];
@@ -405,7 +477,7 @@ function apply(model: Model, value: string, change: Change): boolean {
 		text = value.slice(regionStart, regionEnd + delta);
 	}
 
-	const lines = createLines(model.keyer!, text, regionStart);
+	const lines = text === null ? [] : createLines(model.keyer!, text, regionStart);
 	const rest = chunks[cj].lines.slice(lj + 1);
 	if (cj !== ci) {
 		for (const line of rest) {
@@ -418,7 +490,7 @@ function apply(model: Model, value: string, change: Change): boolean {
 		merged.length > model.chunkSize * 2
 			? Math.ceil(merged.length / Math.floor(merged.length / model.chunkSize))
 			: merged.length;
-	const replacement = [first];
+	const replacement = merged.length ? [first] : [];
 	first.lines = merged.slice(0, size);
 	first.changed = true;
 	for (let i = size; i < merged.length; i += size) {
@@ -433,6 +505,28 @@ function apply(model: Model, value: string, change: Change): boolean {
 	}
 
 	chunks.splice(ci, cj - ci + 1, ...replacement);
-	layout(model, ci);
+	let changedFrom = ci;
+	if (
+		replacement.length === 1 &&
+		first.lines.length < model.chunkSize / 2 &&
+		chunks.length > 1
+	) {
+		const next = ci + 1 < chunks.length;
+		const neighbor = chunks[next ? ci + 1 : ci - 1];
+		if (neighbor.lines.length + first.lines.length <= model.chunkSize * 2) {
+			const [target, source] = next ? [first, neighbor] : [neighbor, first];
+			for (const line of source.lines) {
+				line.dirty = true;
+			}
+
+			target.lines = target.lines.concat(source.lines);
+			target.changed = true;
+			target.visible = target.visible || source.visible;
+			chunks.splice(chunks.indexOf(source), 1);
+			changedFrom = Math.min(ci, chunks.indexOf(target));
+		}
+	}
+
+	layout(model, changedFrom);
 	return true;
 }

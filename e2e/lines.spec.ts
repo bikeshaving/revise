@@ -146,13 +146,15 @@ test.describe("Lines", () => {
 			harness.refresh();
 		});
 		const classOfLine = (i: number) =>
-			page
-				.locator("[contenteditable] > div > div")
-				.nth(i)
-				.locator("span")
-				.getAttribute("class");
+			page.evaluate(
+				(i) =>
+					document
+						.querySelectorAll("[contenteditable] > div > div")
+						[i].querySelector("span")?.className ?? null,
+				i,
+			);
 		expect(await classOfLine(0)).toBe("b");
-		expect(await classOfLine(300)).toBe("a");
+		expect(await classOfLine(300)).toBe(null);
 		const renders = await page.evaluate(() => (window as any).harness.renders);
 		expect(renders).toBeLessThan(200);
 		await page.evaluate(() =>
@@ -191,4 +193,89 @@ test.describe("Lines", () => {
 			"line 7ab\nline 8\n",
 		);
 	});
+});
+
+test.describe("Lines with random edits", () => {
+	for (const skip of [false, true]) {
+		test(skip ? "with skipped renders" : "rendered after every edit", async ({page}) => {
+			await open(page, "?lines=30&chunk=4");
+			const failure = await page.evaluate((skip) => {
+				const harness = (window as any).harness;
+				const area = document.querySelector("content-area") as any;
+				const alphabet = ["a", "b", " ", "\n", "\n"];
+				for (let seed = 1; seed <= 20; seed++) {
+					let s = seed;
+					const random = () => {
+						s = (s + 0x6d2b79f5) | 0;
+						let t = Math.imul(s ^ (s >>> 15), 1 | s);
+						t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+						return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+					};
+					const int = (n: number) => Math.floor(random() * n);
+					harness.state.reset(
+						Array.from({length: 30}, (_, i) => `line ${i}\n`).join(""),
+					);
+					harness.refresh();
+					let action = "";
+					for (let step = 0; step < 300; step++) {
+						const roll = random();
+						const rendered = area.value;
+						const state = harness.state;
+						if (roll < 0.1) {
+							action = "undo";
+							state.undo();
+						} else if (roll < 0.15) {
+							action = "redo";
+							state.redo();
+						} else if (roll < 0.2) {
+							action = "revision";
+							harness.color = harness.color === "a" ? "b" : "a";
+							harness.revision++;
+						} else {
+							const value: string = state.value;
+							const at = int(value.length + 1);
+							const length = int(Math.min(40, value.length - at) + 1);
+							let insert = "";
+							for (let i = int(12); i > 0; i--) {
+								insert += alphabet[int(alphabet.length)];
+							}
+
+							let next = value.slice(0, at) + insert + value.slice(at + length);
+							if (!next.endsWith("\n")) {
+								next += "\n";
+							}
+
+							if (roll < 0.3) {
+								state.checkpoint();
+							}
+
+							action = "set";
+							state.setValue(next);
+						}
+
+						if (skip && random() < 0.3) {
+							continue;
+						}
+
+						harness.refresh();
+						const sizes = [
+							...document.querySelectorAll("[contenteditable] > div"),
+						].map((chunk) => chunk.children.length);
+						const problem =
+							area.value !== state.value
+								? "value"
+								: sizes.some((size) => size === 0 || size > 8)
+									? "chunk sizes " + sizes.join(",")
+									: null;
+						if (problem) {
+							return {seed, step, problem, action, before: rendered, value: state.value, dom: area.value};
+						}
+					}
+				}
+
+				return null;
+			}, skip);
+			expect(failure).toBe(null);
+		});
+	}
 });
