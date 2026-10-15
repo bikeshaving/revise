@@ -110,14 +110,14 @@ export default async function Home({url}: {url: string}) {
 			`}>
 				<div id="hero-title" data-initial=${"Revise.js\n"}>
 					<content-area>
-						<h1 contenteditable="true" spellcheck="false" style=${"font-size: max(40px, 8vw); color: var(--highlight-color); margin: 0; outline: none;"}>
+						<h1 contenteditable="plaintext-only" spellcheck="false" style=${"font-size: max(40px, 8vw); color: var(--highlight-color); margin: 0; outline: none;"}>
 							<div>Revise.js</div>
 						</h1>
 					</content-area>
 				</div>
 				<div id="hero-tagline" data-initial=${"Rich text editing foundations for the web\n"}>
 					<content-area>
-						<p contenteditable="true" spellcheck="false" style=${"font-size: 1.25rem; color: var(--text-muted); margin: 0.5em 0 0; outline: none;"}>
+						<p contenteditable="plaintext-only" spellcheck="false" style=${"font-size: 1.25rem; color: var(--text-muted); margin: 0.5em 0 0; outline: none;"}>
 							<div>Rich text editing foundations for the web</div>
 						</p>
 					</content-area>
@@ -137,7 +137,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Plain text with undo/redo. The minimal setup.</p>
 					<div id="demo-simple" data-initial=${simpleInitial} class=${previewClass}>
 						<content-area>
-							<pre class="editable" contenteditable="true" spellcheck="false">
+							<pre class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderInitialLines(simpleInitial)}
 							</pre>
 						</content-area>
@@ -153,7 +153,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>The whole value as a single text node. No lines, no keys.</p>
 					<div id="demo-plain" data-initial=${plainInitial} class=${previewClass}>
 						<content-area>
-							<pre class="editable" contenteditable="true" spellcheck="false">${plainInitial}</pre>
+							<pre class="editable" contenteditable="plaintext-only" spellcheck="false">${plainInitial}</pre>
 						</content-area>
 					</div>
 					<div class="code-block-container code-block-live">
@@ -167,7 +167,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Per-character coloring with keyed lines.</p>
 					<div id="demo-rainbow" data-initial=${rainbowInitial} class=${previewClass}>
 						<content-area>
-							<div class="editable" contenteditable="true" spellcheck="false">
+							<div class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderInitialLines(rainbowInitial)}
 							</div>
 						</content-area>
@@ -183,7 +183,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Clickable <span style="color:#c084fc">#hashtags</span>, <span style="color:#60a5fa">@mentions</span>, and <span style="color:#34d399">links</span>.</p>
 					<div id="demo-social" data-initial=${socialInitial} class=${previewClass}>
 						<content-area>
-							<div class="editable" contenteditable="true" spellcheck="false">
+							<div class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderInitialLines(socialInitial)}
 							</div>
 						</content-area>
@@ -199,7 +199,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Emoji replaced with SVG using <code>data-content</code>.</p>
 					<div id="demo-twemoji" data-initial=${twemojiInitial} class=${previewClass}>
 						<content-area>
-							<div class="editable" contenteditable="true" spellcheck="false">
+							<div class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderInitialLines(twemojiInitial)}
 							</div>
 						</content-area>
@@ -215,7 +215,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Keyword highlighting with a simple regex tokenizer.</p>
 					<div id="demo-code" data-initial=${codeInitial} class=${previewClass}>
 						<content-area>
-							<pre class="editable" contenteditable="true" spellcheck="false">
+							<pre class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderInitialLines(codeInitial)}
 							</pre>
 						</content-area>
@@ -231,7 +231,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Styled prefixes with <code>data-contentbefore</code>. Lines starting with <code>${"> "}</code> become quotes.</p>
 					<div id="demo-blockquote" data-initial=${blockquoteInitial} class=${previewClass}>
 						<content-area>
-							<div class="editable" contenteditable="true" spellcheck="false">
+							<div class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderBlockquoteLines(blockquoteInitial)}
 							</div>
 						</content-area>
@@ -247,7 +247,7 @@ export default async function Home({url}: {url: string}) {
 					<p class=${sectionDesc}>Checkbox prefixes with <code>data-contentbefore</code>. Lines starting with <code>${"- [ ] "}</code> or <code>${"- [x] "}</code> become todos.</p>
 					<div id="demo-todo" data-initial=${todoInitial} class=${previewClass}>
 						<content-area>
-							<div class="editable" contenteditable="true" spellcheck="false">
+							<div class="editable" contenteditable="plaintext-only" spellcheck="false">
 								${renderTodoLines(todoInitial)}
 							</div>
 						</content-area>

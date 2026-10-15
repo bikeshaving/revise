@@ -60,7 +60,7 @@ test.describe("Todo demo", () => {
 	});
 
 	test("select all + delete clears content", async ({page}) => {
-		const editable = page.locator("[contenteditable='true']");
+		const editable = page.locator("[contenteditable=plaintext-only]");
 		await editable.click();
 		await page.keyboard.press("ControlOrMeta+a");
 		await page.keyboard.press("Backspace");
@@ -121,7 +121,7 @@ test.describe("Blockquote demo", () => {
 	});
 
 	test("select all + delete clears content", async ({page}) => {
-		const editable = page.locator("[contenteditable='true']");
+		const editable = page.locator("[contenteditable=plaintext-only]");
 		await editable.click();
 		await page.keyboard.press("ControlOrMeta+a");
 		await page.keyboard.press("Backspace");
@@ -132,7 +132,8 @@ test.describe("Blockquote demo", () => {
 		expect(value).toBe("\n");
 	});
 
-	test("Backspace during IME composition does not merge lines", async ({page}) => {
+	test("Backspace during IME composition does not merge lines", async ({page, browserName}) => {
+		test.skip(browserName !== "chromium", "Uses the Chrome DevTools Protocol");
 		const area = page.locator("content-area");
 		// Put the cursor just past the second blockquote's "> " prefix. This is the
 		// position whose Backspace handler merges the line into the previous one,

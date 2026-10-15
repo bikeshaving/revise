@@ -12,7 +12,7 @@ function* App(this: Context) {
 		yield (
 			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div
-					contenteditable="true"
+					contenteditable="plaintext-only"
 					spellcheck={false}
 					onkeydown={(ev: KeyboardEvent) => {
 						if (ev.key !== "Tab") return;

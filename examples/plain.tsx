@@ -12,7 +12,7 @@ Newlines live in the text itself, so there is nothing to key.
   for (const {} of this) {
     yield (
       <Editable state={state} onstatechange={() => this.refresh()}>
-        <pre class="editable" contenteditable="true" spellcheck="false">
+        <pre class="editable" contenteditable="plaintext-only" spellcheck="false">
           {state.value}
         </pre>
       </Editable>

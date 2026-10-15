@@ -33,7 +33,7 @@ console.log(message);
     let cursor = 0;
     yield (
       <Editable state={state} onstatechange={() => this.refresh()}>
-        <pre class="editable" contenteditable="true" spellcheck="false">
+        <pre class="editable" contenteditable="plaintext-only" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
             cursor += line.length + 1;

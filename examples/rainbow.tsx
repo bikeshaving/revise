@@ -21,7 +21,7 @@ Text
     let cursor = 0;
     yield (
       <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="true" spellcheck="false">
+        <div class="editable" contenteditable="plaintext-only" spellcheck="false">
           {lines.map((line) => {
             const key = state.keyer.keyAt(cursor);
             cursor += line.length + 1;

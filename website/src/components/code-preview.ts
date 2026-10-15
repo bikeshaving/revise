@@ -370,7 +370,7 @@ export function* CodePreview(
 					`}
 				>
 					${initial ? jsx`
-						<div contenteditable="true" spellcheck=${false} class="editable">
+						<div contenteditable="plaintext-only" spellcheck=${false} class="editable">
 							${renderInitialLines(initial)}
 						</div>
 					` : null}

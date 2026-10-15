@@ -23,7 +23,7 @@ Hamlet, Act 3, Scene 1
 		yield (
 			<Editable state={state} onstatechange={() => this.refresh()}>
 				<div
-					contenteditable="true"
+					contenteditable="plaintext-only"
 					spellcheck={false}
 					onkeydown={(ev: KeyboardEvent) => {
 						if (ev.isComposing || ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
