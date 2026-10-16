@@ -33,7 +33,7 @@ function* App(this: Context) {
 		yield (
 			<Editable state={harness.state} onstatechange={() => this.refresh()}>
 				<div
-					contenteditable="plaintext-only"
+					contenteditable="true"
 					spellcheck="false"
 					style="font: 16px/20px monospace; outline: none; white-space: pre"
 				>

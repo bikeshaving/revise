@@ -22,7 +22,7 @@ function* TodoEditable(this: Context) {
     let cursor = 0;
     yield (
       <Editable state={state} onstatechange={() => this.refresh()}>
-        <div class="editable" contenteditable="plaintext-only" spellcheck="false"
+        <div class="editable" contenteditable="true" spellcheck="false"
           onkeydown={(ev: KeyboardEvent) => {
             if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;
             const area = (ev.currentTarget as HTMLElement)

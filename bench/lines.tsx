@@ -38,7 +38,7 @@ function* App(this: Context) {
 		this.after(() => (bench.lastRender = performance.now()));
 		yield (
 			<Editable state={bench.state} onstatechange={() => this.refresh()}>
-				<pre contenteditable="plaintext-only" spellcheck="false">
+				<pre contenteditable="true" spellcheck="false">
 					<Lines
 						state={bench.state}
 						revision={bench.theme}

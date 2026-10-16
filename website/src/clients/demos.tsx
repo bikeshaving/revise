@@ -18,7 +18,7 @@ function* EditableTitle(
 		yield (
 			<Editable state={state} onstatechange={() => this.refresh()}>
 				<h1
-					contenteditable="plaintext-only"
+					contenteditable="true"
 					spellcheck={false}
 					style={{
 						fontSize: "max(40px, 8vw)",
@@ -57,7 +57,7 @@ function* EditableTagline(
 		yield (
 			<Editable state={state} onstatechange={() => this.refresh()}>
 				<p
-					contenteditable="plaintext-only"
+					contenteditable="true"
 					spellcheck={false}
 					style={{
 						fontSize: "1.25rem",

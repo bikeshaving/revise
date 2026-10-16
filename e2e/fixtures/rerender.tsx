@@ -19,7 +19,7 @@ function* App(this: Context) {
 			<div>
 				<p id="tick">tick {tick}</p>
 				<Editable state={state} onstatechange={() => this.refresh()}>
-					<div contenteditable="plaintext-only" spellcheck={false}>
+					<div contenteditable="true" spellcheck={false}>
 						{lines.map((line) => {
 							const key = state.keyer.keyAt(cursor);
 							cursor += line.length + 1;

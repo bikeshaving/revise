@@ -78,6 +78,7 @@ test.describe("Lines", () => {
 		await open(page);
 		await clickLine(page, 3);
 		await page.keyboard.press("ArrowLeft");
+		await page.keyboard.press("ArrowLeft");
 		await page.keyboard.press("Enter");
 		expect(await inSync(page)).toBe(true);
 		await page.keyboard.press("Backspace");
@@ -102,6 +103,17 @@ test.describe("Lines", () => {
 			await page.evaluate(
 				() => (window as any).harness.state.value.split("\n").length - 1,
 			),
+		);
+	});
+
+	test("Enter after a space keeps a plain space", async ({page, browserName}) => {
+		test.fail(browserName === "webkit", "WebKit turns the space into a non-breaking space");
+		await open(page);
+		await clickLine(page, 3);
+		await page.keyboard.press("ArrowLeft");
+		await page.keyboard.press("Enter");
+		expect(await page.evaluate(() => (window as any).harness.state.value)).toContain(
+			"line \n3\n",
 		);
 	});
 

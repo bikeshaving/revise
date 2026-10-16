@@ -60,7 +60,7 @@ test.describe("Todo demo", () => {
 	});
 
 	test("select all + delete clears content", async ({page}) => {
-		const editable = page.locator("[contenteditable=plaintext-only]");
+		const editable = page.locator("[contenteditable='true']");
 		await editable.click();
 		await page.keyboard.press("ControlOrMeta+a");
 		await page.keyboard.press("Backspace");
@@ -121,7 +121,7 @@ test.describe("Blockquote demo", () => {
 	});
 
 	test("select all + delete clears content", async ({page}) => {
-		const editable = page.locator("[contenteditable=plaintext-only]");
+		const editable = page.locator("[contenteditable='true']");
 		await editable.click();
 		await page.keyboard.press("ControlOrMeta+a");
 		await page.keyboard.press("Backspace");

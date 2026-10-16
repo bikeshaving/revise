@@ -94,7 +94,7 @@ function* CodeEditor() {
     tokenizer.update(state.value);
     yield (
       <Editable state={state} onstatechange={() => this.refresh()}>
-        <pre contenteditable="plaintext-only" spellcheck="false">
+        <pre contenteditable="true" spellcheck="false">
           <Lines
             state={state}
             revision={tokenizer.tree}
@@ -127,6 +127,3 @@ decoration can be missing or out of date while nobody can see it.
 find which lines changed. When it missed an edit, or with older versions of
 revise, it diffs the old and new value instead, which is slower in large
 documents.
-
-Use `contenteditable="plaintext-only"`: with `contenteditable="true"`,
-Safari turns a space before a line break into a non-breaking space.
