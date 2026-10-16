@@ -106,8 +106,7 @@ test.describe("Lines", () => {
 		);
 	});
 
-	test("Enter after a space keeps a plain space", async ({page, browserName}) => {
-		test.fail(browserName === "webkit", "WebKit turns the space into a non-breaking space");
+	test("Enter after a space keeps a plain space", async ({page}) => {
 		await open(page);
 		await clickLine(page, 3);
 		await page.keyboard.press("ArrowLeft");
@@ -115,6 +114,20 @@ test.describe("Lines", () => {
 		expect(await page.evaluate(() => (window as any).harness.state.value)).toContain(
 			"line \n3\n",
 		);
+	});
+
+	test("Enter replaces the selection and Shift+Enter breaks the line", async ({page}) => {
+		await open(page);
+		await clickLine(page, 3);
+		await page.keyboard.press("Shift+ArrowLeft");
+		await page.keyboard.press("Shift+ArrowLeft");
+		await page.keyboard.press("Enter");
+		await page.keyboard.press("Shift+Enter");
+		await page.keyboard.type("x");
+		expect(await page.evaluate(() => (window as any).harness.state.value)).toContain(
+			"line\n\nx\nline 4\n",
+		);
+		expect(await inSync(page)).toBe(true);
 	});
 
 	test("undo and redo stay in sync", async ({page}) => {

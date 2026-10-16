@@ -2,6 +2,7 @@ import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Children} from "@b9g/crank/crank.js";
 import {ContentAreaElement, ContentEvent} from "@b9g/revise/contentarea.js";
 import type {SelectionRange} from "@b9g/revise/contentarea.js";
+import {Edit} from "@b9g/revise/edit.js";
 import {EditableState} from "@b9g/revise/state.js";
 
 export type {SelectionRange};
@@ -72,10 +73,32 @@ export function* Editable(
 	this.addEventListener("keydown", recordPendingMutations, {capture: true});
 	this.addEventListener("beforeinput", recordPendingMutations, {capture: true});
 
-	// beforeinput: intercept browser undo/redo
+	// beforeinput: intercept browser undo/redo and line breaks
 	this.addEventListener("beforeinput", (ev: Event) => {
-		const {inputType} = ev as InputEvent;
+		const {inputType, isComposing} = ev as InputEvent;
 		switch (inputType) {
+			case "insertParagraph":
+			case "insertLineBreak": {
+				if (ev.defaultPrevented || isComposing || !area) break;
+				if (area.value !== state.value) break;
+				const range = liveSelectionRange(area);
+				if (!range) break;
+				const {start, end} = range;
+				ev.preventDefault();
+				const edit = Edit.builder(state.value)
+					.retain(start)
+					.delete(end - start)
+					.insert("\n")
+					.build();
+				state.applyEdit(edit);
+				pendingSelection = lastEditSelection = {
+					start: start + 1,
+					end: start + 1,
+					direction: "none",
+				};
+				dispatchStateChange();
+				break;
+			}
 			case "historyUndo": {
 				ev.preventDefault();
 				if (state.undo()) {

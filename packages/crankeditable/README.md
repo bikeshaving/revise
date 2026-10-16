@@ -55,6 +55,11 @@ wrapping your children. It listens for:
   (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y) — Intercepts undo/redo and
   delegates to `state.undo()`/`state.redo()`.
 
+- **`beforeinput`** (`insertParagraph`/`insertLineBreak`) — Handles Enter
+  and Shift+Enter by inserting `"\n"` into `EditableState` instead of letting
+  the browser edit the DOM, so line breaks behave the same in every browser.
+  Calling `preventDefault()` on these events, or on the `keydown`, opts out.
+
 - **`selectionchange`** — Calls `state.checkpoint()` when the cursor moves
   without editing, so undo groups break at natural boundaries.
 
