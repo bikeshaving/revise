@@ -2,10 +2,13 @@ import {createElement} from "@b9g/crank/crank.js";
 import type {Context, Children} from "@b9g/crank/crank.js";
 import {ContentAreaElement, ContentEvent} from "@b9g/revise/contentarea.js";
 import type {SelectionRange} from "@b9g/revise/contentarea.js";
+import {Edit} from "@b9g/revise/edit.js";
 import {EditableState} from "@b9g/revise/state.js";
 
 export type {SelectionRange};
 export {ContentAreaElement, EditableState};
+export {Lines} from "./lines.js";
+export type {LinesProps} from "./lines.js";
 
 export interface EditableProps {
 	state: EditableState;
@@ -70,10 +73,32 @@ export function* Editable(
 	this.addEventListener("keydown", recordPendingMutations, {capture: true});
 	this.addEventListener("beforeinput", recordPendingMutations, {capture: true});
 
-	// beforeinput: intercept browser undo/redo
+	// beforeinput: intercept browser undo/redo and line breaks
 	this.addEventListener("beforeinput", (ev: Event) => {
-		const {inputType} = ev as InputEvent;
+		const {inputType, isComposing} = ev as InputEvent;
 		switch (inputType) {
+			case "insertParagraph":
+			case "insertLineBreak": {
+				if (ev.defaultPrevented || isComposing || !area) break;
+				if (area.value !== state.value) break;
+				const range = liveSelectionRange(area);
+				if (!range) break;
+				const {start, end} = range;
+				ev.preventDefault();
+				const edit = Edit.builder(state.value)
+					.retain(start)
+					.delete(end - start)
+					.insert("\n")
+					.build();
+				state.applyEdit(edit);
+				pendingSelection = lastEditSelection = {
+					start: start + 1,
+					end: start + 1,
+					direction: "none",
+				};
+				dispatchStateChange();
+				break;
+			}
 			case "historyUndo": {
 				ev.preventDefault();
 				if (state.undo()) {
@@ -135,10 +160,9 @@ export function* Editable(
 	});
 
 	for ({state, children} of this) {
+		const changedSelection = pendingSelection ?? historySelection;
 		const selectionRange =
-			pendingSelection ??
-			historySelection ??
-			(area && liveSelectionRange(area));
+			changedSelection ?? (area && liveSelectionRange(area));
 		pendingSelection = undefined;
 		historySelection = undefined;
 
@@ -158,7 +182,7 @@ export function* Editable(
 
 				// Scroll cursor into view
 				const sel = document.getSelection();
-				if (sel && sel.focusNode) {
+				if (changedSelection && sel && sel.focusNode) {
 					const focusEl =
 						sel.focusNode.nodeType === Node.ELEMENT_NODE
 							? (sel.focusNode as Element)

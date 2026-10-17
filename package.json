@@ -70,7 +70,8 @@
     "build": "libuild build",
     "publish": "libuild publish",
     "test": "playwright-test \"test/**/*.ts\" --runner uvu",
-    "test:e2e": "NODE_PATH=website/node_modules bun build e2e/fixtures/todo.tsx e2e/fixtures/blockquote.tsx e2e/fixtures/rerender.tsx e2e/fixtures/core.tsx e2e/fixtures/pending.tsx --outdir e2e/fixtures/dist --bundle --target browser && playwright test",
+    "bench": "NODE_PATH=website/node_modules bun build bench/lines.tsx --outdir bench/dist --target browser && node bench/run.mjs",
+    "test:e2e": "NODE_PATH=website/node_modules bun build e2e/fixtures/todo.tsx e2e/fixtures/blockquote.tsx e2e/fixtures/rerender.tsx e2e/fixtures/core.tsx e2e/fixtures/pending.tsx e2e/fixtures/lines.tsx --outdir e2e/fixtures/dist --bundle --target browser && playwright test",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "echo 'ERROR: Cannot publish from root directory. Use libuild publish instead.' && exit 1"
   },

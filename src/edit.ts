@@ -660,37 +660,62 @@ function synthesize(
 
 /** @returns The length of the common prefix between two strings. */
 function commonPrefixLength(text1: string, text2: string): number {
-	let min = 0;
-	let max = Math.min(text1.length, text2.length);
-	let mid = max;
-	while (min < mid) {
-		if (text1.slice(min, mid) === text2.slice(min, mid)) {
-			min = mid;
-		} else {
-			max = mid;
+	const max = Math.min(text1.length, text2.length);
+	for (let start = 0, size = 64; start < max; size *= 2) {
+		const end = Math.min(start + size, max);
+		if (text1.slice(start, end) !== text2.slice(start, end)) {
+			let lo = start;
+			let hi = end;
+			while (hi - lo > 1) {
+				const mid = (lo + hi) >> 1;
+				if (text1.slice(lo, mid) === text2.slice(lo, mid)) {
+					lo = mid;
+				} else {
+					hi = mid;
+				}
+			}
+
+			return lo;
 		}
-		mid = Math.floor((max - min) / 2 + min);
+
+		start = end;
 	}
-	return mid;
+
+	return max;
 }
 
 /** @returns The length of the common suffix between two strings. */
 function commonSuffixLength(text1: string, text2: string): number {
-	let min = 0;
-	let max = Math.min(text1.length, text2.length);
-	let mid = max;
-	while (min < mid) {
+	const max = Math.min(text1.length, text2.length);
+	const end1 = text1.length;
+	const end2 = text2.length;
+	for (let start = 0, size = 64; start < max; size *= 2) {
+		const end = Math.min(start + size, max);
 		if (
-			text1.slice(text1.length - mid, text1.length - min) ===
-			text2.slice(text2.length - mid, text2.length - min)
+			text1.slice(end1 - end, end1 - start) !==
+			text2.slice(end2 - end, end2 - start)
 		) {
-			min = mid;
-		} else {
-			max = mid;
+			let lo = start;
+			let hi = end;
+			while (hi - lo > 1) {
+				const mid = (lo + hi) >> 1;
+				if (
+					text1.slice(end1 - mid, end1 - lo) ===
+					text2.slice(end2 - mid, end2 - lo)
+				) {
+					lo = mid;
+				} else {
+					hi = mid;
+				}
+			}
+
+			return lo;
 		}
-		mid = Math.floor((max - min) / 2 + min);
+
+		start = end;
 	}
-	return mid;
+
+	return max;
 }
 
 function factor(edit: Edit): [Subseq, string, Subseq, string] {

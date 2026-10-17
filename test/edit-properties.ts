@@ -432,6 +432,40 @@ test("diff: diff(a, b).apply(a) === b", () => {
 	);
 });
 
+test("diff: long strings keep the whole common prefix and suffix", () => {
+	fc.assert(
+		fc.property(
+			fc.string({unit: fc.constantFrom("a", "b", "\n"), maxLength: 3000}),
+			fc.nat(),
+			fc.nat(40),
+			fc.string({unit: fc.constantFrom("a", "b", "\n"), maxLength: 40}),
+			(a, at, length, insert) => {
+				at = at % (a.length + 1);
+				const b = a.slice(0, at) + insert + a.slice(at + length);
+				const edit = Edit.diff(a, b);
+				Assert.is(edit.apply(a), b);
+				let prefix = 0;
+				while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) {
+					prefix++;
+				}
+
+				let suffix = 0;
+				while (
+					suffix < a.length - prefix &&
+					suffix < b.length - prefix &&
+					a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+				) {
+					suffix++;
+				}
+
+				Assert.is(edit.deleted.length, a.length - prefix - suffix);
+				Assert.is(edit.inserted.length, b.length - prefix - suffix);
+			},
+		),
+		{numRuns: 1000},
+	);
+});
+
 test("diff: diff(a, a) is identity", () => {
 	fc.assert(
 		fc.property(fc.string({minLength: 0, maxLength: 20}), (a) => {
